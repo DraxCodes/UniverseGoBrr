@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1"
+  },
+  "project": "UniverseGoBrr",
+  "workflows": [
+    "council",
+    "hillclimb",
+    "grilling",
+    "handoff",
+    "security"
+  ],
+  "checks": {
+    "build": {
+      "command": "npm run build",
+      "cwd": "."
+    },
+    "test": {
+      "command": "npm test",
+      "cwd": "."
+    },
+    "free": [],
+    "paid": []
+  },
+  "verify": {
+    "surface": "web",
+    "seed": "",
+    "capture": "",
+    "widths": [
+      375,
+      900
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "notes": ""
+  },
+  "rubrics": {
+    "default": "perception"
+  },
+  "visualReview": {
+    "model": "surplus/glm-5.3-flash",
+    "notes": "Bound 2026-11-22: $0.040/$0.078 per M, text+image input, GLM lineage (independent of the DeepSeek gate). No benchmark records for hillclimb.blindspot yet; derived recommendation."
+  },
+  "docs": {
+    "issues": ".scratch",
+    "glossary": "GLOSSARY.md",
+    "adr": "docs/adr",
+    "notes": "docs/notes"
+  },
+  "neverCommit": [
+    ".env",
+    "*.pem",
+    "*.key",
+    "*.local.json"
+  ],
+  "packs": []
+}

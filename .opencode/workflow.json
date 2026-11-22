@@ -43,7 +43,7 @@
   },
   "visualReview": {
     "model": "surplus/glm-5.3-flash",
-    "notes": "Bound 2026-11-22: $0.040/$0.078 per M, text+image input, GLM lineage (independent of the DeepSeek gate). No benchmark records for hillclimb.blindspot yet; derived recommendation."
+    "notes": "Bound 2026-11-22: $0.040/$0.078 per M, text+image input, GLM lineage (independent of the DeepSeek gate). No benchmark records for hillclimb.blindspot yet; derived recommendation. Probe 2026-11-22: text/json/tool passed, image case false-negative on the probe's 1x1 PNG; a 64x64 red PNG returned 'Red' correctly - see docs/notes/probe-image-case.md."
   },
   "docs": {
     "issues": ".scratch",

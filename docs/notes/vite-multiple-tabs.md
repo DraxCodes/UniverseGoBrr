@@ -33,6 +33,24 @@ Three separate causes, and they usually combine:
   that means recreating the shader module and pipeline only — the page and the `GPUDevice`
   survive, which is both faster and removes the reload path entirely.
 
+## A server left over from a previous session
+
+The dev server outlives the session that started it. `strictPort` then fails the *new* session
+with `Port 5173 is already in use`, which reads like a config error. Worse, the old process may
+serve a **stale HTML/HUD transform** after `index.html` or a `ui/` edit — HMR does not always
+cover those — so probes and captures can show the previous version of the page.
+
+Find and clear it before starting the loop:
+
+```powershell
+(Get-NetTCPConnection -LocalPort 5173 -State Listen).OwningProcess
+Get-CimInstance Win32_Process -Filter "ProcessId=<pid>" | Select-Object CreationDate,CommandLine
+Stop-Process -Id <pid> -Force
+```
+
+The `CreationDate` older than the current session is the tell. Then `npm run dev` and re-run
+`npm run probe:state` / `probe:live`, which talk to 5173 directly.
+
 ## Verify
 
 Edit a file five times in a row. Tab count must stay at one, and the console must not show a

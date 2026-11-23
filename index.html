@@ -36,13 +36,14 @@
     </section>
 
     <p id="probe-caption" class="probe-caption" hidden></p>
+    <p id="hud-notice" class="hud__notice" role="status" aria-live="polite" hidden></p>
 
     <section id="fatal" class="fatal" hidden>
       <h1>UniverseGoBrr cannot start</h1>
       <p id="fatal-message" class="fatal__message"></p>
       <p class="fatal__hint">
-        WebGPU needs a current Chrome or Edge and a working GPU. Check
-        <code>chrome://gpu</code>, then reload.
+        WebGPU needs a current Chrome or Edge with hardware acceleration on. If it still fails,
+        check <code>chrome://gpu</code>, then reload.
       </p>
     </section>
 

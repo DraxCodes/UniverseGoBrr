@@ -169,6 +169,7 @@ async function init(): Promise<AppHandle> {
         frameScaleM: displayScaleM(system),
         onChange: () => hud.setCamera(state.camera),
         onCommit: persist,
+        onZoomEdge: (edge) => hud.notice(edge === 'max' ? 'max zoom' : 'min zoom'),
       })
     : null;
 

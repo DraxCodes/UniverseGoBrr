@@ -61,6 +61,9 @@ export function dragOrbit(camera: Camera, dxPixels: number, dyPixels: number): C
   return orbitTo(yaw - dxPixels * DRAG_SENSITIVITY, pitch + dyPixels * DRAG_SENSITIVITY, distance);
 }
 
+/** Which end of the zoom range a wheel notch was pushed against, or null if it moved. */
+export type ZoomEdge = 'min' | 'max';
+
 /** Zoom by a factor, clamped against the frame's own scale so no address is unreachable. */
 export function zoomBy(camera: Camera, factor: number, frameScaleM: number): Camera {
   const { yaw, pitch, distance } = orbitParams(camera);
@@ -68,6 +71,28 @@ export function zoomBy(camera: Camera, factor: number, frameScaleM: number): Cam
   const max = MAX_DISTANCE_FACTOR * frameScaleM;
   const next = Math.min(max, Math.max(min, distance * factor));
   return orbitTo(yaw, pitch, next);
+}
+
+/**
+ * The clamp a wheel notch ran into, for feedback. Only reports when the camera is **already**
+ * at the limit: the notch that first reaches it still produced visible motion, so "max zoom"
+ * would be a lie. This is what makes the clamp audible to the user (the Layer 2 gate recorded
+ * wheel notches being swallowed with no feedback).
+ */
+export function zoomEdge(camera: Camera, factor: number, frameScaleM: number): ZoomEdge | null {
+  const { distance } = orbitParams(camera);
+  const min = MIN_DISTANCE_FACTOR * frameScaleM;
+  const max = MAX_DISTANCE_FACTOR * frameScaleM;
+  const requested = distance * factor;
+  // Tolerance, not equality: `zoomBy` clamps to exactly `min`/`max`, but rebuilding the camera
+  // from its angles and taking the hypotenuse round-trips to that value ±1 ulp, so a strict
+  // comparison reports "not at the limit" forever. (A test that trusted equality spun for
+  // sixteen minutes before anyone noticed.)
+  const atMax = distance >= max * (1 - 1e-9);
+  const atMin = distance <= min * (1 + 1e-9);
+  if (factor > 1 && requested > max && atMax) return 'max';
+  if (factor < 1 && requested < min && atMin) return 'min';
+  return null;
 }
 
 export interface OrbitControlOptions {
@@ -80,6 +105,8 @@ export interface OrbitControlOptions {
   onChange(): void;
   /** Called when the gesture settles. This is where the URL is rewritten. */
   onCommit(): void;
+  /** Called when a wheel notch is swallowed by the zoom clamp, so the UI can say so. */
+  onZoomEdge?(edge: ZoomEdge): void;
 }
 
 export interface OrbitControls {
@@ -146,7 +173,9 @@ export function attachOrbitControls(options: OrbitControlOptions): OrbitControls
     // Normalise the three deltaMode units to roughly "lines", then to a multiplicative factor.
     const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1;
     const factor = Math.exp(event.deltaY * unit * 0.0012);
+    const edge = zoomEdge(camera, factor, frameScaleM);
     apply(zoomBy(camera, factor, frameScaleM));
+    if (edge) options.onZoomEdge?.(edge);
     scheduleCommit();
   };
 

@@ -21,6 +21,8 @@ export interface Hud {
   setPrecision(report: PrecisionReport | null, mode: PrecisionMode | null): void;
   setPipeline(generation: number, error: string | null): void;
   setFps(fps: number): void;
+  /** Transient control feedback (e.g. "max zoom"); auto-hides. */
+  notice(text: string): void;
 }
 
 export function mountHud(state: UrlState, issues: readonly string[]): Hud {
@@ -38,9 +40,11 @@ export function mountHud(state: UrlState, issues: readonly string[]): Hud {
   const pipelineEl = byId('hud-pipeline');
   const fpsEl = byId('hud-fps');
   const issuesEl = byId('hud-issues');
+  const noticeEl = byId('hud-notice');
 
   const urlIssues = [...issues];
   let shaderError: string | null = null;
+  let noticeTimer: ReturnType<typeof setTimeout> | null = null;
 
   // A fatal panel can be left over from a previous HMR attempt; this mount owns the page.
   byId('fatal').hidden = true;
@@ -141,6 +145,15 @@ ${mode === 'fixed' ? 'naive' : 'fixed'} · ${other.spreadPx.toFixed(0)} px · ${
     setPipeline,
     setFps(value) {
       fpsEl.textContent = `${Math.round(value)}`;
+    },
+    notice(text) {
+      noticeEl.textContent = text;
+      noticeEl.hidden = false;
+      if (noticeTimer !== null) clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => {
+        noticeTimer = null;
+        noticeEl.hidden = true;
+      }, 1200);
     },
   };
 }

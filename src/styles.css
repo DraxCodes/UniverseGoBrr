@@ -7,7 +7,11 @@
   color-scheme: dark;
   --ink: #d9e2f2;
   --ink-dim: #8492a8;
-  --ink-faint: #5a6577;
+  /* Lifted from #5a6577 after the Layer 2 gate measured 3.3:1 for the 10 px footer and label
+     text on the panel (below AA's 4.5:1 for normal text). This is 4.66:1 against the panel
+     composited over the page background, and still a clear step below --ink-dim (6.25:1), so
+     the three-level hierarchy survives. */
+  --ink-faint: #6f7c91;
   --panel: rgba(8, 12, 22, 0.72);
   --line: rgba(150, 180, 230, 0.18);
   --accent: #9cc2ff;
@@ -187,6 +191,27 @@ body {
 .probe-caption--error {
   border-color: rgba(255, 120, 90, 0.45);
   color: var(--warn);
+}
+
+/* Transient control feedback: a wheel notch past the zoom clamp used to do nothing visible, so
+   "am I stuck?" had no answer on screen. Fixed and above the probe caption, so showing it never
+   reflows the HUD panel. */
+.hud__notice {
+  position: fixed;
+  left: 50%;
+  bottom: 84px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink-dim);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .fatal {

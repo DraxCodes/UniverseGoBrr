@@ -45,9 +45,9 @@ export function initDevice(): Promise<GpuContext> {
 
 async function acquireGpu(): Promise<GpuContext> {
   if (!('gpu' in navigator) || !navigator.gpu) {
-    throw new Error(
-      'WebGPU is not available in this browser. Use a current Chrome or Edge and reload.',
-    );
+    // State the condition only. The recovery instruction lives in the fatal panel's hint, so a
+    // user never reads the same sentence twice (the Layer 2 gate recorded that duplication).
+    throw new Error('WebGPU is not available in this browser.');
   }
 
   const adapter =
@@ -55,9 +55,8 @@ async function acquireGpu(): Promise<GpuContext> {
     (await navigator.gpu.requestAdapter());
 
   if (!adapter) {
-    throw new Error(
-      'No WebGPU adapter was found. Check chrome://gpu and make sure hardware acceleration is on.',
-    );
+    // As above: the fact here, the fix in the panel's hint.
+    throw new Error('No WebGPU adapter was found for this GPU.');
   }
 
   const device = await adapter.requestDevice({ label: 'ugb-device' });

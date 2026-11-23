@@ -9,6 +9,7 @@ import {
   orbitParams,
   orbitTo,
   zoomBy,
+  zoomEdge,
 } from './orbit-controls';
 import { cameraBasis, projectPoint, multiply, reverseZProjection, viewFromBasis } from '../render/camera';
 
@@ -140,5 +141,30 @@ describe('zooming', () => {
     let camera = HOME;
     for (let step = 0; step < 500; step += 1) camera = zoomBy(camera, 0.5, SCALE);
     expect(orbitDistance(camera)).toBeGreaterThan(0.01 * SCALE);
+  });
+});
+
+describe('zoom clamp feedback', () => {
+  it('does not report an edge while the notch still moves the camera', () => {
+    expect(zoomEdge(HOME, 1.1, SCALE)).toBeNull();
+    expect(zoomEdge(HOME, 0.9, SCALE)).toBeNull();
+  });
+
+  it('reports max only once the camera is at the limit and the notch is swallowed', () => {
+    let camera = HOME;
+    // Bounded, because "at the limit" is a ±1 ulp question: see zoomEdge.
+    for (let step = 0; step < 80; step += 1) camera = zoomBy(camera, 1.3, SCALE);
+    expect(orbitDistance(camera)).toBeCloseTo(MAX_DISTANCE_FACTOR * SCALE, 0);
+    // The notch that arrived at the limit still moved; the next one is the silent one.
+    expect(zoomEdge(camera, 1.3, SCALE)).toBe('max');
+    expect(orbitDistance(zoomBy(camera, 1.3, SCALE))).toBeCloseTo(orbitDistance(camera), 6);
+  });
+
+  it('reports min once the camera is at the limit and the notch is swallowed', () => {
+    let camera = HOME;
+    for (let step = 0; step < 200; step += 1) camera = zoomBy(camera, 0.7, SCALE);
+    expect(orbitDistance(camera)).toBeCloseTo(MIN_DISTANCE_FACTOR * SCALE, 0);
+    expect(zoomEdge(camera, 0.7, SCALE)).toBe('min');
+    expect(zoomEdge(camera, 1.3, SCALE)).toBeNull();
   });
 });

@@ -476,7 +476,12 @@ fn vs_orbit(@location(0) local: vec3f, @location(1) radius: f32) -> OrbitOut {
   var out: OrbitOut;
   out.position = scene.view_proj * vec4f(world, 1.0);
 
-  let outside = smoothstep(radius * 1.02, radius * 1.20, eye);
+  // The fade has to be long enough to read: at 12.7% per wheel notch the old 1.02-1.20 band was
+  // ~1.4 notches, so the last faint line could vanish in a single step (Layer 2 gate nit). This
+  // band spans ~4 notches at the same notch size, and is unchanged wherever the eye is well
+  // outside the ring (~2.2 units at the default framing, where the ring is already at full
+  // opacity).
+  let outside = smoothstep(radius * 1.04, radius * 1.55, eye);
   let inSystem = smoothstep(0.88, 1.02, eye);
   // The part of a ring passing near the eye projects to a near-straight line across the middle
   // of the frame; fade it out there so the close-ups read as a world, not a plot.

@@ -5,6 +5,15 @@ This repository is at **Layer 2** of the roadmap in `.scratch/procedural-univers
 procedural star system. Layer 1 (frames and precision) is complete; there is no travel and no
 gameplay yet.
 
+![A nine-planet system seen as an orrery, with orbit rings around an amber K-type primary](docs/media/layer2-orrery.jpg)
+
+![An ocean world close up: continents, shelf shallows, a polar ice cap and drifting cloud layer](docs/media/layer2-closeup-ocean.jpg)
+
+Both frames are `npm run capture` output from this commit, at 1920×1080. Nothing in them is a
+texture — the orrery, the rings and every surface are drawn from noise in the fragment stage, and
+the only input is `seed` + `addr` + `t`. The panel is the development HUD, and it is in the shots
+on purpose: it is where the renderer states its own coordinate, precision path and frame time.
+
 ## Run it
 
 Requires Node 22+ and a current Chrome or Edge with WebGPU.
@@ -103,6 +112,10 @@ preference, so a shot also fails if the page follows it. The harness refuses to 
 Shot names: `desktop-*` sweep the three desktop widths (plus the DPR-2 shot) over one
 coordinate; `layer2-orrery*` are the star-system content shots; `layer1-precision-*` are the
 negative control.
+
+The two images at the top of this file are `layer2-orrery` and `layer2-closeup-ocean`, downscaled
+to 1600 px wide and saved as JPEG into `docs/media/` — committed so the README renders without a
+build, and kept out of `.scratch/` so they survive a change of machine.
 
 Output and a machine-readable summary go to `.scratch/captures/` (gitignored) by default.
 `--shot <name>`, `--out <dir>`, `--url <base>` and `--headed` are available.

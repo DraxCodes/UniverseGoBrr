@@ -6,7 +6,10 @@ import { formatAddress } from './frame/address';
 import { mountHud, showFatal } from './ui/hud';
 import { attachOrbitControls } from './input/orbit-controls';
 import { defaultSystemCamera, displayScaleM } from './render/system-scene';
+import { GALAXY_MAX_DISTANCE_M } from './render/galaxy-scene';
+import { notchFactor } from './render/scale';
 import { describeSystem, generateSystem } from './universe/system';
+import { generateGalaxy, type Galaxy, type GalaxyTier } from './universe/galaxy';
 import {
   DEFAULT_CAMERA,
   cameraSnapshot,
@@ -29,6 +32,17 @@ let ready = false;
 let failure: string | null = null;
 /** Set by HMR disposal so an init that was still awaiting cannot start a second app. */
 let disposed = false;
+/** The live galaxy, so the debug surface can report its centre for capture framing. */
+let currentGalaxy: Galaxy | null = null;
+
+/**
+ * The impostor budget this build opens with. "Rich" is the desktop default; the renderer's
+ * frame-time watchdog drops it to medium/low rather than stalling (issue 04 D6). Counts are
+ * compile-time constants, so a link cannot ask for more.
+ */
+const GALAXY_TIER: GalaxyTier = 'rich';
+/** The controls' base wheel factor for a 100 px notch; the schedule reports its boost against it. */
+const WHEEL_BASE = Math.exp(0.12);
 
 // Survives HMR module re-execution; replaced only by an actual page load.
 const pageLoadId = (() => {
@@ -61,6 +75,29 @@ window.__ugb = {
   },
   get fps() {
     return renderer?.fps ?? 0;
+  },
+  get tier() {
+    return renderer?.galaxyTier ?? 'rich';
+  },
+  /** The current crossfade and population, for the live handoff probe's evidence. */
+  get galaxy() {
+    const frame = renderer?.galaxyFrame();
+    return frame
+      ? {
+          lod: frame.lod,
+          contrast: frame.contrast,
+          count: frame.count,
+          tier: renderer?.galaxyTier ?? 'rich',
+          // The disc's centre relative to the home star, in metres: capture framing needs it,
+          // and it makes the population's geometry checkable from a browser session.
+          centre: currentGalaxy
+            ? ([currentGalaxy.centre.x, currentGalaxy.centre.y, currentGalaxy.centre.z] as const)
+            : null,
+        }
+      : null;
+  },
+  forceSlowFrames(frames: number) {
+    renderer?.forceSlowFrames(frames);
   },
   get state() {
     return {
@@ -100,6 +137,10 @@ async function init(): Promise<AppHandle> {
   // The system is generated from the address alone (ADR-0005), so it is also built once. A
   // shared link reproduces it exactly; nothing about it is cached or persisted.
   const system = probe ? null : generateSystem(state.seed, state.address);
+  // The galaxy is generated once, from the same (seed, address), in real metres. It is the
+  // backdrop the system sits in; nothing about it is persisted or cached across loads (ADR-0005).
+  const galaxy = system ? generateGalaxy(state.seed, state.address, GALAXY_TIER) : null;
+  currentGalaxy = galaxy;
 
   // A camera at the origin is inside the star. When the URL did not name one, the scene picks a
   // framing that shows the system, and that framing is then written back to the URL.
@@ -127,6 +168,8 @@ async function init(): Promise<AppHandle> {
     seed: state.seed,
     camera: state.camera,
     system,
+    galaxy,
+    galaxyTier: GALAXY_TIER,
     precision: probe,
     precisionMode: state.precision ?? 'fixed',
     getTime: () => clockSeconds(state, Date.now()),
@@ -141,8 +184,25 @@ async function init(): Promise<AppHandle> {
       // The probe's pixel spread depends on the canvas size, so it is refreshed with the
       // stats rather than set once: a resized window must not keep showing the old number.
       if (probe) hud.setPrecision(created.precisionReport(), state.precision);
+
+      // Issue 04 D8: the existing scene row carries the galaxy factor; there is no second
+      // disclaimer and no new panel. Positions are never scaled, so the galaxy reads `×1 real`;
+      // the only distortion is traversal, and it is printed where it is active.
+      if (system) {
+        const lod = created.galaxyFrame()?.lod ?? 0;
+        const distance = Math.hypot(state.camera.x, state.camera.y, state.camera.z);
+        const boost = notchFactor(distance, WHEEL_BASE) / WHEEL_BASE;
+        if (lod > 0.5) {
+          hud.setScene('one galaxy · ×1 real');
+        } else if (boost > 1.02) {
+          hud.setScene(`${describeSystem(system)} · void ×${boost.toFixed(1)}`);
+        } else {
+          hud.setScene(describeSystem(system));
+        }
+      }
     },
     onPipeline: (generation, error) => hud.setPipeline(generation, error),
+    onTierDrop: (tier) => hud.notice(`quality: ${tier} · long frames`),
   });
 
   if (disposed) {
@@ -167,6 +227,7 @@ async function init(): Promise<AppHandle> {
         element: canvas,
         camera: state.camera,
         frameScaleM: displayScaleM(system),
+        maxDistanceM: GALAXY_MAX_DISTANCE_M,
         onChange: () => hud.setCamera(state.camera),
         onCommit: persist,
         onZoomEdge: (edge) => hud.notice(edge === 'max' ? 'max zoom' : 'min zoom'),

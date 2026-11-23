@@ -119,4 +119,59 @@ describe('the population has the right shape', () => {
     const counts = GALAXY_TIER_STARS.rich;
     expect(counts.local + counts.disc).toBeLessThanOrEqual(60_000);
   });
+
+  it('puts the disc on a readable two-arm spiral', () => {
+    // The m=2 wave is measured per radial slice: the spiral's phase moves with radius, so one
+    // DFT over the whole disc would cancel its own arms. This is the acceptance the renderer's
+    // crossfade depends on: a broad, uniform haze measures low here and reads as an oval.
+    const bins = 20;
+    const inner = 0.2 * GALAXY_RADIUS_M;
+    const outer = 1.0 * GALAXY_RADIUS_M;
+    const cosine = new Float64Array(bins);
+    const sine = new Float64Array(bins);
+    const counts = new Float64Array(bins);
+    for (const star of disc) {
+      const x = star.x - galaxy.centre.x;
+      const z = star.z - galaxy.centre.z;
+      const radius = Math.hypot(x, z);
+      if (radius < inner || radius > outer) continue;
+      const bin = Math.min(bins - 1, Math.floor(((radius - inner) / (outer - inner)) * bins));
+      const azimuth = Math.atan2(z, x);
+      cosine[bin]! += Math.cos(2 * azimuth);
+      sine[bin]! += Math.sin(2 * azimuth);
+      counts[bin]! += 1;
+    }
+
+    let weighted = 0;
+    let total = 0;
+    for (let bin = 0; bin < bins; bin += 1) {
+      const n = counts[bin]!;
+      if (n === 0) continue;
+      weighted += (Math.hypot(cosine[bin]!, sine[bin]!) / n) * n;
+      total += n;
+    }
+    // Re-aimed rejects measured ~0.175 here; sampling onto the arms lifts it to ~0.29.
+    expect(weighted / total).toBeGreaterThan(0.25);
+
+    // And the arms are not filaments over black: the uniform inter-arm fraction keeps a
+    // visible floor, so the gaps do not close. Measured in one thin radial slice, because a
+    // thick annulus averages the spiral's own phase change back into a uniform ring.
+    const binsAzimuth = 36;
+    const slice = disc.filter((star) => {
+      const radius = Math.hypot(star.x - galaxy.centre.x, star.z - galaxy.centre.z);
+      return radius > 0.47 * GALAXY_RADIUS_M && radius < 0.53 * GALAXY_RADIUS_M;
+    });
+    const cells = new Float64Array(binsAzimuth);
+    for (const star of slice) {
+      const azimuth = Math.atan2(star.z - galaxy.centre.z, star.x - galaxy.centre.x);
+      cells[Math.floor(((azimuth + Math.PI) / (2 * Math.PI)) * binsAzimuth)]! += 1;
+    }
+    const sorted = [...cells].sort((a, b) => a - b);
+    const trough = sorted[Math.floor(binsAzimuth * 0.05)]!;
+    const crest = sorted[Math.floor(binsAzimuth * 0.95)]!;
+    // A 3:1 density ratio leaves the trough at ~20% of the mean; a floor that never empties
+    // keeps the disc a disc rather than two drawn curves.
+    expect(trough).toBeGreaterThan((slice.length / binsAzimuth) * 0.1);
+    expect(crest / trough).toBeGreaterThan(2.5);
+  });
 });

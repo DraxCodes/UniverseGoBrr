@@ -34,10 +34,23 @@ interface UniverseDebug {
   readonly frame: number;
   readonly pipelineGeneration: number;
   readonly fps: number;
+  /** The impostor budget currently in use (the watchdog may drop it). */
+  readonly tier: 'rich' | 'medium' | 'low';
+  /** The current crossfade and population, or null in probe mode. */
+  readonly galaxy: {
+    lod: number;
+    contrast: number;
+    count: number;
+    tier: 'rich' | 'medium' | 'low';
+    /** Galactic centre relative to the home star, metres. */
+    centre: readonly [number, number, number] | null;
+  } | null;
   readonly state: UniverseDebugState;
   /** Null unless the URL asked for `precision=fixed` or `precision=naive`. */
   readonly precisionReport: UniversePrecisionReport | null;
   sampleCanvas(): Promise<{ mean: number; stdev: number; samples: number }>;
+  /** Debug only: stall the next N frames so the tier watchdog can be observed. */
+  forceSlowFrames(frames: number): void;
 }
 
 interface Window {

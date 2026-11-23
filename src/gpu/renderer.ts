@@ -1,5 +1,6 @@
 import stage0Source from './stage0.wgsl?raw';
 import sceneSource from './scene.wgsl?raw';
+import galaxySource from './galaxy.wgsl?raw';
 import noiseSource from './noise.wgsl?raw';
 import { seedUnit } from '../lib/hash';
 import {
@@ -10,10 +11,24 @@ import {
   type PrecisionReport,
 } from '../frame/precision-probe';
 import type { Camera } from '../state/url-state';
+import type {
+  Galaxy,
+  GalaxyTier,
+} from '../universe/galaxy';
 import type { StarSystem } from '../universe/system';
 import { displayOrbitRadius } from '../universe/system';
 import { cameraBasis, FOV_Y_RAD } from '../render/camera';
-import { buildSceneFrame, type SceneFrame } from '../render/system-scene';
+import { buildSceneFrame, displayScaleM, type SceneFrame } from '../render/system-scene';
+import {
+  GALAXY_GAIN,
+  GALAXY_INSTANCE_FLOATS,
+  GALAXY_MAX_INSTANCES,
+  WATCHDOG_FRAME_MS,
+  galaxyLegibility,
+  nextQualityTier,
+  writeGalaxyFrame,
+  type GalaxyFrame,
+} from '../render/galaxy-scene';
 import { createOrbitRing, createSphere } from './mesh';
 
 export interface RenderStats {
@@ -38,6 +53,10 @@ export interface RendererOptions {
   camera: Camera;
   /** The scene drawn when no probe is active. */
   system: StarSystem | null;
+  /** The galaxy drawn behind the system. Null in probe mode or when there is no system. */
+  galaxy: Galaxy | null;
+  /** The initial impostor budget; the watchdog may drop it. */
+  galaxyTier: GalaxyTier;
   /** When set, the frame draws the precision probe instead of the starfield. */
   precision: PrecisionProbe | null;
   /** Which path the probe uses to build its camera-relative positions. */
@@ -46,18 +65,26 @@ export interface RendererOptions {
   onFirstFrame(): void;
   onStats(stats: RenderStats): void;
   onPipeline(generation: number, error: string | null): void;
+  /** The watchdog gave up a tier; the UI can say so once. */
+  onTierDrop?(tier: GalaxyTier): void;
 }
 
 export interface RendererHandle {
   readonly frame: number;
   readonly pipelineGeneration: number;
   readonly fps: number;
+  /** The impostor budget in use; the watchdog may lower it. */
+  readonly galaxyTier: GalaxyTier;
   /** Marker pixels and positional error for both precision paths, at the current CSS size. */
   precisionReport(): PrecisionReport | null;
   /** The last scene frame, for the HUD's scale readout. Null in probe mode. */
   sceneFrame(): SceneFrame | null;
+  /** The last galaxy frame's crossfade, count and measured contrast, for evidence. */
+  galaxyFrame(): GalaxyFrame | null;
   /** Render one deterministic frame offscreen and read it back. Used as capture evidence. */
   sampleFrame(): Promise<RenderSample>;
+  /** Debug only: stall the next N frames so the watchdog's tier drop can be observed. */
+  forceSlowFrames(frames: number): void;
   dispose(): void;
 }
 
@@ -65,18 +92,31 @@ export interface RendererHandle {
 const PARAMS_BYTES = 112;
 const PARAMS_FLOATS = PARAMS_BYTES / 4;
 
-/** 44 floats: view-projection (16), star (8), billboard basis (8), meta (4). */
-const SCENE_FLOATS = 44;
+/** 48 floats: view-projection (16), star (8), billboard basis (8), meta (4), lod meta (4). */
+const SCENE_FLOATS = 48;
 const SCENE_BYTES = SCENE_FLOATS * 4;
+
+/** 28 floats: view-projection (16), camera basis (8), meta (4). */
+const GALAXY_FLOATS = 28;
+const GALAXY_BYTES = GALAXY_FLOATS * 4;
 
 /** Per planet: centre+radius, colour+atmosphere, tilt+spin+seed+class, detail. */
 const INSTANCE_FLOATS = 16;
 const MAX_PLANETS = 16;
 const DEPTH_FORMAT: GPUTextureFormat = 'depth32float';
+/** Straight alpha for the two system passes the crossfade fades out. */
+const ALPHA_BLEND: GPUBlendState = {
+  color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+  alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+};
 const ORBIT_SEGMENTS = 160;
 const SAMPLE_WIDTH = 640;
 
-type Reload = { sky?: (source: string) => Promise<void>; scene?: (source: string) => Promise<void> };
+type Reload = {
+  sky?: (source: string) => Promise<void>;
+  scene?: (source: string) => Promise<void>;
+  galaxy?: (source: string) => Promise<void>;
+};
 
 let activeReload: Reload | null = null;
 
@@ -96,6 +136,20 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     label: 'scene params',
     size: SCENE_BYTES,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+
+  // ---- Galaxy (impostor field) ---------------------------------------------
+  const galaxyParams = new Float32Array(GALAXY_FLOATS);
+  const galaxyUniform = device.createBuffer({
+    label: 'galaxy params',
+    size: GALAXY_BYTES,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+  const galaxyInstanceData = new Float32Array(GALAXY_MAX_INSTANCES * GALAXY_INSTANCE_FLOATS);
+  const galaxyInstanceBuffer = device.createBuffer({
+    label: 'galaxy instances',
+    size: Math.max(4, galaxyInstanceData.byteLength),
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
   });
 
   // ---- Sky (starfield) ------------------------------------------------------
@@ -158,6 +212,28 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
   let starCorePipeline = await buildStarCorePipeline(device, format, sceneModule, scenePipelineLayout);
   let orbitPipeline = await buildOrbitPipeline(device, format, sceneModule, scenePipelineLayout);
 
+  // The galaxy has its own uniform (it needs the same camera but none of the star/planet data)
+  // and one instanced additive pipeline. There is no vertex buffer: the quad is generated.
+  const galaxyLayout = device.createBindGroupLayout({
+    label: 'galaxy layout',
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+        buffer: { type: 'uniform' },
+      },
+    ],
+  });
+  const galaxyPipelineLayout = device.createPipelineLayout({
+    bindGroupLayouts: [galaxyLayout],
+  });
+  const galaxyBindGroup = device.createBindGroup({
+    label: 'galaxy params',
+    layout: galaxyLayout,
+    entries: [{ binding: 0, resource: { buffer: galaxyUniform } }],
+  });
+  let galaxyPipeline = await buildGalaxyPipeline(device, format, galaxySource, galaxyPipelineLayout);
+
   let depth: GPUTexture | null = null;
   let generation = 1;
   let frame = 0;
@@ -168,6 +244,13 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
   let raf = 0;
   let reloadToken = 0;
   let lastScene: SceneFrame | null = null;
+  let lastGalaxy: GalaxyFrame | null = null;
+  let lastGalaxyKey = '';
+  let qualityTier = options.galaxyTier;
+  let debugSlowFrames = 0;
+  let lastFrameAt = 0;
+  let frameMsEma = 0;
+  let longFrameCount = 0;
 
   options.onPipeline(generation, null);
 
@@ -206,10 +289,72 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     device.queue.writeBuffer(uniformBuffer, 0, params);
   }
 
-  function writeScene(time: number, width: number, height: number): SceneFrame | null {
+  function writeGalaxy(time: number, width: number, height: number): GalaxyFrame | null {
+    const galaxy = options.galaxy;
+    if (!galaxy) {
+      lastGalaxy = null;
+      lastGalaxyKey = '';
+      return null;
+    }
+
+    // The galaxy is static; the buffer only changes when the camera, viewport or budget does.
+    // Repacking it every idle frame would be wasted upload bandwidth and CPU.
+    const key = `${camera.x},${camera.y},${camera.z},${camera.yaw},${camera.pitch},${width},${height},${qualityTier}`;
+    if (key !== lastGalaxyKey || !lastGalaxy) {
+      const aspect = width / Math.max(1, height);
+      const scaleM = system ? displayScaleM(system) : 1;
+      const legibility = galaxyLegibility(galaxy, camera, height);
+      const next = writeGalaxyFrame(
+        galaxyInstanceData,
+        galaxy,
+        qualityTier,
+        camera,
+        scaleM,
+        height,
+        aspect,
+        legibility,
+      );
+
+      galaxyParams.set(next.viewProjection, 0);
+      galaxyParams[16] = next.cameraRight.x;
+      galaxyParams[17] = next.cameraRight.y;
+      galaxyParams[18] = next.cameraRight.z;
+      galaxyParams[19] = 0;
+      galaxyParams[20] = next.cameraUp.x;
+      galaxyParams[21] = next.cameraUp.y;
+      galaxyParams[22] = next.cameraUp.z;
+      galaxyParams[23] = 0;
+      galaxyParams[24] = next.lod;
+      galaxyParams[25] = GALAXY_GAIN;
+      galaxyParams[26] = time;
+      galaxyParams[27] = 0;
+      device.queue.writeBuffer(galaxyUniform, 0, galaxyParams);
+      if (next.count > 0) {
+        device.queue.writeBuffer(
+          galaxyInstanceBuffer,
+          0,
+          next.instances,
+          0,
+          next.count * GALAXY_INSTANCE_FLOATS,
+        );
+      }
+
+      lastGalaxy = next;
+      lastGalaxyKey = key;
+    }
+
+    return lastGalaxy;
+  }
+
+  function writeScene(
+    time: number,
+    width: number,
+    height: number,
+    lod: number,
+  ): SceneFrame | null {
     if (!system) return null;
     const aspect = width / Math.max(1, height);
-    const scene = buildSceneFrame(system, camera, time, aspect);
+    const scene = buildSceneFrame(system, camera, time, aspect, height, lod);
     lastScene = scene;
 
     sceneParams.set(scene.viewProjection, 0);
@@ -238,6 +383,11 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     sceneParams[33] = scene.planets.length;
     sceneParams[34] = scene.nearUnits;
     sceneParams[35] = aspect;
+    // The one crossfade value every pipeline consumes (issue 04 D4).
+    sceneParams[36] = scene.lod;
+    sceneParams[37] = height / (2 * Math.tan(FOV_Y_RAD / 2));
+    sceneParams[38] = 0;
+    sceneParams[39] = 0;
     device.queue.writeBuffer(sceneUniform, 0, sceneParams);
 
     const count = Math.min(scene.planets.length, MAX_PLANETS);
@@ -310,6 +460,15 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     pass.setPipeline(skyPipeline);
     pass.setBindGroup(0, skyBindGroup);
     pass.draw(3);
+
+    // The impostor field is drawn first and tests no depth: it is behind the orrery, and every
+    // system pass that follows paints over it. One draw call for up to 60k stars.
+    if (lastGalaxy && lastGalaxy.count > 0) {
+      pass.setPipeline(galaxyPipeline);
+      pass.setBindGroup(0, galaxyBindGroup);
+      pass.setVertexBuffer(0, galaxyInstanceBuffer);
+      pass.draw(6, lastGalaxy.count);
+    }
 
     if (system && lastScene) {
       // Orbits first, so the star's glare sits over them and the planets occlude both.
@@ -398,15 +557,62 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     }
   }
 
-  activeReload = { sky: reloadSky, scene: reloadScene };
+  async function reloadGalaxy(source: string): Promise<void> {
+    const token = ++reloadToken;
+    try {
+      const next = await buildGalaxyPipeline(device, format, source, galaxyPipelineLayout);
+      if (disposed || token !== reloadToken) return;
+      galaxyPipeline = next;
+      generation += 1;
+      options.onPipeline(generation, null);
+      console.info(`[ugb] galaxy rebuilt → pipeline generation ${generation}`);
+    } catch (error) {
+      if (disposed || token !== reloadToken) return;
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[ugb] galaxy rebuild failed; previous pipeline is still live.\n${message}`);
+      options.onPipeline(generation, message);
+    }
+  }
+
+  activeReload = { sky: reloadSky, scene: reloadScene, galaxy: reloadGalaxy };
 
   function render(now: number): void {
     if (disposed) return;
     raf = requestAnimationFrame(render);
 
+    // Frame-time watchdog (issue 04 D6): a sustained long frame costs the rich tier instead of
+    // stalling into a TDR. The EMA ignores the one huge gap a backgrounded tab produces.
+    if (lastFrameAt > 0) {
+      const delta = now - lastFrameAt;
+      if (delta > 0 && delta < 500) {
+        frameMsEma = frameMsEma === 0 ? delta : frameMsEma * 0.9 + delta * 0.1;
+      }
+    }
+    lastFrameAt = now;
+    if (frameMsEma > WATCHDOG_FRAME_MS) longFrameCount += 1;
+    else longFrameCount = 0;
+    const dropped = nextQualityTier(qualityTier, frameMsEma, longFrameCount);
+    if (dropped) {
+      qualityTier = dropped;
+      longFrameCount = 0;
+      // Force the next frame to repack at the smaller, prefix-only count.
+      lastGalaxyKey = '';
+      options.onTierDrop?.(dropped);
+    }
+
+    if (debugSlowFrames > 0) {
+      // Debug evidence only: make this frame cost ~45 ms so the watchdog has something to see.
+      const until = performance.now() + 45;
+      while (performance.now() < until) {
+        // busy-wait, deliberately
+      }
+      debugSlowFrames -= 1;
+    }
+
     const time = options.getTime();
     writeParams(time, canvas.width, canvas.height);
-    writeScene(time, canvas.width, canvas.height);
+    const galaxyFrame = writeGalaxy(time, canvas.width, canvas.height);
+    writeScene(time, canvas.width, canvas.height, galaxyFrame?.lod ?? 0);
 
     const encoder = device.createCommandEncoder({ label: 'stage0 frame' });
     const depthTexture = ensureDepth(canvas.width, canvas.height);
@@ -464,7 +670,8 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     const encoder = device.createCommandEncoder({ label: 'stage0 sample' });
     const time = options.getTime();
     writeParams(time, width, height);
-    writeScene(time, width, height);
+    const galaxyFrame = writeGalaxy(time, width, height);
+    writeScene(time, width, height, galaxyFrame?.lod ?? 0);
     encodePass(encoder, texture.createView(), sampleDepth.createView());
     encoder.copyTextureToBuffer(
       { texture },
@@ -517,6 +724,8 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     depth?.destroy();
     uniformBuffer.destroy();
     sceneUniform.destroy();
+    galaxyUniform.destroy();
+    galaxyInstanceBuffer.destroy();
     sphereVertexBuffer.destroy();
     sphereIndexBuffer.destroy();
     instanceBuffer.destroy();
@@ -536,8 +745,15 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     get fps() {
       return fps;
     },
+    get galaxyTier() {
+      return qualityTier;
+    },
     precisionReport: precisionReportAt,
     sceneFrame: () => lastScene,
+    galaxyFrame: () => lastGalaxy,
+    forceSlowFrames(frames: number) {
+      debugSlowFrames = Math.max(0, Math.floor(frames));
+    },
     sampleFrame,
     dispose,
   };
@@ -630,6 +846,57 @@ async function buildSkyPipeline(
   );
 }
 
+/**
+ * One instanced additive pass for the whole galaxy. There is no vertex buffer: the six corners
+ * are generated in the shader from the camera basis, and each instance carries only a
+ * camera-relative centre, a world-space radius and a colour/reveal. The pass writes no depth and
+ * tests none, because it is behind the orrery and is drawn before it.
+ */
+async function buildGalaxyPipeline(
+  device: GPUDevice,
+  format: GPUTextureFormat,
+  source: string,
+  layout: GPUPipelineLayout,
+): Promise<GPURenderPipeline> {
+  const module = await compileModule(device, 'galaxy', source);
+  return guardPipeline(device, 'galaxy', () =>
+    device.createRenderPipelineAsync({
+      label: 'galaxy impostors',
+      layout,
+      vertex: {
+        module,
+        entryPoint: 'vs_star',
+        buffers: [
+          {
+            arrayStride: GALAXY_INSTANCE_FLOATS * 4,
+            stepMode: 'instance',
+            attributes: [
+              { shaderLocation: 0, offset: 0, format: 'float32x3' },
+              { shaderLocation: 1, offset: 3 * 4, format: 'float32' },
+              { shaderLocation: 2, offset: 4 * 4, format: 'float32x4' },
+            ],
+          },
+        ],
+      },
+      fragment: {
+        module,
+        entryPoint: 'fs_star',
+        targets: [
+          {
+            format,
+            blend: {
+              color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+              alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+            },
+          },
+        ],
+      },
+      primitive: { topology: 'triangle-list', cullMode: 'none' },
+      depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: 'always' },
+    }),
+  );
+}
+
 async function buildPlanetPipeline(
   device: GPUDevice,
   format: GPUTextureFormat,
@@ -663,7 +930,7 @@ async function buildPlanetPipeline(
           },
         ],
       },
-      fragment: { module, entryPoint: 'fs_planet', targets: [{ format }] },
+      fragment: { module, entryPoint: 'fs_planet', targets: [{ format, blend: ALPHA_BLEND }] },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       // Reverse-Z: nearer means a larger depth value.
       depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: 'greater' },
@@ -720,7 +987,7 @@ async function buildStarCorePipeline(
       label: 'star core',
       layout,
       vertex: { module, entryPoint: 'vs_star_core' },
-      fragment: { module, entryPoint: 'fs_star_core', targets: [{ format }] },
+      fragment: { module, entryPoint: 'fs_star_core', targets: [{ format, blend: ALPHA_BLEND }] },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: 'greater' },
     }),
@@ -780,6 +1047,10 @@ if (import.meta.hot) {
   import.meta.hot.accept('./scene.wgsl?raw', (module) => {
     const source = (module as { default?: unknown } | undefined)?.default;
     if (typeof source === 'string') void activeReload?.scene?.(source);
+  });
+  import.meta.hot.accept('./galaxy.wgsl?raw', (module) => {
+    const source = (module as { default?: unknown } | undefined)?.default;
+    if (typeof source === 'string') void activeReload?.galaxy?.(source);
   });
   // The noise module is shared, so an edit to it invalidates both pipelines.
   import.meta.hot.accept('./noise.wgsl?raw', () => {

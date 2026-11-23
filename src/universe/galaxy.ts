@@ -26,7 +26,7 @@ import { formatAddress, type Address } from '../frame/address';
 import { GALAXY_RADIUS_M } from '../render/scale';
 
 /** Bumped whenever the generator's output would change; old links break loudly (ADR-0005). */
-export const GALAXY_VERSION = 1;
+export const GALAXY_VERSION = 2;
 
 /** One light-year, metres (IAU). */
 export const LY_M = 9.460_730_472_580_8e15;
@@ -76,15 +76,37 @@ export interface Galaxy {
 /** Where the home star sits in the disc, as a fraction of the radius. */
 const HOME_RADIUS_FRACTION = 0.55;
 /** Disc scale length, as a fraction of the radius: an exponential disc falls off here. */
-const DISC_SCALE_LENGTH_FRACTION = 0.28;
+const DISC_SCALE_LENGTH_FRACTION = 0.36;
 /** Two arms; the log-spiral pitch is this many radians of winding per scale length. */
 const ARM_WINDING = 2.4;
 /** Fraction of the disc budget in the bulge. */
-const BULGE_FRACTION = 0.12;
+const BULGE_FRACTION = 0.06;
+/** Bulge radius, as a fraction of the radius: a compact nucleus, not a wash over the inner arms. */
+const BULGE_RADIUS_FRACTION = 0.11;
+/**
+ * Bulge stars are drawn dimmer than disc stars. They are a dense 3D cluster, so the same
+ * brightness stacks into an additive white blob that swallows the inner arms; the nucleus still
+ * reads as the brightest part of the galaxy, but as a core rather than a clipped hole.
+ */
+const BULGE_BRIGHTNESS = 0.55;
 /** Disc thickness, as a fraction of the radius. */
 const DISC_THICKNESS_FRACTION = 0.025;
 /** Fraction of the disc that is always inter-arm, so the gaps do not close. */
-const INTER_ARM_FLOOR = 0.30;
+const INTER_ARM_FRACTION = 0.08;
+/**
+ * The arm's minimum acceptance. A rejected draw is re-aimed (not kept), so this is the
+ * acceptance floor at the arm's edge; it keeps the arm soft rather than a drawn filament. It is
+ * deliberately low: the *density* ratio is what makes the arm read at 45k impostors, and a high
+ * floor fills the gap with haze until the wave measures flat (the oval failure).
+ */
+const ARM_FLOOR = 0.05;
+/**
+ * Bound on the rejection loop. Re-aiming a rejected star uniformly (the first implementation)
+ * deposited ~60% of the disc as haze, which flattened the m=2 wave into an oval and made the
+ * arms unreadable at the render budget. Rejection-sampling *into* the arm keeps the population
+ * on the arms; the loop is bounded so a pathological seed cannot spin.
+ */
+const ARM_ATTEMPTS = 40;
 
 export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier): Galaxy {
   const counts = GALAXY_TIER_STARS[tier];
@@ -145,7 +167,7 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
 
     if (inBulge) {
       // A flattened spheroid: radius ∝ u^(1/3) keeps it solid, not a shell.
-      const r = 0.16 * radius * Math.cbrt(discRng.next());
+      const r = BULGE_RADIUS_FRACTION * radius * Math.cbrt(discRng.next());
       const cosPolar = discRng.range(-1, 1);
       const sinPolar = Math.sqrt(1 - cosPolar * cosPolar);
       const azimuth = discRng.range(0, Math.PI * 2);
@@ -161,14 +183,19 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
         if (r <= radius) break;
       }
       const azimuth = discRng.range(0, Math.PI * 2);
-      const arm = armStrength(r, azimuth, scale, armOffsets);
-      // Density modulation, not a drawn curve: an arm is a region where more stars survive.
-      // A rejected star is re-aimed once at a fresh angle, which is where the inter-arm
-      // population comes from; the count stays a compile-time constant.
-      const finalAngle =
-        discRng.next() > INTER_ARM_FLOOR + (1 - INTER_ARM_FLOOR) * arm
-          ? discRng.range(0, Math.PI * 2)
-          : azimuth;
+      // Density modulation, not a drawn curve: most stars are rejection-sampled onto the arm,
+      // and a fixed fraction is placed uniformly so the inter-arm gaps stay populated.
+      let finalAngle: number;
+      if (discRng.chance(INTER_ARM_FRACTION)) {
+        finalAngle = discRng.range(0, Math.PI * 2);
+      } else {
+        finalAngle = azimuth;
+        for (let attempt = 0; attempt < ARM_ATTEMPTS; attempt += 1) {
+          const arm = armStrength(r, finalAngle, scale, armOffsets);
+          if (discRng.next() <= ARM_FLOOR + (1 - ARM_FLOOR) * arm) break;
+          finalAngle = discRng.range(0, Math.PI * 2);
+        }
+      }
       x = r * Math.cos(finalAngle);
       z = r * Math.sin(finalAngle);
       y = gaussian(discRng) * DISC_THICKNESS_FRACTION * radius;
@@ -189,7 +216,9 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
       homeZ *= factor;
     }
 
-    const brightness = starBrightness(discRng);
+    const brightness = inBulge
+      ? starBrightness(discRng) * BULGE_BRIGHTNESS
+      : starBrightness(discRng);
     stars.push({
       x: homeX,
       y: homeY,

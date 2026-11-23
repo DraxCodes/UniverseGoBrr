@@ -142,6 +142,18 @@ describe('zooming', () => {
     for (let step = 0; step < 500; step += 1) camera = zoomBy(camera, 0.5, SCALE);
     expect(orbitDistance(camera)).toBeGreaterThan(0.01 * SCALE);
   });
+
+  it('reaches the galaxy when given a farther bound, and still clamps there', () => {
+    // Layer 3 raises the reachable distance; the URL keeps real metres, so this is the only
+    // bound that changes.
+    const galaxyMax = 6e21;
+    let camera = HOME;
+    for (let step = 0; step < 400; step += 1) {
+      camera = zoomBy(camera, 1.3, SCALE, galaxyMax);
+    }
+    expect(orbitDistance(camera)).toBeCloseTo(galaxyMax, 0);
+    expect(zoomEdge(camera, 1.3, SCALE, galaxyMax)).toBe('max');
+  });
 });
 
 describe('zoom clamp feedback', () => {

@@ -4,13 +4,14 @@ import {
   NEAR_UNITS,
   STAR_CORE_RADIUS,
   STAR_DISPLAY_RADIUS,
+  STAR_MIN_PX,
   buildSceneFrame,
   defaultSystemCamera,
   displayScaleM,
   hueToRgb,
   planetColor,
 } from './system-scene';
-import { cameraBasis, projectPoint } from './camera';
+import { FOV_Y_RAD, cameraBasis, projectPoint } from './camera';
 import {
   AU_M,
   displayOrbitRadius,
@@ -210,6 +211,28 @@ describe('presentation constants', () => {
     const scene = buildSceneFrame(SYSTEM, defaultSystemCamera(SYSTEM), 0, ASPECT);
     expect(scene.starCoreRadius).toBe(STAR_CORE_RADIUS);
     expect(scene.starRadius).toBe(STAR_DISPLAY_RADIUS);
+  });
+
+  it('keeps the home star a findable point through the crossfade', () => {
+    // At galaxy distance the glare quad is far below a pixel; the identity floor is what stops
+    // "the one point the eye can find" from becoming no point at all (issue 04 D5).
+    const distance = 6e21;
+    const pitch = -0.639;
+    const camera = {
+      x: 0,
+      y: -Math.sin(pitch) * distance,
+      z: Math.cos(pitch) * distance,
+      yaw: 0,
+      pitch,
+    };
+    const scene = buildSceneFrame(SYSTEM, camera, 0, ASPECT, 1080, 0.9);
+    expect(scene.lod).toBe(0.9);
+    expect(scene.starRadius).toBeGreaterThan(STAR_DISPLAY_RADIUS);
+
+    const scale = displayScaleM(SYSTEM);
+    const distanceUnits = Math.hypot(camera.x, camera.y, camera.z) / scale;
+    const focalPx = 1080 / (2 * Math.tan(FOV_Y_RAD / 2));
+    expect((scene.starRadius / distanceUnits) * focalPx).toBeCloseTo(STAR_MIN_PX, 6);
   });
 
   it('maps hues to bounded, unsaturated colours', () => {

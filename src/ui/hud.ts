@@ -61,11 +61,15 @@ export function mountHud(state: UrlState, issues: readonly string[]): Hud {
     issuesEl.hidden = lines.length === 0;
   }
 
+  const LY_M = 9.460_730_472_580_8e15;
+
   function setCamera(camera: Camera): void {
     const f = (value: number): string => {
       // A system camera sits at 10¹¹ m, where six decimals of metres is noise and fifteen digits
-      // is unreadable. Format by magnitude, in AU.
-      return Math.abs(value) >= 1e6
+      // is unreadable. Format by magnitude: light-years out at galaxy scale, AU inside it.
+      const magnitude = Math.abs(value);
+      if (magnitude >= 0.05 * LY_M) return `${(value / LY_M).toFixed(1)} ly`;
+      return magnitude >= 1e6
         ? `${(value / AU_M).toFixed(1)} AU`
         : formatNumber(Number(value.toFixed(1)));
     };

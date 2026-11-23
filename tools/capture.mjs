@@ -146,6 +146,9 @@ async function captureShot(browserInstance, baseUrl, outDir, shot) {
         deviceId: debug.deviceId,
         frame: debug.frame,
         pipelineGeneration: debug.pipelineGeneration,
+        // The live crossfade and population: evidence that the galaxy pass actually ran, and
+        // that the still is the frame the manifest says it is.
+        galaxy: debug.galaxy,
         state: debug.state,
         precisionReport: debug.precisionReport,
         // The app's own verdict on the query string. Non-empty means it replaced a value with
@@ -178,6 +181,7 @@ async function captureShot(browserInstance, baseUrl, outDir, shot) {
     assertFullBleed(observed);
     assertDarkOnly(shot.name, observed);
     assertPrecisionControl(shot, observed.precisionReport);
+    assertGalaxy(shot, observed.galaxy);
 
     const sample = await page.evaluate(() => window.__ugb.sampleCanvas());
     if (!Number.isFinite(sample.mean) || !Number.isFinite(sample.stdev)) {
@@ -190,7 +194,7 @@ async function captureShot(browserInstance, baseUrl, outDir, shot) {
     }
 
     const file = path.join(outDir, `${shot.name}.png`);
-    await page.screenshot({ path: file, fullPage: false });
+    await page.screenshot({ path: file, fullPage: false, ...(shot.clip ? { clip: shot.clip } : {}) });
 
     if (consoleErrors.length > 0) {
       throw new Error(`Console errors:\n${consoleErrors.map(indent).join('\n')}`);
@@ -213,6 +217,8 @@ async function captureShot(browserInstance, baseUrl, outDir, shot) {
       deviceId: observed.deviceId,
       state: observed.state,
       precisionReport: observed.precisionReport,
+      galaxy: observed.galaxy,
+      clip: shot.clip ?? null,
       url: observed.url,
       viewport: observed.viewport,
       appearance: observed.appearance,
@@ -284,6 +290,26 @@ function validateShot(shot, file) {
   if (shot.dpr !== undefined) {
     if (typeof shot.dpr !== 'number' || !(shot.dpr >= 1 && shot.dpr <= 2)) {
       throw new Error(`${where}: dpr must be a number in [1, 2] when present.`);
+    }
+  }
+  if (shot.clip !== undefined) {
+    const { x, y, width, height } = shot.clip ?? {};
+    if (
+      ![x, y, width, height].every((value) => Number.isInteger(value)) ||
+      x < 0 ||
+      y < 0 ||
+      width <= 0 ||
+      height <= 0
+    ) {
+      throw new Error(`${where}: clip must be {x, y, width, height} in CSS pixels.`);
+    }
+  }
+  if (shot.expectGalaxyLod !== undefined) {
+    if (
+      typeof shot.expectGalaxyLod !== 'number' ||
+      !(shot.expectGalaxyLod >= 0 && shot.expectGalaxyLod <= 1)
+    ) {
+      throw new Error(`${where}: expectGalaxyLod must be a number in [0, 1] when present.`);
     }
   }
 }
@@ -402,6 +428,26 @@ function assertDarkOnly(name, { appearance }) {
 
   if (problems.length > 0) {
     throw new Error(`Shot ${name} is not dark-only:\n${problems.map(indent).join('\n')}`);
+  }
+}
+
+/**
+ * The galaxy pass ran and is at the crossfade the manifest expects. A still cannot prove a
+ * transition, but it can prove which side of it this frame is on, and that impostors exist.
+ */
+function assertGalaxy(shot, galaxy) {
+  if (shot.expectGalaxyLod === undefined) return;
+  if (!galaxy) {
+    throw new Error(`Shot ${shot.name} expected the galaxy pass, but no galaxy frame exists.`);
+  }
+  if (galaxy.count < 1000) {
+    throw new Error(`Shot ${shot.name} drew only ${galaxy.count} impostors.`);
+  }
+  if (Math.abs(galaxy.lod - shot.expectGalaxyLod) > 0.12) {
+    throw new Error(
+      `Shot ${shot.name} has lod ${galaxy.lod.toFixed(3)}, not the expected ` +
+        `${shot.expectGalaxyLod.toFixed(3)} (camera or trigger drifted).`,
+    );
   }
 }
 

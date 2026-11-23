@@ -12,6 +12,7 @@
  */
 
 import type { Camera } from '../state/url-state';
+import { notchFactor } from '../render/scale';
 
 /** Closest the camera may approach the star, as a fraction of the outermost orbit. */
 export const MIN_DISTANCE_FACTOR = 0.08;
@@ -65,11 +66,15 @@ export function dragOrbit(camera: Camera, dxPixels: number, dyPixels: number): C
 export type ZoomEdge = 'min' | 'max';
 
 /** Zoom by a factor, clamped against the frame's own scale so no address is unreachable. */
-export function zoomBy(camera: Camera, factor: number, frameScaleM: number): Camera {
+export function zoomBy(
+  camera: Camera,
+  factor: number,
+  frameScaleM: number,
+  maxDistanceM = MAX_DISTANCE_FACTOR * frameScaleM,
+): Camera {
   const { yaw, pitch, distance } = orbitParams(camera);
   const min = MIN_DISTANCE_FACTOR * frameScaleM;
-  const max = MAX_DISTANCE_FACTOR * frameScaleM;
-  const next = Math.min(max, Math.max(min, distance * factor));
+  const next = Math.min(maxDistanceM, Math.max(min, distance * factor));
   return orbitTo(yaw, pitch, next);
 }
 
@@ -79,10 +84,15 @@ export function zoomBy(camera: Camera, factor: number, frameScaleM: number): Cam
  * would be a lie. This is what makes the clamp audible to the user (the Layer 2 gate recorded
  * wheel notches being swallowed with no feedback).
  */
-export function zoomEdge(camera: Camera, factor: number, frameScaleM: number): ZoomEdge | null {
+export function zoomEdge(
+  camera: Camera,
+  factor: number,
+  frameScaleM: number,
+  maxDistanceM = MAX_DISTANCE_FACTOR * frameScaleM,
+): ZoomEdge | null {
   const { distance } = orbitParams(camera);
   const min = MIN_DISTANCE_FACTOR * frameScaleM;
-  const max = MAX_DISTANCE_FACTOR * frameScaleM;
+  const max = maxDistanceM;
   const requested = distance * factor;
   // Tolerance, not equality: `zoomBy` clamps to exactly `min`/`max`, but rebuilding the camera
   // from its angles and taking the hypotenuse round-trips to that value ±1 ulp, so a strict
@@ -101,6 +111,11 @@ export interface OrbitControlOptions {
   camera: Camera;
   /** The frame's outermost orbit in metres: the unit the zoom limits are expressed in. */
   frameScaleM: number;
+  /**
+   * The furthest the camera may retreat, in metres. Omitted means the Layer 2 framing limit
+   * (`MAX_DISTANCE_FACTOR` × the frame scale); Layer 3 passes the galaxy's reachable distance.
+   */
+  maxDistanceM?: number;
   /** Called on every animation-worthy change. Must be cheap. */
   onChange(): void;
   /** Called when the gesture settles. This is where the URL is rewritten. */
@@ -117,6 +132,7 @@ const COMMIT_DELAY_MS = 250;
 
 export function attachOrbitControls(options: OrbitControlOptions): OrbitControls {
   const { element, camera, frameScaleM } = options;
+  const maxDistanceM = options.maxDistanceM ?? MAX_DISTANCE_FACTOR * frameScaleM;
   const target = element;
   let pointerId: number | null = null;
   let lastX = 0;
@@ -172,9 +188,13 @@ export function attachOrbitControls(options: OrbitControlOptions): OrbitControls
     event.preventDefault();
     // Normalise the three deltaMode units to roughly "lines", then to a multiplicative factor.
     const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1;
-    const factor = Math.exp(event.deltaY * unit * 0.0012);
-    const edge = zoomEdge(camera, factor, frameScaleM);
-    apply(zoomBy(camera, factor, frameScaleM));
+    const base = Math.exp(event.deltaY * unit * 0.0012);
+    // Layer 3: the void is crossed faster, but the rate is bit-identical to Layer 2 inside the
+    // system and at the galaxy edge. `notchFactor` is a pure function of the distance the wheel
+    // is at, so the same gesture is one rate across the joint.
+    const factor = notchFactor(orbitDistance(camera), base);
+    const edge = zoomEdge(camera, factor, frameScaleM, maxDistanceM);
+    apply(zoomBy(camera, factor, frameScaleM, maxDistanceM));
     if (edge) options.onZoomEdge?.(edge);
     scheduleCommit();
   };

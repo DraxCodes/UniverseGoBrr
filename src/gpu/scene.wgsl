@@ -24,6 +24,8 @@ struct Scene {
   camera_up: vec4f,
   // x: seconds, y: planet count, z: near plane, w: aspect.
   frame_meta: vec4f,
+  // x: the shared crossfade `lod` (issue 04 D4), y: focal pixels, z: star minimum px, w: reserved.
+  lod_meta: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> scene: Scene;
@@ -41,6 +43,8 @@ struct PlanetOut {
   // Light and eye directions, rotated into the local frame.
   @location(4) light: vec3f,
   @location(5) view: vec3f,
+  // The crossfade's opacity for this body: 1 in the orrery, 0 once the system is one point.
+  @location(6) fade: f32,
 };
 
 // Inverse of the surface rotation (spin about y, then tilt about x).
@@ -84,6 +88,9 @@ fn vs_planet(
   out.extras = vec3f(tilt_spin.z, tilt_spin.w, extra.x);
   out.light = to_local(normalize(scene.star_center.xyz - world), spin, tilt);
   out.view = to_local(normalize(-world), spin, tilt);
+  // The system's geometry fades inside the crossfade band; the star's glare keeps going as the
+  // identity impostor. Order matters: it is the planets that must collapse first.
+  out.fade = 1.0 - smoothstep(0.15, 0.55, scene.lod_meta.x);
   return out;
 }
 
@@ -251,6 +258,9 @@ fn ocean_clouds(dir: vec3f, seed: f32, timeSeconds: f32) -> f32 {
 
 @fragment
 fn fs_planet(in: PlanetOut) -> @location(0) vec4f {
+  if (in.fade <= 0.01) {
+    discard;
+  }
   let dir = normalize(in.surface);
   let light = normalize(in.light);
   let view = normalize(in.view);
@@ -352,7 +362,7 @@ fn fs_planet(in: PlanetOut) -> @location(0) vec4f {
   // leaving mid-tones almost untouched (0.3 -> 0.295).
   color = color / (vec3f(0.85) + color * 0.55);
 
-  return vec4f(color, 1.0);
+  return vec4f(color, in.fade);
 }
 
 struct StarOut {
@@ -436,14 +446,16 @@ fn vs_star_core(@builtin(vertex_index) index: u32) -> StarOut {
 @fragment
 fn fs_star_core(in: StarOut) -> @location(0) vec4f {
   let r = length(in.uv);
-  if (r > 1.0) {
+  let fade = 1.0 - smoothstep(0.45, 0.75, scene.lod_meta.x);
+  if (r > 1.0 || fade <= 0.01) {
     discard;
   }
   // The core's own UV is mapped into the glare quad's units, so its rim evaluates to exactly the
   // corona's value at that radius.
   let ratio = scene.star_color.w / scene.star_center.w;
   let surface = star_surface(r);
-  return star_shade(surface + star_glow(in.uv * ratio), surface);
+  let shade = star_shade(surface + star_glow(in.uv * ratio), surface);
+  return vec4f(shade.rgb, fade);
 }
 
 @fragment
@@ -454,7 +466,13 @@ fn fs_star(in: StarOut) -> @location(0) vec4f {
   if (d < scene.star_color.w / scene.star_center.w) {
     discard;
   }
-  return star_shade(star_glow(in.uv), 0.0);
+  // As the opaque core fades out, the corona takes over the same brightness (issue 04 D4/D5).
+  // Without it the star arrives as a small dim dot while brighter disc impostors surround it, and
+  // the one point the viewer is supposed to find is lost in the field it belongs to. At orrery
+  // scale this is exactly 1.0, so Layer 2's star is untouched.
+  let handoff = smoothstep(0.45, 0.85, scene.lod_meta.x);
+  let shade = star_shade(star_glow(in.uv), 0.0);
+  return vec4f(shade.rgb * mix(1.0, 1.9, handoff), 1.0);
 }
 
 struct OrbitOut {
@@ -510,5 +528,9 @@ fn vs_orbit(@location(0) local: vec3f, @location(1) radius: f32) -> OrbitOut {
 fn fs_orbit(in: OrbitOut) -> @location(0) vec4f {
   // Faint on purpose — the rings are a diagram, not scenery — but they were too faint to read at
   // 1080p, which made the planets look scattered rather than orbiting.
-  return vec4f(0.44, 0.56, 0.74, 0.42 * in.opacity);
+  //
+  // Rings are the first thing the crossfade gives up: a diagram above the orrery is exactly the
+  // astrolabe frame the council named.
+  let fade = 1.0 - smoothstep(0.0, 0.25, scene.lod_meta.x);
+  return vec4f(0.44, 0.56, 0.74, 0.42 * in.opacity * fade);
 }

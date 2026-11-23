@@ -8,6 +8,12 @@
  * steps the wheel and records the mean luminance and stdev per step, so a discontinuity shows as a
  * jump between two adjacent steps rather than as a smooth ramp.
  *
+ * Layer 3 adds the **handoff leg**: one continuous outward run from the orrery through the
+ * system→galaxy crossfade to the far wheel clamp, recording `lod` (the shared crossfade value),
+ * arm `contrast`, the impostor count and the HUD's own scene row at each step. The still set
+ * cannot show a transition; this leg is the evidence that the order is rings → point → arm → disc
+ * and that the handoff does not double-expose or pop.
+ *
  * Usage (needs the dev server, e.g. `npm run dev`):
  *   node tools/live-probe.mjs --url http://127.0.0.1:5173/
  */
@@ -54,6 +60,10 @@ async function sample(dir, label) {
   await page.waitForFunction((n) => window.__ugb.frame > n + 1, frame, { timeout: 5000 });
   const stats = await page.evaluate(() => window.__ugb.sampleCanvas());
   const camera = await page.evaluate(() => window.__ugb.state.camera);
+  const galaxy = await page.evaluate(() => window.__ugb.galaxy);
+  const scene = await page.evaluate(
+    () => document.querySelector('#hud-scene')?.textContent?.trim() ?? '',
+  );
   const eyeAU = Math.hypot(camera[0], camera[1], camera[2]) / AU;
   const file = path.join(outDir, dir, `${label}.png`);
   await mkdir(path.dirname(file), { recursive: true });
@@ -63,13 +73,50 @@ async function sample(dir, label) {
     eyeAU: Number(eyeAU.toFixed(3)),
     mean: Number(stats.mean.toFixed(5)),
     stdev: Number(stats.stdev.toFixed(5)),
+    lod: galaxy ? Number(galaxy.lod.toFixed(3)) : null,
+    contrast: galaxy ? Number(galaxy.contrast.toFixed(3)) : null,
+    count: galaxy?.count ?? null,
+    tier: galaxy?.tier ?? null,
+    scene,
     file: path.relative(root, file),
   };
   console.log(
     `[live] ${dir} ${label} eye=${entry.eyeAU.toFixed(2)} AU mean=${entry.mean.toFixed(4)} ` +
-      `stdev=${entry.stdev.toFixed(4)}`,
+      `stdev=${entry.stdev.toFixed(4)} lod=${entry.lod ?? '-'} count=${entry.count ?? '-'} ` +
+      `scene="${scene}"`,
   );
   return entry;
+}
+
+/**
+ * The crossfade's own evidence: `lod` must climb from 0 to 1 without going back down, and the
+ * handoff window is where the two scene rows swap. A step that reports `lod` outside [0,1], or a
+ * decrease, is a pop the stills could not show.
+ */
+function summariseHandoff(steps) {
+  const lods = steps.map((step) => step.lod ?? 0);
+  let decreases = 0;
+  let worstDecrease = 0;
+  for (let index = 1; index < lods.length; index += 1) {
+    const delta = lods[index] - lods[index - 1];
+    if (delta < -1e-6) {
+      decreases += 1;
+      worstDecrease = Math.min(worstDecrease, delta);
+    }
+  }
+  const firstRamp = steps.find((step) => (step.lod ?? 0) > 0.02);
+  const firstFull = steps.find((step) => (step.lod ?? 0) >= 0.98);
+  const handoff = steps.filter((step) => (step.lod ?? 0) > 0.02 && (step.lod ?? 0) < 0.98);
+  return {
+    steps: steps.length,
+    decreases,
+    worstDecrease: Number(worstDecrease.toFixed(4)),
+    firstRampAt: firstRamp?.label ?? null,
+    firstFullAt: firstFull?.label ?? null,
+    handoffSteps: handoff.length,
+    maxCount: Math.max(...steps.map((step) => step.count ?? 0)),
+    sceneRows: [...new Set(steps.map((step) => step.scene))].length,
+  };
 }
 
 /** Report the largest step-to-step change; a pop is a discontinuity that dwarfs its neighbours. */
@@ -108,16 +155,33 @@ for (let index = 1; index <= 20; index += 1) {
   outward.push(await sample('out', `step-${String(index).padStart(2, '0')}`));
 }
 
+// --- The handoff leg: one continuous outward run, orrery → galaxy → far clamp. --------------
+// 80 notches at 120 px: the void boost crosses the eight decades in roughly 45, the legibility
+// ramp starts near 4.7e20 m and completes near 7.5e20 m, and the tail pins the far clamp
+// (6e21 m = 12 R) so the run has a definite end. The reset re-frames the orrery so this leg
+// starts where the scored still does.
+await page.goto(target.href, { waitUntil: 'domcontentloaded' });
+await page.waitForFunction(() => window.__ugb?.frame >= 3, null, { timeout: 20_000 });
+await page.mouse.move(960, 700);
+
+const handoff = [await sample('handoff', 'step-00')];
+for (let index = 1; index <= 80; index += 1) {
+  await page.mouse.wheel(0, 120);
+  handoff.push(await sample('handoff', `step-${String(index).padStart(2, '0')}`));
+}
+
 const report = {
   generatedAt: new Date().toISOString(),
   baseUrl,
   camera: ORRERY_CAMERA,
   inward: { steps: inward, summary: summarise(inward) },
   outward: { steps: outward, summary: summarise(outward) },
+  handoff: { steps: handoff, summary: summariseHandoff(handoff) },
 };
 await writeFile(path.join(outDir, 'summary.json'), `${JSON.stringify(report, null, 2)}\n`);
 console.log(`[live] inward  ${JSON.stringify(report.inward.summary)}`);
 console.log(`[live] outward ${JSON.stringify(report.outward.summary)}`);
+console.log(`[live] handoff ${JSON.stringify(report.handoff.summary)}`);
 
 await context.close();
 await browser.close();

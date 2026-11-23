@@ -12,7 +12,7 @@
  *   near/far in the units the vertices are in.
  */
 
-import { cameraBasis, multiply, reverseZProjection, viewFromBasis, type Vec3 } from './camera';
+import { cameraBasis, FOV_Y_RAD, multiply, reverseZProjection, viewFromBasis, type Vec3 } from './camera';
 import type { Camera } from '../state/url-state';
 import {
   PLANET_CLASS_ID,
@@ -28,6 +28,14 @@ import {
 export const NEAR_UNITS = 0.002;
 /** The star's glare quad, in units. The visible photosphere is much smaller than this. */
 export const STAR_DISPLAY_RADIUS = 0.135;
+/**
+ * The star's minimum on-screen radius, in device pixels. Past the crossfade the glare quad would
+ * otherwise shrink below a pixel and vanish; this is what keeps the home star findable at 1:1
+ * through the handoff (issue 04 D5). It never enlarges the star at orrery scale. Sized to read as
+ * the brightest single point in its neighbourhood once the disc resolves, not merely as one more
+ * impostor: the galaxy pass fades its own local field out, so this quad is the whole of the mark.
+ */
+export const STAR_MIN_PX = 3.4;
 /**
  * The opaque core's radius, in units — the disc that writes depth and occludes. It is held
  * **absolute** (0.075 × 0.55, the size verified against planets crossing the sun) rather than as
@@ -68,6 +76,11 @@ export interface SceneFrame {
   /** Orbit radii in display units, one per planet, outermost last. */
   readonly orbitRadii: readonly number[];
   readonly nearUnits: number;
+  /**
+   * The shared crossfade value (issue 04 D4). 0 is the orrery, 1 is the resolved galaxy. Every
+   * pipeline consumes this one number; there is no per-pipeline threshold and no CPU mode switch.
+   */
+  readonly lod: number;
 }
 
 /** Metres → display units, given the system's outermost orbit. */
@@ -81,10 +94,21 @@ export function buildSceneFrame(
   camera: Camera,
   timeSeconds: number,
   aspect: number,
+  viewportHeightPx = 1080,
+  lod = 0,
 ): SceneFrame {
   const scale = displayScaleM(system);
   const basis = cameraBasis(camera.yaw, camera.pitch);
   const viewProjection = multiply(reverseZProjection(aspect, NEAR_UNITS), viewFromBasis(basis));
+
+  // Pixels per display unit at distance 1. The star's glare keeps a minimum footprint so it is
+  // still a point the eye can find when the orrery is one dot inside the galaxy.
+  const focalPx = viewportHeightPx / (2 * Math.tan(FOV_Y_RAD / 2));
+  const cameraDistanceUnits = Math.hypot(camera.x, camera.y, camera.z) / scale;
+  const starRadius = Math.max(
+    STAR_DISPLAY_RADIUS,
+    (STAR_MIN_PX * cameraDistanceUnits) / focalPx,
+  );
 
   // The camera is at (camera.x, camera.y, camera.z) in metres; every object is expressed as
   // `(objectMetres - cameraMetres) / scale`. Both subtractions are doubles, so the result is
@@ -115,12 +139,13 @@ export function buildSceneFrame(
   return {
     viewProjection,
     starCenter: relative(0, 0, 0),
-    starRadius: STAR_DISPLAY_RADIUS,
+    starRadius,
     starCoreRadius: STAR_CORE_RADIUS,
     starColor: system.star.color,
     planets,
     orbitRadii: system.planets.map((planet) => displayOrbitRadius(planet, system)),
     nearUnits: NEAR_UNITS,
+    lod,
   };
 }
 

@@ -1,0 +1,138 @@
+{
+  "notes": "Layer 2 capture manifest. Desktop only: 1080p, 1440p and 4K at DPR 1, plus a 4K display at 200% OS scaling (1920 CSS px, DPR 2). The first four shots sweep the desktop widths over the same coordinate; 'layer2-orrery', 'layer2-orrery-1440p' and 'layer2-orrery-2160p' are the content shots at the seam's three declared widths, and the four 'layer2-closeup-*' shots frame one world each at ~9 body radii so surface detail can be judged at full size. The 1440p content shot exists because 2560 is the one width between both HUD zoom breakpoints, so it is the only way to observe the 1.25x tier. The two precision shots are a negative control: they differ only in the coordinate path the probe uses, so if 'naive' ever separates the markers the harness has stopped detecting the bug. Mobile is a non-goal (spec §1); fullscreen is a display mode, not a separate layout. Light theme is not meaningful for the space scene.",
+  "shots": [
+    {
+      "name": "desktop-1080p",
+      "width": 1920,
+      "height": 1080,
+      "seed": "ugb-0000",
+      "epoch": "2000-01-01T00:00:00.000Z",
+      "address": "v1/0",
+      "t": 1200,
+      "camera": [0, 4539683610135.335, 6109799745971.616, 0, -0.6390168339184684]
+    },
+    {
+      "name": "desktop-1440p",
+      "width": 2560,
+      "height": 1440,
+      "seed": "ugb-0000",
+      "epoch": "2000-01-01T00:00:00.000Z",
+      "address": "v1/0",
+      "t": 1200,
+      "camera": [0, 4539683610135.335, 6109799745971.616, 0, -0.6390168339184684]
+    },
+    {
+      "name": "desktop-2160p",
+      "width": 3840,
+      "height": 2160,
+      "seed": "ugb-0000",
+      "epoch": "2000-01-01T00:00:00.000Z",
+      "address": "v1/0",
+      "t": 1200,
+      "camera": [0, 4539683610135.335, 6109799745971.616, 0, -0.6390168339184684]
+    },
+    {
+      "name": "desktop-2160p-scaled",
+      "width": 1920,
+      "height": 1080,
+      "dpr": 2,
+      "seed": "ugb-0000",
+      "epoch": "2000-01-01T00:00:00.000Z",
+      "address": "v1/0",
+      "t": 1200,
+      "camera": [0, 4539683610135.335, 6109799745971.616, 0, -0.6390168339184684]
+    },
+    {
+      "name": "layer1-precision-fixed",
+      "width": 1920,
+      "height": 1080,
+      "seed": "ugb-0000",
+      "epoch": "2000-01-01T00:00:00.000Z",
+      "address": "v1/4.-2.7.1",
+      "t": 1200,
+      "camera": [0, 0, 0, 0, 0],
+      "precision": "fixed"
+    },
+    {
+      "name": "layer1-precision-naive",
+      "width": 1920,
+      "height": 1080,
+      "seed": "ugb-0000",
+      "epoch": "2000-01-01T00:00:00.000Z",
+      "address": "v1/4.-2.7.1",
+      "t": 1200,
+      "camera": [0, 0, 0, 0, 0],
+      "precision": "naive"
+    },
+    {
+      "name": "layer2-closeup-ocean",
+      "width": 1920,
+      "height": 1080,
+      "seed": "ugb-0000",
+      "epoch": "2000-01-01T00:00:00.000Z",
+      "address": "v1/4.-2.7",
+      "t": 1200,
+      "camera": [-15219111193.446575, 85628711268.60799, -249550843562.60406, 0.06091057379264537, -0.3]
+    },
+    {
+      "name": "layer2-closeup-gas",
+      "width": 1920,
+      "height": 1080,
+      "seed": "ugb-0000",
+      "epoch": "2000-01-01T00:00:00.000Z",
+      "address": "v1/4.-2.7",
+      "t": 1200,
+      "camera": [685950750218.9579, -281158760942.0521, 2647104376118.082, -1.5941174545, 0.35]
+    },
+    {
+      "name": "layer2-closeup-rock",
+      "width": 1920,
+      "height": 1080,
+      "seed": "ugb-0000",
+      "epoch": "2000-01-01T00:00:00.000Z",
+      "address": "v1/4.-2.7",
+      "t": 1200,
+      "camera": [168183614711.78818, 57642163329.87281, -6277978474.37943, -1.533485528, -0.3]
+    },
+    {
+      "name": "layer2-closeup-superearth",
+      "width": 1920,
+      "height": 1080,
+      "seed": "ugb-0000",
+      "epoch": "2000-01-01T00:00:00.000Z",
+      "address": "v1/4.-2.7",
+      "t": 1200,
+      "camera": [-251001290778.18863, 105001666513.2773, 480525936137.0203, 2.660227671, -0.3]
+    },
+    {
+      "name": "layer2-orrery",
+      "width": 1920,
+      "height": 1080,
+      "seed": "ugb-0000",
+      "epoch": "2000-01-01T00:00:00.000Z",
+      "address": "v1/4.-2.7",
+      "t": 1200,
+      "camera": [0, 4039008706713.87, 5435959086479.569, 0, -0.6390168339184684]
+    },
+    {
+      "name": "layer2-orrery-1440p",
+      "width": 2560,
+      "height": 1440,
+      "seed": "ugb-0000",
+      "epoch": "2000-01-01T00:00:00.000Z",
+      "address": "v1/4.-2.7",
+      "t": 1200,
+      "camera": [0, 4039008706713.87, 5435959086479.569, 0, -0.6390168339184684]
+    },
+    {
+      "name": "layer2-orrery-2160p",
+      "width": 3840,
+      "height": 2160,
+      "seed": "ugb-0000",
+      "epoch": "2000-01-01T00:00:00.000Z",
+      "address": "v1/4.-2.7",
+      "t": 1200,
+      "camera": [0, 4039008706713.87, 5435959086479.569, 0, -0.6390168339184684]
+    }
+  ]
+}

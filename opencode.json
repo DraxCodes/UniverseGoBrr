@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "surplus/deepseek-v4.1-flash-1017",
+  "model": "surplus30/deepseek-v4.1-flash-1017",
   "compaction": {
     "auto": true,
     "buffer": "20%",
@@ -24,7 +24,7 @@
         "deepseek-v4.1-flash-1017": {
           "name": "DeepSeek 4.1 Flash 1017 (Surplus)",
           "limit": {
-            "context": 250000,
+            "context": 600000,
             "output": 32000
           },
           "variants": {
@@ -106,6 +106,31 @@
           }
         }
       }
+    },
+    "surplus30": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Surplus Intelligence (min30 floor)",
+      "options": {
+        "baseURL": "https://api.surplusintelligence.ai/min30/v1",
+        "apiKey": "{env:SURPLUS_API_KEY}",
+        "headers": {
+          "X-SI-Route-Objective": "latency",
+          "X-SI-Route-Tolerance-Pct": "15"
+        }
+      },
+      "models": {
+        "deepseek-v4.1-flash-1017": {
+          "name": "DeepSeek 4.1 Flash 1017 (Surplus, min30 floor)",
+          "limit": {
+            "context": 300000,
+            "output": 32000
+          },
+          "variants": {
+            "low": {},
+            "high": {}
+          }
+        }
+      }
     }
   },
   "policies": [
@@ -117,10 +142,10 @@
   ],
   "agents": {
     "task-orchestrator": {
-      "model": "surplus/deepseek-v4.1-flash-1017#low"
+      "model": "surplus30/deepseek-v4.1-flash-1017#low"
     },
     "plan-architect": {
-      "model": "surplus/deepseek-v4.1-flash-1017#high",
+      "model": "surplus30/deepseek-v4.1-flash-1017#high",
       "permissions": [
         {
           "action": "edit",

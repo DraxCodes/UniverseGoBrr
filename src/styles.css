@@ -1,0 +1,241 @@
+:root {
+  /* One look, not a theme. The page is dark because a universe is dark: the light in a
+     frame comes from suns, emission nebulae and supernovae, never from a light surface.
+     Declaring it here (and in index.html) stops the UA from painting light form controls,
+     scrollbars and the canvas backdrop when the OS prefers light. Do not add a
+     `prefers-color-scheme` branch. */
+  color-scheme: dark;
+  --ink: #d9e2f2;
+  --ink-dim: #8492a8;
+  --ink-faint: #5a6577;
+  --panel: rgba(8, 12, 22, 0.72);
+  --line: rgba(150, 180, 230, 0.18);
+  --accent: #9cc2ff;
+  --warn: #ffb4a2;
+  --font: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #05070d;
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #05070d;
+  /* Orbit controls: grab to rotate. touch-action keeps a drag from scrolling the page. */
+  cursor: grab;
+  touch-action: none;
+}
+
+#stage.is-dragging {
+  cursor: grabbing;
+}
+
+.hud {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  user-select: text;
+}
+
+.hud__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.hud__brand {
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: var(--ink);
+}
+
+.hud__layer {
+  font-size: 10px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.hud__rows {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.hud__rows > div {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.hud__rows dt {
+  color: var(--ink-faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding-top: 1px;
+}
+
+.hud__rows dd {
+  margin: 0;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud__issues {
+  margin: 8px 0 0;
+  padding: 6px 8px;
+  border-left: 2px solid var(--warn);
+  background: rgba(255, 120, 90, 0.08);
+  color: var(--warn);
+  font-size: 10px;
+  white-space: pre-wrap;
+}
+
+.hud__hint {
+  margin: 10px 0 0;
+  color: var(--ink-faint);
+  font-size: 10px;
+}
+
+.hud__hint kbd {
+  padding: 1px 4px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--ink-dim);
+  font: inherit;
+}
+
+.hud__hint span {
+  padding: 0 2px;
+}
+
+.hud__pipeline--error {
+  color: var(--warn);
+}
+
+.hud__precision--error {
+  color: var(--warn);
+}
+
+/* The probe readout is two lines and must not be clipped: it is the number that proves the
+   fix, so an ellipsis would hide the evidence. */
+.hud__rows dd.hud__precision--probe {
+  white-space: pre-line;
+  text-overflow: clip;
+  overflow: visible;
+}
+
+/* Self-describing evidence: the two precision captures must be readable without the HUD. */
+.probe-caption {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 64px);
+  margin: 0;
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink-dim);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.probe-caption--error {
+  border-color: rgba(255, 120, 90, 0.45);
+  color: var(--warn);
+}
+
+.fatal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  padding: 32px;
+  background: radial-gradient(circle at 50% 40%, #101827 0%, #05070d 70%);
+}
+
+.fatal h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.fatal__message {
+  max-width: 60ch;
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 2px solid var(--warn);
+  background: rgba(255, 120, 90, 0.08);
+  color: var(--warn);
+  white-space: pre-wrap;
+}
+
+.fatal__hint {
+  max-width: 60ch;
+  margin: 0;
+  color: var(--ink-dim);
+}
+
+.fatal code {
+  color: var(--accent);
+}
+
+/* Dev HUD only: keep it legible on 1440p/4K desktop evidence. The product HUD replaces
+   this at Layer 2. WebGPU means Chromium, where `zoom` is supported. */
+@media (min-width: 2400px) {
+  .hud {
+    zoom: 1.25;
+  }
+}
+
+@media (min-width: 3200px) {
+  .hud {
+    zoom: 1.5;
+  }
+}

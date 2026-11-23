@@ -1,0 +1,25 @@
+{
+  "name": "universegobrr",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "A procedural universe explorer for the web (WebGPU + TypeScript).",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "capture": "node tools/capture.mjs",
+    "verify:dev": "node tools/check-dev-loop.mjs",
+    "probe:state": "node tools/state-probe.mjs",
+    "probe:live": "node tools/live-probe.mjs"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.74",
+    "playwright-core": "^1.65.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1"
+  }
+}

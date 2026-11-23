@@ -26,17 +26,17 @@
   },
   "verify": {
     "surface": "web",
-    "seed": "",
-    "capture": "",
+    "seed": "capture/shots.json",
+    "capture": "npm run build && npm run capture",
     "widths": [
-      375,
-      900
+      1920,
+      2560,
+      3840
     ],
     "themes": [
-      "light",
       "dark"
     ],
-    "notes": ""
+    "notes": "Layer 2: desktop only, one look (dark, ADR-0007) - `themes` is a single entry because the base requires a non-empty list for a web surface, not because a light variant exists. Shots pin seed, epoch, address, t and camera in capture/shots.json at 1920, 2560 and 3840 CSS px (1080p, 1440p, 4K) at DPR 1, plus 1920 at DPR 2 for a 4K display at 200% scaling. The 2560 shot is the only observation of the HUD's 1.25x zoom tier, which sits between the 2400 px and 3200 px breakpoints. `layer2-orrery*` at 1920/2560/3840 are the content shots; `layer2-closeup-{ocean,gas,rock,superearth}` frame one world each at about nine body radii so the surface shader can be judged at full size. Two extra 1080p shots are the precision negative control (precision=fixed vs precision=naive, ADR-0008); the harness fails if the naive path ever separates the markers. Output and summary land in .scratch/captures/."
   },
   "rubrics": {
     "default": "perception"

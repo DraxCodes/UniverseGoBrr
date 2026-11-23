@@ -218,10 +218,24 @@ Small atomic commits with a clear scope; never commit secrets or personal data; 
 
 ### Seat models
 
-The four agents are read-only lenses. Seats route to Surplus models behind the
-provider's minimum 80% discount floor, and **listed is not routable**: a model
-whose sellers do not clear 80% fails before a token is spent, with a message
-that reads like a transport error. Routability can change between calls.
+The four agents are read-only lenses. Seats route to Surplus models behind a
+provider **discount-floor tier**, and **listed is not routable**: a model whose
+sellers do not clear the tier fails before a token is spent, with a message that
+reads like a transport error. Routability can change between calls.
+
+The floor lives in the endpoint path, so it is **per provider entry**, not per
+model: `/min80/v1` is tight (few sellers, best discounts) and `/min30/v1` is
+loose (more sellers, more available at peak). `opencode.json` registers both as
+`surplus` and `surplus30`.
+
+- **Bulk seats use `min30`** — the main model, chair and shape — because a busy
+  peak hour must not block work.
+- **The experience gate and the audit keep `min80`** — the gate's score is the
+  only iterate/stop signal, and a gate that silently routes to a different
+  upstream seller gives incomparable scores. If it is unroutable at peak, pause
+  the hillclimb loop rather than change the judge.
+
+Probed 2026-11-23: `/min30/`, `/min40/`, `/min50/`, `/min80/` all returned 200.
 
 | Model | in/M | out/M | Seat |
 | --- | --- | --- | --- |
@@ -242,6 +256,32 @@ The project implements this mix in `opencode.json`. The market moves: probe a
 candidate with one one-token call inside the run that needs it, read the
 provider's message rather than the status code, and write the fallback rule in
 `AGENTS.md`. Prices read 2026-11-18.
+
+### Context window and compaction
+
+`deepseek-v4.1-flash-1017` reports **1,048,576** context / 393,216 max completion
+on both floors (probed 2026-11-23 via `GET /v1/models`), but the project declares
+**600,000**. That is deliberate, not a stale copy of the listing:
+
+- `/v1/models` reports the **top provider's** window, and a discount floor
+  auction-routes across sellers. A declared 1M can be rejected mid-session when a
+  request lands on a cheaper seller with a smaller window. OpenCode recovers once
+  (compacts and retries), but the interruption is real, so 600k keeps ~40% in
+  reserve against that.
+- `compaction.buffer` is a share of the declared window, so the current
+  `"20%"` puts automatic compaction at **480,000** tokens. Money is not the
+  constraint ($0.036/M input ≈ $0.018 for a full 480k prefill); prefill latency
+  and long-context retrieval quality are.
+
+If you raise the declaration, change it in **both** provider entries (the model
+is registered under `surplus` and `surplus30`) or the seat and the gate will
+disagree about the same model.
+
+`glm-5.3` (the audit seat) stays declared at **250,000** even though it lists
+1,000,000. That is deliberate: audit briefs are scoped to a slice on purpose
+(see *Audit briefs* above), so the declaration doubles as a ceiling on how much
+context an audit is allowed to read. Raising it would remove the only mechanism
+that keeps an audit from quietly widening to the whole tree.
 
 ### Optional local models
 

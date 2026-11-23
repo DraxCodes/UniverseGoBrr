@@ -1,0 +1,249 @@
+/**
+ * The URL is the coordinate: `seed + epoch + address + t + camera`, plus a debug `precision`
+ * switch. Everything here is pure so the capture harness can rely on the same parser and
+ * serializer the app uses.
+ */
+
+import {
+  DEFAULT_ADDRESS,
+  formatAddress,
+  parseAddress,
+  type Address,
+} from '../frame/address';
+import type { PrecisionMode } from '../frame/precision-probe';
+
+export interface Camera {
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  pitch: number;
+}
+
+export interface UrlState {
+  seed: string;
+  /** The coordinate's epoch, as Unix milliseconds (see GLOSSARY: Epoch). */
+  epochMs: number;
+  /** The frame this coordinate is in. Unbounded depth; see ADR-0008. */
+  address: Address;
+  /** Pinned `t` in seconds since the epoch. `null` means the clock is live. */
+  t: number | null;
+  /** Camera offset inside the address's frame, in metres and radians. */
+  camera: Camera;
+  /**
+   * True when the URL carried a `cam` parameter. The scene chooses its own default framing when
+   * it did not — a camera at the origin is inside the star, which is not a useful opening view.
+   */
+  cameraExplicit: boolean;
+  /**
+   * Debug switch, not a feature: `null` draws the normal scene. `fixed` and `naive` draw the
+   * precision probe with the two coordinate paths, so the negative control is reproducible.
+   */
+  precision: PrecisionMode | null;
+}
+
+export interface ParsedUrlState {
+  state: UrlState;
+  /** Human-readable notes about values that were rejected and replaced. */
+  issues: string[];
+}
+
+export const DEFAULT_SEED = 'ugb-0';
+export const DEFAULT_EPOCH_ISO = '2000-01-01T00:00:00.000Z';
+export const DEFAULT_EPOCH_MS = Date.parse(DEFAULT_EPOCH_ISO);
+
+export const DEFAULT_CAMERA: Readonly<Camera> = Object.freeze({
+  x: 0,
+  y: 0,
+  z: 0,
+  yaw: 0,
+  pitch: 0,
+});
+
+const SEED_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
+const ISO_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/**
+ * Values are capped as well as checked for finiteness. A finite double still becomes
+ * `Infinity` when stored in a float32 uniform above ~3.4×10³⁸, and Infinity in a uniform
+ * renders as NaN pixels — a hostile link that draws garbage rather than reporting a bad
+ * coordinate. The caps are chosen to be far above anything the app means and far below that
+ * threshold: 10³⁰ m is a thousand times the largest frame in ADR-0008, and 10²⁰ s is three
+ * trillion years.
+ */
+const MAX_POSITION_M = 1e30;
+const MAX_ANGLE_RAD = 1e6;
+const MAX_TIME_S = 1e20;
+
+export function defaultState(): UrlState {
+  return {
+    seed: DEFAULT_SEED,
+    epochMs: DEFAULT_EPOCH_MS,
+    address: DEFAULT_ADDRESS,
+    t: null,
+    camera: { ...DEFAULT_CAMERA },
+    cameraExplicit: false,
+    precision: null,
+  };
+}
+
+export function parseUrlState(search: string): ParsedUrlState {
+  const params = new URLSearchParams(search);
+  const issues: string[] = [];
+
+  const state = defaultState();
+
+  if (params.has('seed')) {
+    const raw = (params.get('seed') ?? '').trim();
+    if (SEED_PATTERN.test(raw)) {
+      state.seed = raw;
+    } else {
+      issues.push(`seed "${raw}" must match ${SEED_PATTERN.source}; using "${DEFAULT_SEED}".`);
+    }
+  }
+
+  if (params.has('epoch')) {
+    const raw = (params.get('epoch') ?? '').trim();
+    const ms = Date.parse(raw);
+    if (ISO_PATTERN.test(raw) && Number.isFinite(ms)) {
+      state.epochMs = ms;
+    } else {
+      issues.push(`epoch "${raw}" must be ISO 8601; using ${DEFAULT_EPOCH_ISO}.`);
+    }
+  }
+
+  if (params.has('addr')) {
+    const raw = (params.get('addr') ?? '').trim();
+    const parsed = parseAddress(raw);
+    if (parsed.address) {
+      state.address = parsed.address;
+    } else {
+      issues.push(
+        `addr "${raw}" is not a valid address (${parsed.issue ?? 'unknown reason'}); ` +
+          `using ${formatAddress(DEFAULT_ADDRESS)}.`,
+      );
+    }
+  }
+
+  if (params.has('t')) {
+    const raw = (params.get('t') ?? '').trim();
+    const value = Number(raw);
+    if (raw !== '' && Number.isFinite(value) && Math.abs(value) <= MAX_TIME_S) {
+      state.t = value;
+    } else {
+      issues.push(
+        `t "${raw}" must be a finite number of seconds within ±${MAX_TIME_S.toExponential()}; ` +
+          'leaving the clock live.',
+      );
+    }
+  }
+
+  if (params.has('cam')) {
+    const raw = params.get('cam') ?? '';
+    const camera = parseCamera(raw);
+    if (camera) {
+      state.camera = camera;
+      state.cameraExplicit = true;
+    } else {
+      issues.push(
+        `cam "${raw}" must be x,y,z,yaw,pitch (metres and radians) within ±${MAX_POSITION_M.toExponential()}; ` +
+          'using the default camera.',
+      );
+    }
+  }
+
+  if (params.has('precision')) {
+    const raw = (params.get('precision') ?? '').trim();
+    if (raw === 'fixed' || raw === 'naive') {
+      state.precision = raw;
+    } else {
+      issues.push(`precision "${raw}" must be "fixed" or "naive"; drawing the normal scene.`);
+    }
+  }
+
+  return { state, issues };
+}
+
+function parseCamera(raw: string): Camera | null {
+  const parts = raw.split(',').map((part) => part.trim());
+  if (parts.length !== 5 || parts.some((part) => part === '')) return null;
+
+  const [x, y, z, yaw, pitch] = parts.map(Number);
+  if (!isFiniteNumber(x) || !isFiniteNumber(y) || !isFiniteNumber(z)) return null;
+  if (!isFiniteNumber(yaw) || !isFiniteNumber(pitch)) return null;
+
+  // Finite is not enough: 1e300 is finite in a double and Infinity in the float32 uniform,
+  // which renders as NaN pixels instead of reporting a bad coordinate.
+  if (!within(x, MAX_POSITION_M) || !within(y, MAX_POSITION_M) || !within(z, MAX_POSITION_M)) {
+    return null;
+  }
+  if (!within(yaw, MAX_ANGLE_RAD) || !within(pitch, MAX_ANGLE_RAD)) return null;
+
+  return { x, y, z, yaw, pitch };
+}
+
+function within(value: number, limit: number): boolean {
+  return Math.abs(value) <= limit;
+}
+
+function isFiniteNumber(value: number | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+export function urlForState(state: UrlState, pathname: string): string {
+  const params = new URLSearchParams();
+  params.set('seed', state.seed);
+  params.set('epoch', new Date(state.epochMs).toISOString());
+  params.set('addr', formatAddress(state.address));
+
+  if (state.t !== null) {
+    params.set('t', formatNumber(state.t));
+  }
+
+  const { x, y, z, yaw, pitch } = state.camera;
+  params.set('cam', [x, y, z, yaw, pitch].map(formatNumber).join(','));
+
+  if (state.precision !== null) {
+    params.set('precision', state.precision);
+  }
+
+  // `:`, `,` and `/` are legal in a query string and make a shared coordinate readable.
+  // Every value here is either an ISO timestamp, a restricted seed, an address, or a number.
+  const query = params
+    .toString()
+    .replaceAll('%3A', ':')
+    .replaceAll('%2C', ',')
+    .replaceAll('%2F', '/');
+  return `${pathname}?${query}`;
+}
+
+export function formatNumber(value: number): string {
+  if (Object.is(value, -0)) return '0';
+
+  const magnitude = Math.abs(value);
+  // Two reasons to switch to exponential form for big and small values:
+  //   1. `toFixed(6)` returns exponential notation above 1e21 *and includes a `+` sign*, which
+  //      `URLSearchParams` escapes to %2B — a coordinate that looks corrupted in a shared link.
+  //   2. Even below that, a 1e17 camera prints as eighteen digits and is unreadable.
+  // `toExponential()` with no argument is exact: it emits the shortest digit string that parses
+  // back to the same double, so this is a presentation change, not a lossy one.
+  if (magnitude !== 0 && (magnitude >= 1e15 || magnitude < 1e-4)) {
+    return value.toExponential().replace('e+', 'e');
+  }
+
+  return Number(value.toFixed(6)).toString();
+}
+
+/** Seconds since the state's epoch: pinned when `t` is set, otherwise the wall clock. */
+export function clockSeconds(state: UrlState, nowMs: number): number {
+  return state.t ?? (nowMs - state.epochMs) / 1000;
+}
+
+export function formatEpoch(epochMs: number): string {
+  return new Date(epochMs).toISOString();
+}
+
+export function cameraSnapshot(camera: Camera): [number, number, number, number, number] {
+  return [camera.x, camera.y, camera.z, camera.yaw, camera.pitch];
+}

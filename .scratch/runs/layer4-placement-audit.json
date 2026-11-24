@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "kind": "security",
+  "status": "passed",
+  "startedAt": "2026-11-24T20:05:00.000Z",
+  "endedAt": "2026-11-24T20:35:00.000Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Security lens over the placement commit (3c0e6ad..3601d75): can a crafted address make placement loop, allocate or recurse unboundedly; did the disc-law extraction change any output; is the status page still inert under its CSP; did any added line leak.",
+  "commit": "3601d75 (wip/layer-3, pushed to origin)",
+  "models": [
+    "surplus/glm-5.3 (audit)"
+  ],
+  "verdict": "PASS on all four claims, and claims 2-4 were independently reproduced rather than taken from the commit message. Bounded: placement does one length check, an O(depth) slice (depth bounded at 64 by the parser), a flat FNV pass and a fixed 3-draw frame, then a sample whose loops are bounded at 8 and 40; no recursion, no unbounded allocation, and the address reaches only a hash-keyed mulberry32 stream. Output equivalence: the auditor extracted the pre-change generator into a temp mirror and compared every star's x/y/z/brightness/color/size/home with Object.is on three cases, all identical, versions unchanged. Status page: text-only diff, no script/handler/remote resource; default-src 'none' is the script-src fallback, so the page stays inert. No secret, credential, absolute path or personal data in any added line.",
+  "notes": "Three findings, none blocking, none needing code today. F1 (low, prospective): placementKey and galaxyKey reduce the address to 32-bit FNV-1a, so two addresses can collide and share a position - a correctness alias, not a privilege boundary, and harmless while position is only drawn. It becomes real if any feature treats position as identity; the fix at that boundary is a >=64-bit key behind a PLACEMENT_VERSION bump. Routed to ticket 05 risks. F2 (informational): placement has no production caller yet, so its attack surface arrives with the renderer wiring; book a re-audit at that commit boundary, routed to status.md Next. F3 (informational): the status.md bit-identical claim had no checked-in proof command; independently reproduced here, and the line was reworded to say the digest comparison was a scratch check and the permanent evidence is the replay test in placement.test.ts. Rationale: transcendentals' last bits are engine-dependent, so a checked-in exact golden would fail on another engine. Cost: cents, one seat, one pass plus an independent equivalence mirror.",
+  "evidence": [
+    "src/universe/disc.ts",
+    "src/universe/placement.ts",
+    "src/universe/placement.test.ts",
+    "public/status.html",
+    "docs/issues/tickets/05-layer-4-travel.md"
+  ]
+}

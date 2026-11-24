@@ -145,6 +145,11 @@ the generator in `src/universe/disc.ts`.
   than no compass, because it is trusted.
 - **Time couples to feel.** Choosing "travel advances `t`" without deciding the rate makes the
   arrival state unpredictable and unshareable.
+- **Position is not identity yet.** `placementKey` and `galaxyKey` reduce the address to 32-bit
+  FNV-1a (the hash module calls itself "good enough for placeholder work"). Two addresses can collide
+  and receive the same position; harmless while a position is only drawn, but if anything treats a
+  position as identity — a pinned place, an arrival check — widen the key hash to at least 64 bits
+  behind a `PLACEMENT_VERSION` bump. Do not rely on a position as a primary key before then.
 
 ## Decisions this brief does not make
 

@@ -114,7 +114,9 @@ Two new environment notes landed with this commit, both traps this session paid 
    is a **journey**; **time advances by `d / v(method)`** (ADR-0010); tiers + panning first, compass
    second. **Lane P passes** (§8), so the rebase is address-only. **Lane 1** (`src/frame/rebase.ts`)
    and **placement** (`src/universe/placement.ts`) are done. Next: the picture draws by address,
-   then travel state/history, then the compass and tier masks.
+   then travel state/history, then the compass and tier masks. When the renderer starts calling
+   `placement`, re-run the security lens: that is where its attack surface actually arrives (today
+   only tests call it).
 2. The deferred visual pass: read `iterations/layer-3-iteration-2-deferred.md` before touching tone,
    grading, density balance or reference claims. Re-gate here when it returns.
 3. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon
@@ -228,10 +230,12 @@ The decision record is tracked, so a clone on another machine is enough to resum
 
 - `npm test` — pass, 21 files, **204 tests**.
 - `npm run build` — pass, `tsc --noEmit && vite build`, clean; **81.11 kB JS / 29.29 kB gzip**.
-- Placement check — the disc-law extraction is **bit-identical** (exact-double digest of the
-  45,001 / 22,501 / 13,601-star cases before and after); placement is deterministic, stays inside
-  the galaxy's disc and outside the 120 ly local sphere, and replays the generator's `|disc` stream
-  exactly.
+- Placement check — the disc-law extraction was **bit-identical**, proved locally with an
+  exact-double digest of the 45,001 / 22,501 / 13,601-star cases before and after (a scratch
+  comparison, not checked in: the last bits of transcendentals are engine-dependent, so a
+  checked-in golden would fail on another engine). The permanent evidence is the replay test:
+  placement is deterministic, stays inside the galaxy's disc and outside the 120 ly local sphere,
+  and replays the generator's `|disc` stream exactly.
 - `npm run capture` — **not re-run for placement**: the galaxy output is bit-identical and placement
   has no renderer consumer yet. The last full run, after the galaxy-identity fix, was 20/20.
 - `base doctor` — no errors; `docs.issues: docs/issues`, the doc tree and the ADR index check clean.

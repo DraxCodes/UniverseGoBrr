@@ -31,17 +31,45 @@ checkout. Nothing isolates it: same filesystem, same Windows user, same `.git`.
   time, so a path that has since moved (or a document that has since been edited) looks stale on
   purpose. Do not rewrite a past record to match the current layout.
 
-## Project-specific Antigravity guidelines: not yet written
+## Project-specific Antigravity guidelines
 
-The owner has said they will define **project-specific guidelines for how Antigravity is used in this
-repo** at the start of the next session (2026-11-24), before Layer 3 iteration 2 resumes. Until they
-do:
+Defined by the owner 2026-11-24. The standing trigger and the never-hand-off list are in `AGENTS.md`
+under *Antigravity / Neon handoffs*; this section is the working detail. The six rules above remain
+the floor — one writer at a time is unchanged by any handoff.
 
-- The six rules above are the whole protocol. Treat them as a floor, not as the finished policy.
-- Do not invent the guidelines, and do not start Layer 3 work that assumes a division of labour with
-  a second agent. The owner's definition comes first, and it may replace parts of this note.
-- When they write it, it belongs here (a working note) unless it becomes a standing decision — in
-  which case an ADR in `docs/adr/` and a pointer from `AGENTS.md`'s project section.
+### When a handoff is offered
+
+The chair asks, the owner chooses: hand it to Neon, or take a crack first. The domains that make the
+question worth asking, per the owner: WGSL procedural shaders, volumetric light transport, procedural
+noise kernels (Worley/curl/simplex), tone-mapping curves, colour grading, and visual perception
+review. That list is examples, not a fence.
+
+Perception review is the delicate one. It is **last resort**, because it would interrupt a gate run
+that is the only iterate/stop signal. The sanctioned moment is after a gate scores 8/10: offer "do you
+want Neon to take a look too?" and stop there unless the owner says yes.
+
+### What a handoff has to contain
+
+Neon has none of this session's context, so the prompt carries it:
+
+- the branch name, based on the exact commit the task starts on;
+- the task, with the file paths and the failure that prompted it;
+- **the return shape**, so the result is answerable without a follow-up: the block at the bottom of
+  this note, filled in. Claims come with the command that proves them, because a statement about a
+  screenshot nobody can re-take does not count (rule 6).
+
+### What stays here
+
+- `perception` gate scoring, always. Two entities scoring one gate makes the scores incomparable, and
+  the score is the only stop signal.
+- `opencode.json`, `.opencode/`, the seat configuration and this workflow's own docs. Neon touches the
+  codebase and hands it back with the information needed to continue — nothing outside it.
+
+### On return
+
+Read the branch as a diff, do not take the claims on trust: re-run the proof commands the handoff
+names, then re-capture and re-gate here. The gate, not Neon's report, decides whether the work ships.
+
 
 ## Why it matters
 

@@ -216,6 +216,42 @@ Small atomic commits with a clear scope; never commit secrets or personal data; 
   <question>` searches the notes, docs and commit messages without an embedding index.
 <!-- workflow-base:end -->
 
+### Antigravity / Neon handoffs
+
+A stronger external model ("Neon", in Antigravity) is used only through a deliberate, owner-approved
+handoff — never silently, never as a second concurrent writer. The chair **asks the owner** whenever a
+task crosses into a domain where a stronger model plainly prevails, and **the owner chooses**: hand
+the task to Neon cleanly, or have the chair take a crack at it first.
+
+Domains that trigger the question (examples, **not exhaustive**):
+
+- WGSL procedural shaders
+- volumetric light transport
+- procedural noise kernels (Worley, curl, simplex)
+- tone-mapping curves
+- colour grading
+- visual perception review — **last resort only**, and it must never interrupt a `perception` gate
+  run. The one sanctioned moment is *after* a gate reaches 8/10: offer "we hit 8/10 — do you want
+  Neon to take a look too?" and let the owner decide.
+
+A handoff is a branch plus a prompt, not a conversation:
+
+- branch `agent/antigravity-<task>` from the exact commit the task starts on;
+- a prompt that states **exactly what Neon must return** — the handover block in
+  `docs/notes/two-agent-workflow.md` (branch, commits, claims with proof commands, touched outside
+  the branch, version/seed-visible changes, known broken / not attempted) — so the result is
+  answerable without a follow-up question.
+
+What is never handed off:
+
+- **`perception` gate scoring.** It stays in this workflow; passing the only iterate/stop signal
+  between two entities makes the scores incomparable.
+- **Anything outside the codebase.** Neon works on the code and hands it back with the information
+  needed to continue. `opencode.json`, `.opencode/` and this workflow's seat configuration are not
+  Neon's to edit.
+
+Mechanics (one writer at a time, ports, tracking): `docs/notes/two-agent-workflow.md`.
+
 ### Seat models
 
 The four agents are read-only lenses. Seats route to Surplus models behind a

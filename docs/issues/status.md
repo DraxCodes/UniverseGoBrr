@@ -38,10 +38,9 @@ Two new environment notes landed with this commit, both traps this session paid 
 
 ## Next
 
-1. **First, the owner defines the project-specific Antigravity guidelines** — they said they would
-   specify them at the start of the next session, before any Layer 3 work. Until that conversation
-   happens, one writer at a time and `docs/notes/two-agent-workflow.md` still hold. Do not invent the
-   guidelines and do not start iteration 2 ahead of it.
+1. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon
+   handoffs*, working detail in `docs/notes/two-agent-workflow.md`. The chair asks before any
+   handoff; gate scoring never leaves this workflow.
 2. Read `gates/gate-layer-3-iteration-1.md`, then work the four flaws in its order: home-star identity
    (0.56 → above the field's 0.99, distinct hue, 2–3 px clear gap), grade the nucleus, make the
    arms read at 1080p, then the boot-frame dust band.

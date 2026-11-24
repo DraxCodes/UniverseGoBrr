@@ -14,6 +14,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
+    <!--
+      This page is meant to stay inert. The policy makes that a property of the browser rather than a
+      promise in this comment: if a later edit adds a script, a remote font or a fetch, the page
+      breaks loudly instead of quietly executing something. `src/status-page.test.ts` checks the same
+      invariant at build time; this catches the case where someone edits the file and does not run it.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"
+    />
     <title>UniverseGoBrr — build status</title>
     <style>
       :root {

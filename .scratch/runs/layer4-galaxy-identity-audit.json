@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "kind": "security",
+  "status": "passed",
+  "startedAt": "2026-11-24T19:14:00.000Z",
+  "endedAt": "2026-11-24T19:22:00.000Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Security lens over the galaxy-identity fix (ADR-0011) and the status-page delta: is anything new reachable from a crafted addr, can the RNG key change inflate work, is the shipped page inert, and does anything leak.",
+  "commit": "0e41cfa + f10ec1f (wip/layer-3, pushed to origin)",
+  "models": [
+    "surplus/glm-5.3 (audit)"
+  ],
+  "verdict": "PASS on all five claims. ancestorAddress is bounded in both directions and only ever returns a prefix of an already-parsed address, so a crafted addr cannot exceed what the parser already allowed. The galaxy loop bounds are compile-time constants and the address reaches only the seed string, so no address can inflate the star loop; the normalised key is shorter than before. public/status.html contains no script, no media element, no inline handler, no fetch and no interpolation. The HUD link is same-origin with rel=noopener to a scriptless page. No secret, credential, absolute path or personal data in any added line.",
+  "notes": "One medium finding, and it is outside the change: opencode.json (owner work, deliberately uncommitted) sets context limits to 256000 and registers a `medium` variant for deepseek-v4.1-flash-1017, while AGENTS.md documents 600000 and states the model rejects `medium`. If upstream still rejects it, a seat routed there fails at use time with a transport-looking error. Reported to the owner, not touched. Two informational notes on the status page: it discloses internal roadmap, gate scores and a 'Neon' codename (a values call, not an exposure), and it shipped without a CSP. The CSP was added in response, since the no-script property was otherwise enforced only by editing discipline; default-src 'none' plus style-src 'unsafe-inline' keeps the inline stylesheet working, verified in the browser with zero console violations. A structural test (no script, no inline handlers, no media, no external href/src) now runs with the suite so the property is checked rather than promised. Cost: cents, one seat, one pass.",
+  "evidence": [
+    "src/frame/address.ts",
+    "src/universe/galaxy.ts",
+    "public/status.html",
+    "src/status-page.test.ts"
+  ]
+}

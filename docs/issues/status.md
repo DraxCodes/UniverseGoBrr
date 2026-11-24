@@ -122,18 +122,18 @@ Two new environment notes landed with this commit, both traps this session paid 
 3. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon
    handoffs*, working detail in `docs/notes/two-agent-workflow.md`. The chair asks before any
    handoff; gate scoring never leaves this workflow.
-4. Open owner question: when to add left-click X/Y camera panning (with zoom, pitch and yaw
-   relative to the new centre). It couples to `src/input/orbit-controls.ts`'s "position is derived
-   from angles and distance" invariant and to ADR-0003's framing-vs-travel split, so it belongs
-   with Layer 4's camera work rather than as a standalone change. **D5 already answers the ordering
-   (with the tier work); what is unanswered is whether it is a drag or a modifier-click.**
+4. **Panning binding is settled** (owner, 2026-11-24): left-drag keeps yaw/pitch as today,
+   **right-drag pans**, and the context menu is suppressed only while a right-drag is active. It is
+   still **unimplemented**: it arrives with the tier work (D5) and touches
+   `src/input/orbit-controls.ts`'s "position is derived from angles and distance" invariant plus
+   ADR-0003's framing-vs-travel split.
 
 
 ## Blocked
 
-- **Nothing wanted from the owner to start.** One small constant is open and can be answered at the
-  first build step: the speed table in ADR-0010 (proposed, unconfirmed). Placement is built; only its
-  density and occupancy numbers are ours to choose.
+- **Nothing wanted from the owner to start.** The two Layer 4 questions are answered: the speed
+  table and the panning binding. What remains is V1-level — the product name and the root
+  `LICENSE`.
 - Nothing technical. The 1650-class proxy is unavailable, so floor performance stays an argument,
   never a measurement.
 
@@ -144,7 +144,13 @@ Two new environment notes landed with this commit, both traps this session paid 
   and gated on the approach probe. Council record: `council-layer-4.md` §10; dissent in §8.
 - **Travel time is distance over speed** (ADR-0010): `Δt = d / v(method)`, measured in the parent
   frame. Camera gestures never advance `t`. This entails `placement(seed, address)`, which also
-  serves the compass. The speed table is proposed, not confirmed.
+  serves the compass. **The speed table is confirmed as proposed** (owner, 2026-11-24): impulse
+  0.01 c, warp 1 ly/day, transwarp 100 ly/day, wormhole 10,000 ly/day. `d` is real within one galaxy
+  today; between galaxies it waits for a root layout.
+- **Panning is right-drag; left-drag keeps yaw/pitch** (owner, 2026-11-24). The canvas suppresses
+  the context menu while a right-drag is active. `orbit-controls.ts` ignores every button except 0
+  today, so this adds a `button === 2` path rather than remapping the existing one. Touch/pen
+  panning waits with the mobile layout (spec §1).
 - **The address grid is the world; the picture is a view of it** (ADR-0011, owner 2026-11-24). Every
   drawn light is a rendered address that resolves to the same thing when you arrive; placement is
   `placement(seed, address)`, never the inverse; occupancy is one rule shared by the renderer and

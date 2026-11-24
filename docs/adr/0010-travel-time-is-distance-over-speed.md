@@ -1,6 +1,6 @@
 # 0010 — Travel advances time by distance over speed
 
-**Status:** accepted (2026-11-24, decided by the owner)
+**Status:** accepted (2026-11-24, decided by the owner; speed table confirmed 2026-11-24)
 **Context:** ADR-0003 makes travel a tiered rebase, and the Layer 4 council recommended advancing
 `t` by a fixed duration per tier (impulse 0, warp hours, transwarp years). The owner rejected that
 shape: *"time should move ahead based on distance we're travelling and the speed we associate with
@@ -44,10 +44,15 @@ inside its sector, so the distance between `v1/a.b.c` and `v1/a.b.d` cannot be c
 addresses.
 
 D3 therefore entails a **placement** function: `placement(seed, address)` returns a deterministic
-`Position` in the parent frame, versioned like any content. This amends the Layer 4 brief's "no new
+offset in the parent frame, versioned like any content. This amends the Layer 4 brief's "no new
 content" rule deliberately, and narrowly: it is one pure function, not a population. It also supplies
 the navigation compass's bearings and distances (spec §3.2), which the same layer needs, and it is
 what lets a rebase prove its swap is continuous.
+
+It shipped in ADR-0011's direction (`src/universe/placement.ts`, `PLACEMENT_VERSION 1`), so `d` is
+**real today within one galaxy**. It is not yet meaningful **between galaxies**: every galaxy node is
+its own frame origin and no root layout exists, so a universe-level distance would read zero. That is
+a later piece of layout, not a different model.
 
 ## Options considered
 
@@ -73,7 +78,7 @@ what lets a rebase prove its swap is continuous.
 - Impulse/free flight inside a frame does not advance `t` yet: the camera is not a ship, and there is
   no ship speed to apply until a later layer.
 
-## Proposed speed table (one confirmation outstanding)
+## Speed table (confirmed 2026-11-24)
 
 | Method | Speed | Anchor trip |
 | --- | --- | --- |
@@ -84,8 +89,9 @@ what lets a rebase prove its swap is continuous.
 
 These are fiction numbers, not physics; the property that matters is the ratio. The FTL tiers are
 100× apart on purpose, so "one tier up" is "two orders of magnitude faster" and the only thing that
-decides a journey's length is how far it goes. The table is proposed, not yet confirmed - the owner
-can move any row without touching the model.
+decides a journey's length is how far it goes. **The owner confirmed this table as proposed on
+2026-11-24.** Moving a row later is still a content change: it changes the arrival `t` of every link
+that crosses that method, so it is versioned like a generator change.
 
 ## What would change this decision
 
@@ -93,6 +99,9 @@ If placement cannot be made cheap enough to run at the compass's cadence, there 
 fallback**: option B is the rejected shape, and reverting to it means the owner accepting that every
 trip in a tier takes the same time. Return the measurement, not a substitute model.
 
-Placement has one open choice of its own: a hash-to-position function, or selecting a deterministic
-star from the galaxy's own population. The second is coherent with what the player sees; the first
-is cheaper and more uniform. That choice belongs with the compass, not here.
+Placement's open choice was a hash-to-position function or selecting a deterministic star from the
+galaxy's own population. **The published function takes the hash path** (`placementKey` →
+`sampleDiscStar`): it is O(1), stable under a tier change, and it does not require the picture to
+become the authority, which ADR-0011 forbids. The population path becomes revisitable only once the
+picture draws *by* address and every drawn star carries one; at that point the two would agree by
+construction rather than by law.

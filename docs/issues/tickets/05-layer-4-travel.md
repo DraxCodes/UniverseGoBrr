@@ -150,17 +150,24 @@ the generator in `src/universe/disc.ts`.
   and receive the same position; harmless while a position is only drawn, but if anything treats a
   position as identity — a pinned place, an arrival check — widen the key hash to at least 64 bits
   behind a `PLACEMENT_VERSION` bump. Do not rely on a position as a primary key before then.
+- **Right-drag panning fights the browser.** A context menu opens on right-button release unless the
+  canvas suppresses it while a right-drag is active. Suppress only during the drag, not globally,
+  or the rest of the page loses its menu.
 
 ## Decisions this brief does not make
 
 Answered on 2026-11-24 (see `council-layer-4.md` §10): rebase strategy **A**, tier-only; a
 **journey** rather than a cut; **tiers + panning first**, compass second; panning with the tier work;
-time by **distance over speed** (ADR-0010).
+time by **distance over speed** (ADR-0010). The **speed table is confirmed as proposed** (impulse
+0.01 c, warp 1 ly/day, transwarp 100 ly/day, wormhole 10,000 ly/day). The **panning binding** is
+settled: left-drag keeps yaw/pitch as today, **right-drag pans**, and the canvas suppresses the
+context menu while a right-drag is active. Touch/pen panning waits with the mobile layout (spec §1).
 
 Still open, and small enough to answer at the first build step:
 
-1. **Speed constants** - the table in ADR-0010 is proposed; confirm or move any row. The model does
-   not depend on the numbers.
+1. ~~**Speed constants**~~ - **answered 2026-11-24 (owner): the table in ADR-0010 is confirmed as
+   proposed.** Changing a row later is a content change and moves the arrival `t` of every link that
+   crosses it.
 2. ~~**Placement choice**~~ - **answered 2026-11-24 (owner): the address grid is the world, and the
    picture is a view of its occupied cells (ADR-0011).** `placement(seed, address)` returns a
    position; it is never asked to invert a drawn star. The galaxy keying that made every address a

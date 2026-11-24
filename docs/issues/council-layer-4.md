@@ -462,7 +462,7 @@ Nothing below is decided. Each line is the owner's to answer; the chair's recomm
 | **D2** | Cut with a mask, or a journey? | a journey, with arrival `t` derived | **approved as recommended** |
 | **D3** | Does travel advance `t`? | yes, by traversal time | **amended — see below** |
 | **D4** | Tiers first, or compass first? | tiers + panning first; compass in the same layer, second commit | **approved as recommended** |
-| **D5** | Panning scope | with the tier work; it is the same `target` generalisation | **approved as recommended** |
+| **D5** | Panning scope | with the tier work; it is the same `target` generalisation | **approved as recommended**; binding: left-drag keeps orbit, right-drag pans (below) |
 
 ### D3 amendment (owner, 2026-11-24)
 
@@ -485,3 +485,22 @@ Recorded as **ADR-0010**: `Δt = d / v(method)`.
 With D1-D5 answered, the thesis in §5 and the decision are written into spec §7 row 4, and
 `tickets/05-layer-4-travel.md` stops being "proposed". The first build step is the approach probe
 (lane P), not the rebase module.
+
+### Speed table confirmed (owner, 2026-11-24)
+
+The owner took the table in ADR-0010 **as recommended, unchanged**: impulse/free flight 0.01 c,
+warp 1 ly/day, transwarp/slipstream 100 ly/day, subspace/wormhole 10,000 ly/day. The model never
+depended on the numbers; now the arrival times do.
+
+### D5 follow-up: panning binding (owner, 2026-11-24)
+
+D5 settled *when* panning arrives (with the tier work), not *how it is bound*. The owner's answer:
+**left-drag keeps yaw/pitch exactly as it is today; right-drag pans** - "the other mouse click for
+other movement". Three consequences travel with the implementation:
+
+- the canvas must suppress the browser context menu while a right-drag is active, or the menu opens
+  mid-pan;
+- `src/input/orbit-controls.ts` currently ignores every button except 0, so this adds a
+  `button === 2` path; it does not remap the existing one;
+- touch/pen has no right button: one finger keeps orbiting, and a pan gesture waits with the mobile
+  layout (spec §1).

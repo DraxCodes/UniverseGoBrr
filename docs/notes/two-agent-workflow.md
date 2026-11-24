@@ -31,6 +31,18 @@ checkout. Nothing isolates it: same filesystem, same Windows user, same `.git`.
   time, so a path that has since moved (or a document that has since been edited) looks stale on
   purpose. Do not rewrite a past record to match the current layout.
 
+## Project-specific Antigravity guidelines: not yet written
+
+The owner has said they will define **project-specific guidelines for how Antigravity is used in this
+repo** at the start of the next session (2026-11-24), before Layer 3 iteration 2 resumes. Until they
+do:
+
+- The six rules above are the whole protocol. Treat them as a floor, not as the finished policy.
+- Do not invent the guidelines, and do not start Layer 3 work that assumes a division of labour with
+  a second agent. The owner's definition comes first, and it may replace parts of this note.
+- When they write it, it belongs here (a working note) unless it becomes a standing decision — in
+  which case an ADR in `docs/adr/` and a pointer from `AGENTS.md`'s project section.
+
 ## Why it matters
 
 The failure this prevents is a second agent editing a closed decision in the docs to match what it

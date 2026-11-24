@@ -5,7 +5,7 @@ Branch: `wip/layer-3`, which is the Layer 3 WIP commit `566a303` with `main`'s d
 `main` carries the reorg. Tag `pin/layer-3-assessment` marks `566a303`, the code state the gate
 scored 6/10, and stays there; the merge changed no source file.
 Working tree: clean except `opencode.json` (user work — do not commit, do not revert).
-Nothing is pushed: `origin/main` predates the reorg.
+Pushed: `origin/main` matches `main`, so the record is public. `wip/layer-3` and the tag stay local.
 The record is tracked and present on both branches; there is no staged-index hazard any more.
 For exact commit ids, read `git log --oneline -5`; this file deliberately does not pin them.
 
@@ -30,18 +30,25 @@ For exact commit ids, read `git log --oneline -5`; this file deliberately does n
 
 ## Doing
 
-Nothing in flight. The tree is pinned so the user can run an assessment phase; Layer 3 iteration 2
-has not started.
+Nothing in flight in the code. The tree is pinned so the user can run an assessment phase; Layer 3
+iteration 2 has not started.
+
+Two new environment notes landed with this commit, both traps this session paid for:
+`docs/notes/powershell-writes-cp1252.md` and `docs/notes/git-reset-hard-and-opencode-json.md`.
 
 ## Next
 
-1. Read `gates/gate-layer-3-iteration-1.md`, then work the four flaws in its order: home-star identity
+1. **First, the owner defines the project-specific Antigravity guidelines** — they said they would
+   specify them at the start of the next session, before any Layer 3 work. Until that conversation
+   happens, one writer at a time and `docs/notes/two-agent-workflow.md` still hold. Do not invent the
+   guidelines and do not start iteration 2 ahead of it.
+2. Read `gates/gate-layer-3-iteration-1.md`, then work the four flaws in its order: home-star identity
    (0.56 → above the field's 0.99, distinct hue, 2–3 px clear gap), grade the nucleus, make the
    arms read at 1080p, then the boot-frame dust band.
-2. Fix the false "at native size" label in the crop manifests (`.scratch/visual-review/layer3/manifest.json`).
-3. Re-capture, re-run `probe:live` and `probe:watchdog`, re-run the blindspot pass at
+3. Fix the false "at native size" label in the crop manifests (`.scratch/visual-review/layer3/manifest.json`).
+4. Re-capture, re-run `probe:live` and `probe:watchdog`, re-run the blindspot pass at
    `--max-tokens 6000`, re-gate.
-4. On a score ≥ 8: `/code-review` scoped to the Layer 3 diff, then one commit on `main`.
+5. On a score ≥ 8: `/code-review` scoped to the Layer 3 diff, then one commit on `main`.
 
 ## Blocked
 
@@ -98,9 +105,14 @@ The decision record is tracked, so a clone on another machine is enough to resum
 - `npm test` — pass, 16 files, 141 tests, on the merged `wip/layer-3` (the gatekeeper also ran them
   on the unmerged `566a303`).
 - `npm run build` — pass, `tsc --noEmit && vite build`, clean; 76.98 kB JS / 27.55 kB gzip.
-- `base doctor` — no errors; `docs.issues: docs/issues`, 44 markdown files, 8 ADRs.
-- Doc path check — 50 backticked refs across 44 files, all resolve except two `AGENTS.md` skill
-  references, which are not repo paths.
+- `base doctor` — no errors; `docs.issues: docs/issues`, 45 markdown files under `docs/`, 8 ADRs.
+- Doc path check — 177 backticked refs that look like paths (one or more slashes plus a file
+  extension), resolved against the repo root or the file's own directory, across the 46 project
+  markdown files (`docs/` 43, plus `AGENTS.md`, `README.md`, `GLOSSARY.md`). On `main` 10 do not
+  resolve and all are accounted for: 6 name Layer 3 files that exist only on `wip/layer-3`, 2 are
+  `AGENTS.md` skill references rather than repo paths, and 2 are version strings in a ticket that the
+  pattern mistakes for paths. On `wip/layer-3` the same check leaves 4 — the two skill references and
+  the two version strings.
 - `npm run capture` — 19/19 shots pass (on `566a303`; not re-run after the docs-only merge).
 - `npm run probe:live` — `{steps:81, decreases:0, handoffSteps:2, maxCount:45000}` (on `566a303`).
 - `npm run probe:watchdog` — rich 45000 → medium 22500, status `ready` (on `566a303`).

@@ -1,8 +1,8 @@
 # 05 - Layer 4: travel tiers
 
-**Status: proposed, not decided.** This brief exists so the owner can decide *whether and how* to
-build Layer 4. It deliberately contains no chosen strategy; the decisions are listed in
-`council-layer-4.md` §7. Do not implement from this file until that decision is recorded.
+**Status: decided (owner, 2026-11-24).** D1, D2, D4 and D5 as recommended; **D3 amended** to
+`Δt = d / v(method)` (ADR-0010). The first build step is the approach probe (lane P), not the rebase
+module. Speed constants and one placement choice remain open (see the end of this brief).
 
 ## Deliverable (spec §7, row 4)
 
@@ -81,15 +81,11 @@ work, not before it.
 
 ## D6 - Time during travel
 
-`t` is an input (ADR-0004), and a journey has a duration. Three positions, one of which the
-council must take:
-
-- travel does not advance `t` (the universe freezes while you move);
-- travel advances `t` by the traversal time (arrive later, orbits have moved);
-- travel advances `t` by a stated rate (a warp is hours, a transwarp is years).
-
-This is an experience decision, not a physics one: it decides whether arriving somewhere feels
-like *going there* or *cutting there*.
+**Decided (owner, 2026-11-24): `Δt = d / v(method)`.** Time advances by the distance travelled
+divided by the method's speed, never by a fixed duration per tier: a 5 ly warp and a 500 ly
+transwarp can both take five days. `d` is measured in the parent frame; camera gestures are not
+travel and never advance `t`; effect duration (screen time) and elapsed time (universe time) are
+different numbers. Speed constants and the placement prerequisite are in ADR-0010.
 
 ## D7 - The URL and sharing contract
 
@@ -106,6 +102,10 @@ and possibly `t` all change. The contract must say:
 Layer 4 generates nothing new. It moves through what Layers 2 and 3 already produce, plus the
 authored registry. If a deliverable needs new generation (nebulae, actors, belts), it belongs to
 Layer 5 or later.
+
+**One narrow exception, entailed by D6:** `placement(seed, address)` gives a node a deterministic
+position in its parent frame. Without it there is no distance, and without a distance D6 cannot be
+computed. It is one pure, versioned function - not a population - and the compass needs it too.
 
 ## Evidence plan (to be finalised by the council)
 
@@ -140,11 +140,16 @@ Layer 5 or later.
 
 ## Decisions this brief does not make
 
-1. Whether to convene the Layer 4 council at all (the triggers are in `council-layer-4.md` §6).
-2. The frame/rebase strategy: address-origin vs cell lattice vs a frame stack.
-3. Cut-with-mask vs journey, and the effect per tier.
-4. Whether travel advances `t`, and at what rate.
-5. Whether panning, the compass and the breadcrumb ship together or in separate commits.
-6. Whether the address HUD's first version is read-only or clickable-to-zoom-out.
+Answered on 2026-11-24 (see `council-layer-4.md` §10): rebase strategy **A**, tier-only; a
+**journey** rather than a cut; **tiers + panning first**, compass second; panning with the tier work;
+time by **distance over speed** (ADR-0010).
 
-Owner: none of the above is assumed anywhere in the code. Layer 4 starts when these are answered.
+Still open, and small enough to answer at the first build step:
+
+1. **Speed constants** - the table in ADR-0010 is proposed; confirm or move any row. The model does
+   not depend on the numbers.
+2. **Placement choice** - a hash-to-position function, or selecting a deterministic star from the
+   galaxy's population (coherent with what the player sees). Belongs with the compass.
+3. **Address HUD behaviour in v1** - read-only, or clickable-to-zoom-out from the first commit.
+
+Owner: the shape is settled. Nothing in the code assumes a decision that is not written down.

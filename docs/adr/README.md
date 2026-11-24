@@ -11,6 +11,7 @@
 | 0007 | accepted | One presentation: dark, with no theme system. Light is a property of the scene. |
 | 0008 | accepted | Camera-relative double subtraction now; int64 cells and rebasing deferred to Layer 4; the address is unbounded, has a root (`v1/`), and stays opaque identity. |
 | 0009 | accepted | Authored nodes reserve a new address and ignore the seed; the registry is data checked before the generator, versioned per node. Sol reserves `v1/0.0.0`. |
+| 0010 | accepted | Travel advances `t` by distance over speed (`Δt = d / v(method)`), measured in the parent frame; camera gestures never advance `t`. Entails a versioned `placement(seed, address)` per node. |
 
 Status is one of `proposed`, `accepted`, `superseded` (name the successor),
 `deprecated` or `rejected`. The numbered filename is `NNNN-slug.md`.

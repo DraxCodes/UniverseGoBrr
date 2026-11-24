@@ -109,6 +109,12 @@ Free flight is preserved inside every frame. Warping to an arbitrary empty point
 supported, and requires a **navigation compass** (bearing + distance to nearest anchors, a
 pin on where you came from, a return breadcrumb) or the void is simply disorienting.
 
+Travel advances `t` by **`Δt = d / v(method)`** (ADR-0010): the distance actually travelled in the
+parent frame, divided by the method's speed. A 5 ly warp and a 500 ly transwarp can therefore both
+take five days. Camera gestures are not travel and never advance the clock; effect duration (screen
+time) and elapsed time (universe time) are different numbers. A distance requires every node to have
+a position in its parent frame, so this also fixes `placement(seed, address)` as content.
+
 ### 3.3 Generation (ADR-0005)
 
 `content = f(seed, address)` — pure, no storage, no save file, no database.
@@ -250,7 +256,7 @@ Layer 2) can pick a model by whether it names the flaws a human eye sees.
 | 1 | **Camera-relative precision + unbounded address** — double subtraction before float32, `Position` type, versioned address; cells and rebasing deferred to Layer 4 (ADR-0008) | Skip it and every later layer inherits a broken coordinate system |
 | 2 | **One procedural star system** — star shader, orbits, lit planets, atmospheres, rotation | First screenshot; proves the foundation |
 | 3 | **Star field + one galaxy** - instanced impostors; a cell-keyed local field plus a disc/bulge/arm population; `displayRadiusM` compresses emptiness, not structure; the crossfade order is rings → point → arm → disc, with the home star findable at 1:1. Council: `council-layer-3.md`; brief: `tickets/04-layer-3-star-field-and-galaxy.md`. **Sol (§3.6) is built** as the first authored node, at `v1/0.0.0` (ADR-0009), captured as `layer3-sol-1080p`. The address HUD **moved to Layer 4** - it is half of the navigation compass. | Scale made real |
-| 4 | **Travel tiers** - frame rebases, warp effects, navigation compass. Council **convened 2026-11-24** at fixed point `014c312`: recommendation is **A, address-origin frames, rebasing on tier crossings only**, with the approach probe before any code; **D1-D5 pending**. Record: `council-layer-4.md`; brief: `tickets/05-layer-4-travel.md`. | The core loop |
+| 4 | **Travel tiers** - frame rebases, warp effects, navigation compass. Council **convened and decided 2026-11-24** at `014c312`: **A, address-origin frames, rebasing on tier crossings only**; a tier crossing is a **journey**; **time advances by `d / v(method)`** (ADR-0010), which entails `placement(seed, address)`; the focus rebase is gated on the approach probe. Thesis and dissent: `council-layer-4.md`; brief: `tickets/05-layer-4-travel.md`. | The core loop |
 | 5 | **Nebulae** — volumetric beauty pass, real + procedural populations | Where `perception` earns its keep |
 | 6 | **Planet surfaces** — cube-sphere, terrain LOD, ground atmosphere | Hardest; possibly never |
 

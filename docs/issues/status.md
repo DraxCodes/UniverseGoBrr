@@ -61,11 +61,12 @@ Two new environment notes landed with this commit, both traps this session paid 
 
 ## Next
 
-1. **Layer 4 (travel tiers)** is the next skeleton piece, and the only open question is *how* to
-   build it, not whether. The council **convened** on 2026-11-24: `council-layer-4.md` holds the
-   three unedited seat proposals, the cross-critiques, the experience thesis, the trade-off register
-   and the recommendation (**A, address-origin, tier-only rebase**, focus gated on the approach
-   probe). **D1-D5 are the owner's**, and no code starts before they are answered.
+1. **Layer 4 (travel tiers) is decided and not started.** `council-layer-4.md` §10 records the
+   owner's answers: **A**, address-origin frames, rebasing on tier crossings only; a tier crossing
+   is a **journey**; **time advances by `d / v(method)`** (ADR-0010), which entails
+   `placement(seed, address)`; tiers + panning first, compass second. The first build step is the
+   **approach probe** (lane P), not the rebase module - it decides whether a focus rule is ever
+   needed.
 2. The deferred visual pass: read `iterations/layer-3-iteration-2-deferred.md` before touching tone,
    grading, density balance or reference claims. Re-gate here when it returns.
 3. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon
@@ -79,17 +80,22 @@ Two new environment notes landed with this commit, both traps this session paid 
 
 ## Blocked
 
-- **Layer 4 needs the owner's decision (D1-D5) before any code.** The council convened on
-  2026-11-24 and its recommendation is recorded: **A, address-origin frames, rebasing on tier
-  crossings only**, with the approach probe run before the first line of the rebase module; the
-  focus rebase is out of v1 and gated on that probe. Three seats dissented on the focus question and
-  the dissent is recorded verbatim in `council-layer-4.md` §8. Brief:
-  `tickets/05-layer-4-travel.md`.
+- **Nothing wanted from the owner to start.** Two small constants are open and both can be answered
+  at the first build step: the speed table in ADR-0010 (proposed, unconfirmed) and the placement
+  choice (hash-to-position vs a deterministic star from the galaxy's population).
+- Nothing technical. The 1650-class proxy is unavailable, so floor performance stays an argument,
+  never a measurement.
 - Nothing technical. The 1650-class proxy is unavailable, so floor performance stays an argument,
   never a measurement.
 
 ## Decisions
 
+- **Layer 4 shape (owner, 2026-11-24):** A (address-origin frames), rebasing on tier crossings only;
+  a tier crossing is a journey; tiers + panning first, compass second. The focus rebase is out of v1
+  and gated on the approach probe. Council record: `council-layer-4.md` §10; dissent in §8.
+- **Travel time is distance over speed** (ADR-0010): `Δt = d / v(method)`, measured in the parent
+  frame. Camera gestures never advance `t`. This entails `placement(seed, address)`, which also
+  serves the compass. The speed table is proposed, not confirmed.
 - **Authored nodes reserve a new address and ignore the seed** (ADR-0009). Sol is `v1/0.0.0`; a
   hand-authored node that keeps varying with the seed cannot be an anchor, and overwriting a
   procedural address rewrites somebody's shared link.

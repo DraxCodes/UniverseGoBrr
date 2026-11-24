@@ -2,7 +2,8 @@
 
 **Convened:** 2026-11-24, owner's instruction ("convene the council").
 **Fixed point:** `014c312` on `wip/layer-3` (pushed to `origin`).
-**Status:** recommendation recorded, **decision pending** (owner, §10). No code has been written.
+**Status:** decision recorded (owner, 2026-11-24); D3 amended to distance-over-speed (ADR-0010).
+No code has been written.
 **Seats:** chair `task-orchestrator` (DeepSeek 4.1 Flash), shape `plan-architect` (DeepSeek 4.1 Flash),
 experience `quality-gatekeeper` (DeepSeek 4.1 Flash), risk `security-auditor` (GLM 5.3). Two model
 lineages, as `doctor` requires. Every seat was read-only and returned text only.
@@ -255,7 +256,8 @@ The three-second read: a lit orrery or a galaxy in black, one address line, one 
 where you are and what the obvious next action is (*warp to the thing the needle points at*) without
 reading anything twice. The first run: land in a seeded system, orbit it, click the address up one
 level, warp to a neighbour; the streaks end with the destination already there, growing exactly
-where the streak ended, and the clock has moved by the tier's stated duration. The moment that
+where the streak ended, and the clock has moved by the distance the method covers — a 5 ly warp and
+a 500 ly transwarp can both cost five days. The moment that
 should feel good: **the address line changes once, mid-effect, and nothing else does** — the seam
 between frames is the one thing the eye never catches. The friction to avoid: the URL and the address
 line rewriting every frame; the needle swinging because your own breadcrumb reordered; a warp that
@@ -356,15 +358,33 @@ breadcrumb is a pin labelled as a trail, and the needle is checked arithmetic, n
 
 Nothing below is decided. Each line is the owner's to answer; the chair's recommendation is in §8.
 
-| # | Question | Chair recommends | Your answer |
+| # | Question | Chair recommended | Owner's answer |
 | --- | --- | --- | --- |
-| **D0** | Convene or decide directly? | convened; this record is the input | _pending_ |
-| **D1** | Rebase strategy | **A**, tier-only; focus gated on the probe | _pending_ |
-| **D2** | Cut with a mask, or a journey? | a journey that advances `t` at a stated per-tier rate, with arrival `t` derived | _pending_ |
-| **D3** | Does travel advance `t`? | yes, by traversal time; impulse 0, warp hours, transwarp years | _pending_ |
-| **D4** | Tiers first, or compass first? | tiers + panning first; compass in the same layer, second commit | _pending_ |
-| **D5** | Panning scope | with the tier work; it is the same `target` generalisation | _pending_ |
+| **D0** | Convene or decide directly? | convened; this record is the input | **convened** |
+| **D1** | Rebase strategy | **A**, tier-only; focus gated on the probe | **approved as recommended** |
+| **D2** | Cut with a mask, or a journey? | a journey, with arrival `t` derived | **approved as recommended** |
+| **D3** | Does travel advance `t`? | yes, by traversal time | **amended — see below** |
+| **D4** | Tiers first, or compass first? | tiers + panning first; compass in the same layer, second commit | **approved as recommended** |
+| **D5** | Panning scope | with the tier work; it is the same `target` generalisation | **approved as recommended** |
 
-When D1-D3 are answered, the thesis in §5 and the answer are written into spec §7 row 4, and
-`tickets/05-layer-4-travel.md` stops being "proposed". Until then, no code is written from this
-file and `status.md` records Layer 4 as blocked on the owner.
+### D3 amendment (owner, 2026-11-24)
+
+The owner rejected the per-tier durations: *"time should move ahead based on distance we're
+travelling and the speed we associate with the method of travel"* — so a trip between two solar
+systems at warp can take the same time as a trip between two sectors at transwarp, because transwarp
+is much faster. The same logic applies to every method in the tier list.
+
+Recorded as **ADR-0010**: `Δt = d / v(method)`.
+
+- `d` is the metric distance in the **parent frame**; `v` is a speed per method.
+- Camera gestures are not travel and never advance `t`.
+- Effect duration (screen time) and elapsed time (universe time) are different numbers.
+- This **entails** `placement(seed, address)` — a node needs a position in its parent frame before a
+  distance exists. That is a deliberate, narrow amendment to the brief's D8 ("no new content"): one
+  pure function, not a population, and it also serves the compass.
+- The speed table in ADR-0010 is **proposed and unconfirmed**; the model does not depend on its
+  numbers.
+
+With D1-D5 answered, the thesis in §5 and the decision are written into spec §7 row 4, and
+`tickets/05-layer-4-travel.md` stops being "proposed". The first build step is the approach probe
+(lane P), not the rebase module.

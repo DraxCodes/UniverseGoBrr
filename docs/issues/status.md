@@ -51,14 +51,24 @@ For exact commit ids, read `git log --oneline -5`; this file deliberately does n
   counterweight is recorded too — at **true scale** the near plane sits 1,412 real Earth radii out,
   which makes landing a Layer 6 depth-range problem, not a rebase one. Note:
   `docs/notes/metres-to-pixels-needs-the-projection.md`.
+- **Lane 1, the rebase module: done.** `src/frame/rebase.ts` — translation only, a shift rather than
+  two absolutes, orientation untouched, pure. `npm test` **184/184** (19 files). Two findings along
+  the way: the dead band has no consumer under A (recorded, not built), and the risk seat's
+  "`cam=1e30` renders a wrong image" is **false** — it renders a correct but empty one, because the
+  scene normalises before rounding. That second finding exposes something bigger: **one address
+  spans system→galaxy across twelve orders of magnitude** (the `layer3-galaxy-*` shots sit at
+  1.3×10²¹ m under a system address), so "which frame is this camera in" is the address HUD's
+  problem, not a parser check.
 
 ## Doing
 
-**Layer 4 lane 1 (the rebase module) is the next code.** The probe has closed its gate, so
-`src/frame/rebase.ts` can be written address-only: `rebaseToAddress(state, address)` and nothing
-else, with `FRAME_MARGIN` and the dead band as named constants. Still unbuilt from the council's
-plan: `placement(seed, address)` (ADR-0010's prerequisite, needed for `d`), the history rule, the
-compass and the tier masks.
+**Layer 4 lane 1 (the rebase module) is done; lane 2 is next.** `src/frame/rebase.ts` is
+`rebaseCamera(camera, originShiftM)` — translation only, shift never absolute, pure — plus the
+offset bound. 13 assertions, including "a 10 ly rebase moves a body under 0.001 px". The council's
+dead-band rider was **dropped deliberately**: under A nothing continuously changes the address, so a
+hysteresis constant would have asserted a literal. It has no production consumer yet, by design.
+Still unbuilt: **`placement(seed, address)`** (ADR-0010's prerequisite for `d`), lane 2's history
+and journey rules, the compass, and the tier masks.
 
 Two new environment notes landed with this commit, both traps this session paid for:
 `docs/notes/powershell-writes-cp1252.md` and `docs/notes/git-reset-hard-and-opencode-json.md`, plus

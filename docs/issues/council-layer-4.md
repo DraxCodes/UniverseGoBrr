@@ -248,6 +248,34 @@ fatal-if-stored, fixable-if-derived.
 **Tightened failures:** focus serialization; tier-bounce history spam; accepted degenerate `cam`;
 mid-travel `t` divergence; body-at-frame-edge flap.
 
+### Chair's adjudication of the risk seat's asks (2026-11-24, after lane 1)
+
+**Ask 1 — refuted, with measurement. `cam=1e30` does not render a wrong image; it renders a
+correct, empty one.**
+
+The claim was that an accepted-but-degenerate `cam` draws "everything at the camera" and therefore
+needs a HUD issue. Measured instead of assumed:
+
+- The scene divides by the frame's own scale *before* rounding, so what reaches the GPU at 10³⁰ m
+  is a large but finite display coordinate. Every body stays finite and at a stable position; the
+  system is drawn as a sub-pixel dot. Asserted in `approach-probe.test.ts` ("draws a correct but
+  empty frame at the parser cap, never garbage").
+- A per-frame bound *does* exist and is now written down (`maxOffsetM` in `rebase.ts`): a double
+  resolves a frame up to ~4.5×10⁹ × the frame radius. For a system that is ~1.5×10²² m, seven
+  orders below the parser's cap — so the cap is loose, but looseness is not wrongness.
+- The bound **cannot be wired as a check**, because at galaxy scale (radius 5×10²⁰ m) it is
+  ~2×10³⁰ m and 10³⁰ is *inside* it. The same `cam` is degenerate at one scale and fine at another.
+
+That last point is the real finding, and it is bigger than the ask: **one address currently spans
+system→galaxy across twelve orders of magnitude.** The existing capture shots
+(`layer3-galaxy-*`) sit at 1.3×10²¹ m — a galaxy framing reported under a system address, at 9.5%
+of that frame's own resolvable bound. "Which frame is this camera in" is therefore not answerable
+from `addr` alone today, and it is the address HUD's problem (lane 3), not a parser check.
+No check was shipped: a warning that fires on a legitimate galaxy framing trains people to ignore
+the HUD.
+
+**Ask 2 (history) and Ask 3 (derive, never store)** stand unchanged, and are lane 2's contract.
+
 ## 5. Experience thesis
 
 At eight out of ten, travel reads as **one continuous place**, not a sequence of screens.
@@ -380,7 +408,7 @@ Four lanes, non-overlapping write scopes. The probe lands before lane 1.
 | Lane | Writes | Depends on |
 | --- | --- | --- |
 | **P. Approach probe** | `src/render/approach-probe.ts` + test; `.scratch/` printer | **done 2026-11-24, passes** |
-| **1. Rebase** | `src/frame/rebase.ts` (new), `src/frame/rebase.test.ts` (new) | P (closed: address-only) |
+| **1. Rebase** | `src/frame/rebase.ts` (new), `src/frame/rebase.test.ts` (new) | **done 2026-11-24** — address-only, 14 assertions |
 | **2. Travel state + URL history** | `src/state/url-state.ts`, `src/main.ts` | 1 |
 | **3. Compass + address HUD** | `src/ui/hud.ts`, `src/ui/compass.ts` (new) | 2 (needs derived `t` and the history rule) |
 | **4. Tier masks** | `src/gpu/scene.wgsl`, `src/gpu/renderer.ts` | 1 (composites over the live destination) |
@@ -388,6 +416,25 @@ Four lanes, non-overlapping write scopes. The probe lands before lane 1.
 Lane 2's history rule, as critiqued: `replaceState` on rebase, `pushState` only on user-initiated
 arrival, consecutive same-`addr` pushes collapse to a replace, and a scripted boundary oscillation
 must leave history length constant.
+
+### Lane 1 landed (2026-11-24), and one council rider was dropped
+
+`src/frame/rebase.ts` is `rebaseCamera(camera, originShiftM)` plus the offset bound. Thirteen
+assertions, including the invariant that matters: **a rebase must not change the picture.** A 10 ly
+shift moves a body by under 0.001 px, and the test takes the viewing depth as an argument so it
+cannot silently assert the wrong ratio (the cost is `ulp(shift) / depth`, so 10 ly of shift is 10⁻⁵
+px at closeup depth and 0.02 px if the same shift were measured against a 10⁹ m target — a
+configuration that does not exist, which is why the depth is stated per case).
+
+**The dead band was dropped, deliberately.** The council asked for a hysteresis constant with a
+test, on the assumption that something continuously triggers an address change. Under A nothing
+does: arriving in a frame is a committed action (a warp, a click on the address HUD), not a distance
+the camera drifts past. A constant with a test would have asserted a literal rather than a property
+of the system, so the record of this decision is the absence of the code and this paragraph. It
+lands the day an automatic level change does.
+
+`rebase.ts` has **no production consumer yet**, by design: lane 2 is what calls it. It is
+tree-shaken from the bundle (80.67 kB, unchanged).
 
 Lane 2's time rule, as critiqued: a mid-travel link is legal and pins the **arrival** `t`; the
 journey is derived from `(addr, cam, t)`, never a stored `jour` parameter; the effect duration is a

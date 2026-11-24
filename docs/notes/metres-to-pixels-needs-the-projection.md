@@ -48,6 +48,26 @@ error in world metres can be far below a pixel if the frame is astronomically la
 - **Report both numbers, and say which question each answers.** Metres near the object's origin
   belong to the HUD's "what this picture exaggerates"; pixels belong to "can the eye see it".
 
+## The same arithmetic, applied to rebasing
+
+`src/frame/rebase.ts` moves a camera to a new frame by subtracting an origin shift. That
+subtraction is where a double's step enters, and the step is set by the **shift**, not by the
+frame you came from:
+
+| Rebase | shift | double step | visible cost, at depth 10⁹ m | at depth 10²⁰ m |
+| --- | --- | --- | --- | --- |
+| system → neighbour, 10 ly | 9.5×10¹⁶ m | ~16 m | 2×10⁻⁵ px | — |
+| system → galaxy, 50,000 ly | 4.7×10²⁰ m | ~65 km | 0.02 px | 8×10⁻¹³ px |
+
+So "a rebase costs 65 km" and "a rebase costs nothing" are both true, of the same rebase. The
+figure that decides it is `ulp(shift) / depth`, and depth is how far the nearest visible thing is
+— which moves with the frame. **Never quote the shift's error without saying what depth it is
+measured against.** The 0.02 px in that row is what a galaxy-scale shift does to a target 10⁹ m
+away, which is not a scene that exists; the same code at galaxy depth is a trillionth of a pixel.
+
+`rebase.test.ts` therefore takes the depth as an argument rather than assuming one, so the test
+states the pair it is asserting. The first version of it did not, and failed on a correct number.
+
 ## The related trap: the same probe has a real counterweight
 
 The probe passes for the **drawn orrery**, where bodies are exaggerated so they are legible. At

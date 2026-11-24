@@ -117,6 +117,29 @@ describe('approach probe: the failure it must be able to report', () => {
     expect(stretched.fewestUlpsAcrossDisc).toBeLessThan(APPROACH_MIN_ULPS_ACROSS_DISC);
     expect(stretched.failures.join(' ')).toContain('float32 steps');
   });
+
+  it('draws a correct but empty frame at the parser cap, never garbage', () => {
+    // The risk seat asked for a crafted `cam=1e30` to report an issue rather than render a wrong
+    // image. It renders a sub-pixel dot at a finite position: every body is still in the frame,
+    // nothing is NaN, nothing moved to the camera. So the honest failure is "you see nothing",
+    // and a HUD warning would be a false alarm. This assertion is why no check is wired.
+    const scale = displayScaleM(SOL_SYSTEM);
+    const capped = 1e30;
+    const camera = aimFrom({ x: capped, y: 0, z: 0 }, { x: 0, y: 0, z: 0 });
+    const frame = buildSceneFrame(SOL_SYSTEM, camera, 0, 16 / 9, 1080);
+
+    const points = [frame.starCenter, ...frame.planets.map((p) => p.center)];
+    for (const point of points) {
+      expect(Number.isFinite(point.x)).toBe(true);
+      expect(Number.isFinite(point.y)).toBe(true);
+      expect(Number.isFinite(point.z)).toBe(true);
+    }
+
+    // Every body is ~1e18 display units away: present, finite, and far too small to see.
+    const units = Math.hypot(frame.planets[0]!.center.x, frame.planets[0]!.center.y, frame.planets[0]!.center.z);
+    expect(units * scale).toBeGreaterThan(1e29);
+    expect(units).toBeLessThan(1e21);
+  });
 });
 
 describe('approach probe: aiming', () => {

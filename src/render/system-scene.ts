@@ -214,5 +214,7 @@ export function defaultSystemCamera(system: StarSystem): Camera {
     z: 1.79 * scale,
     yaw: 0,
     pitch: -Math.atan2(1.33, 1.79),
+    // The star is the frame origin, so the opening view orbits it, not a panned point.
+    target: { x: 0, y: 0, z: 0 },
   };
 }

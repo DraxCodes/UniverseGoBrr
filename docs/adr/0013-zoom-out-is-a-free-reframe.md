@@ -71,10 +71,10 @@ galactic centre, so both the orientation and the distance have to account for th
 
 - **`rebaseCamera` is still without a production consumer.** A view-preserving zoom-out would need a
   camera **target**, because after a pure translation the eye is no longer on the ray its angles
-  describe and the next drag snaps back to the frame origin. The orbit camera's "position is derived
-  from the angles and distance" invariant is what makes the current reframe safe; the target
-  generalisation arrives with right-drag panning (lane 4), which is also what allows the zoom-out to
-  preserve the picture.
+  describe and the next drag snaps back to the frame origin. The target arrived with right-drag
+  panning (ADR-0014), but the zoom-out still deliberately **reframes**: a translation-preserving
+  zoom-out would show the disc from inside the plane it sits in, which reads as a band, not a
+  galaxy. The target makes that option available; it does not make it the right picture.
 - **An anchor click is a travel**, so it costs `d / v(method)` and lands on the destination's
   opening camera (ADR-0012). The row shows the distance that will be charged, because it is
   `distanceM` from the place, not from the eye.
@@ -86,6 +86,6 @@ galactic centre, so both the orientation and the distance have to account for th
   a row for it would print a made-up number. The pin is dropped silently, like any other anchor that
   cannot be measured.
 - **What must be revisited:** when levels carry a scale, every address line becomes a real zoom-out
-  target and `planZoomOut`'s depth check becomes the level's own answer. When the camera gains a
-  target, the reframe should become a translation-preserving one if that looks better; this ADR
-  records the current limit rather than pretending it away.
+  target and `planZoomOut`'s depth check becomes the level's own answer. With the camera target in
+  place (ADR-0014), a translation-preserving zoom-out is possible if it can be made legible; this
+  ADR records the current limit rather than pretending it away.

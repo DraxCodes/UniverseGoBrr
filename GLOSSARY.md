@@ -19,6 +19,8 @@ column. New terms get added by `/domain-modeling` when a concept is actually set
 | **Zoom out** | Following an address line to an ancestor frame. A **reframe**, not a travel: the address and camera change, no universe time passes, and it still earns a history entry (ADR-0013). | "travel out", "fly out" (both imply elapsed time) |
 | **Anchor** | A place the compass offers as a jump target: a **drawn** star of the current galaxy, with the address that produced it. Never a place you happened to visit (ADR-0013). | "waypoint" (implies a stored route) |
 | **Pin / came from** | The address the last committed travel started from, carried in the link as `from=` and treated as a coordinate, not journey state (ADR-0013). | "history", "trail" (both sound like stored motion) |
+| **Target** | The frame-local point the camera looks at and orbits. The eye is derived from it, the angles and the distance, and a right-drag moves it. Carried in the link as `tgt=` when it is not the frame origin (ADR-0014). | "look-at" (unclear it is a position), "focus" (that is a UI concept) |
+| **Pan** | A right-drag that slides the camera target and eye together across the view plane, at the target's depth. A **gesture**, not a place: it replaces the history entry and costs no universe time (ADR-0014). | "scroll", "drag the world" (the drag is the gesture, not the result) |
 | **Display name** | The human-facing label for a level (`"Sol"`, `"Region 4211"`), resolved from the address for the HUD only. Never written into a link, and a rename never changes an address. Must be depth-indexed with a fallback, because the address has no fixed depth. | "title" (implies canvas text) |
 
 ## Generation

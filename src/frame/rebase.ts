@@ -45,6 +45,12 @@ export interface FrameCamera {
   readonly z: number;
   readonly yaw: number;
   readonly pitch: number;
+  /**
+   * The point the camera looks at (ADR-0014), when the caller has one. Optional so a camera that
+   * predates the target still rebases; when present it is shifted with the eye, because a rebase
+   * that moved only the eye would silently rotate the view.
+   */
+  readonly target?: Vec3;
 }
 
 /**
@@ -71,14 +77,29 @@ const DOUBLE_RELATIVE_STEP = Math.pow(2, -52);
  * Taking a shift rather than two absolutes is the precision choice: both inputs are translated but
  * never added to a large third value, so a frame-global translation cannot silently lose the
  * camera's position inside the frame.
+ *
+ * **A camera now also carries a `target` (ADR-0014).** When it is present it is shifted by the
+ * same vector as the eye, because a rebase that moved the eye and left the target behind would
+ * silently rotate the view — the opposite of rule 1. A camera without a target rebases exactly as
+ * before, so this stayed a compatible addition rather than a breaking change.
  */
 export function rebaseCamera(camera: FrameCamera, originShiftM: Vec3): FrameCamera {
-  return {
+  const rebased: FrameCamera = {
     x: camera.x - originShiftM.x,
     y: camera.y - originShiftM.y,
     z: camera.z - originShiftM.z,
     yaw: camera.yaw,
     pitch: camera.pitch,
+  };
+  if (!camera.target) return rebased;
+  // The target travels with the eye, so the view direction is preserved exactly.
+  return {
+    ...rebased,
+    target: {
+      x: camera.target.x - originShiftM.x,
+      y: camera.target.y - originShiftM.y,
+      z: camera.target.z - originShiftM.z,
+    },
   };
 }
 

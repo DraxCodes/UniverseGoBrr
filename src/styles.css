@@ -56,6 +56,11 @@ body {
   cursor: grabbing;
 }
 
+/* Right-drag pans. The same grabbing cursor: the gesture is "grab the view and slide it". */
+#stage.is-panning {
+  cursor: grabbing;
+}
+
 .hud {
   position: fixed;
   top: 16px;

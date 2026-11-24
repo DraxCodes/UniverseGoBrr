@@ -1,16 +1,19 @@
 /**
- * Orbit-and-zoom camera control.
+ * Orbit-and-zoom camera control, and panning (ADR-0014).
  *
- * The camera is stored as a position plus the yaw/pitch that look at the star, so the two must
- * always be kept consistent — the renderer uses the position for translation and the angles for
- * the view basis. Every function here therefore returns a camera whose position is *derived from*
- * its angles and distance, never adjusted independently.
+ * The camera is stored as a **target**, the angles that look at it, and the distance to it. The eye
+ * (`x`/`y`/`z`) is always *derived* from those three — `target − forward(yaw, pitch) · distance` —
+ * and every function here returns a camera whose position satisfies that. The invariant is what
+ * makes panning safe: when the target moves, the eye moves with it, so the next drag orbits the
+ * point you panned to instead of snapping the view back to the frame origin.
  *
  * This is framing, not travel: it moves the camera within one frame and never rebases (ADR-0003
  * puts flight in Layer 4). It writes back through `onChange`/`onCommit` so the URL stays the
  * single source of truth.
  */
 
+import { WORLD_ORIGIN, type Vec3 } from '../frame/position';
+import { FOV_Y_RAD, cameraBasis } from '../render/camera';
 import type { Camera } from '../state/url-state';
 import { notchFactor } from '../render/scale';
 
@@ -23,43 +26,103 @@ export const DRAG_SENSITIVITY = 0.0048;
 /** Pitch stops just short of the poles: looking straight down the up-axis is degenerate. */
 export const PITCH_LIMIT = 1.45;
 
-/** Distance from the camera to the frame origin, in metres. */
+/** Distance from the eye to the point it looks at, in metres. */
 export function orbitDistance(camera: Camera): number {
-  return Math.hypot(camera.x, camera.y, camera.z);
+  return Math.hypot(
+    camera.x - camera.target.x,
+    camera.y - camera.target.y,
+    camera.z - camera.target.z,
+  );
 }
 
 /**
- * The camera that looks at the origin from `distance`, at `yaw` and `pitch`.
- * Position is `-forward × distance`, which is exactly what the view basis expects.
+ * The camera that looks at `target` from `distance`, at `yaw` and `pitch`.
+ * Position is `target − forward(yaw, pitch) · distance`, which is exactly what the view basis
+ * expects: `cameraBasis(yaw, pitch).forward` points from the eye to the target.
  */
-export function orbitTo(yaw: number, pitch: number, distance: number): Camera {
+export function orbitTo(
+  yaw: number,
+  pitch: number,
+  distance: number,
+  target: Vec3 = WORLD_ORIGIN,
+): Camera {
   const clampedPitch = Math.min(PITCH_LIMIT, Math.max(-PITCH_LIMIT, pitch));
   const cosPitch = Math.cos(clampedPitch);
   return {
-    x: Math.sin(yaw) * cosPitch * distance,
-    y: -Math.sin(clampedPitch) * distance,
-    z: Math.cos(yaw) * cosPitch * distance,
+    x: target.x + Math.sin(yaw) * cosPitch * distance,
+    y: target.y - Math.sin(clampedPitch) * distance,
+    z: target.z + Math.cos(yaw) * cosPitch * distance,
     yaw,
     pitch: clampedPitch,
+    // Copied, never aliased: `WORLD_ORIGIN` is frozen, and a caller's object must not become the
+    // camera's live target by accident.
+    target: { x: target.x, y: target.y, z: target.z },
   };
 }
 
-/** Read the orbit parameters back out of a camera position. */
-export function orbitParams(camera: Camera): { yaw: number; pitch: number; distance: number } {
-  const distance = orbitDistance(camera);
-  if (distance === 0) return { yaw: camera.yaw, pitch: camera.pitch, distance: 0 };
-  const pitch = -Math.asin(Math.min(1, Math.max(-1, camera.y / distance)));
-  const yaw = Math.atan2(camera.x, camera.z);
-  return { yaw, pitch, distance };
+/** Read the orbit parameters back out of a camera. */
+export function orbitParams(camera: Camera): {
+  yaw: number;
+  pitch: number;
+  distance: number;
+  target: Vec3;
+} {
+  const dx = camera.x - camera.target.x;
+  const dy = camera.y - camera.target.y;
+  const dz = camera.z - camera.target.z;
+  const distance = Math.hypot(dx, dy, dz);
+  if (distance === 0) {
+    return { yaw: camera.yaw, pitch: camera.pitch, distance: 0, target: camera.target };
+  }
+  const pitch = -Math.asin(Math.min(1, Math.max(-1, dy / distance)));
+  const yaw = Math.atan2(dx, dz);
+  return { yaw, pitch, distance, target: camera.target };
 }
 
-/** Drag in CSS pixels: horizontal turns, vertical tilts. Distance is preserved exactly. */
+/** Drag in CSS pixels: horizontal turns, vertical tilts. Distance and target are preserved. */
 export function dragOrbit(camera: Camera, dxPixels: number, dyPixels: number): Camera {
-  const { yaw, pitch, distance } = orbitParams(camera);
+  const { yaw, pitch, distance, target } = orbitParams(camera);
   // Drag right turns the scene right (the eye moves left): `yaw - dx`.
   // Drag up raises the eye over the system, matching OrbitControls: moving up means a *smaller*
   // clientY, so a negative dy, and a more negative pitch is a higher camera.
-  return orbitTo(yaw - dxPixels * DRAG_SENSITIVITY, pitch + dyPixels * DRAG_SENSITIVITY, distance);
+  return orbitTo(
+    yaw - dxPixels * DRAG_SENSITIVITY,
+    pitch + dyPixels * DRAG_SENSITIVITY,
+    distance,
+    target,
+  );
+}
+
+/**
+ * Right-drag pan: slide the target (and the eye with it) across the view plane by the world
+ * distance the cursor covered **at the target's depth**.
+ *
+ * `viewportHeightPx` turns pixels into metres: at distance `d` the vertical field spans
+ * `2·d·tan(FOV/2)`, so one pixel is that over the viewport height. Using the target's depth, not
+ * the frame's scale, is what makes the drag feel grabbed — the point under the cursor stays under
+ * the cursor at any zoom.
+ *
+ * Signs match `dragOrbit`'s "drag the scene": dragging right moves the scene right, so the camera
+ * moves left, and dragging down moves the scene down, so the camera moves up.
+ */
+export function panBy(
+  camera: Camera,
+  dxPixels: number,
+  dyPixels: number,
+  viewportHeightPx: number,
+): Camera {
+  const { yaw, pitch, distance, target } = orbitParams(camera);
+  if (!(viewportHeightPx > 0) || !(distance > 0)) return orbitTo(yaw, pitch, distance, target);
+
+  const basis = cameraBasis(yaw, pitch);
+  const metresPerPixel = (2 * distance * Math.tan(FOV_Y_RAD / 2)) / viewportHeightPx;
+  const dx = dxPixels * metresPerPixel;
+  const dy = dyPixels * metresPerPixel;
+  return orbitTo(yaw, pitch, distance, {
+    x: target.x - basis.right.x * dx + basis.up.x * dy,
+    y: target.y - basis.right.y * dx + basis.up.y * dy,
+    z: target.z - basis.right.z * dx + basis.up.z * dy,
+  });
 }
 
 /** Which end of the zoom range a wheel notch was pushed against, or null if it moved. */
@@ -72,10 +135,10 @@ export function zoomBy(
   frameScaleM: number,
   maxDistanceM = MAX_DISTANCE_FACTOR * frameScaleM,
 ): Camera {
-  const { yaw, pitch, distance } = orbitParams(camera);
+  const { yaw, pitch, distance, target } = orbitParams(camera);
   const min = MIN_DISTANCE_FACTOR * frameScaleM;
   const next = Math.min(maxDistanceM, Math.max(min, distance * factor));
-  return orbitTo(yaw, pitch, next);
+  return orbitTo(yaw, pitch, next, target);
 }
 
 /**
@@ -135,6 +198,8 @@ export function attachOrbitControls(options: OrbitControlOptions): OrbitControls
   const maxDistanceM = options.maxDistanceM ?? MAX_DISTANCE_FACTOR * frameScaleM;
   const target = element;
   let pointerId: number | null = null;
+  /** Which gesture the captured pointer is doing. Set on pointerdown, never changed mid-drag. */
+  let gesture: 'orbit' | 'pan' = 'orbit';
   let lastX = 0;
   let lastY = 0;
   let commitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -154,13 +219,15 @@ export function attachOrbitControls(options: OrbitControlOptions): OrbitControls
   };
 
   const onPointerDown = (event: PointerEvent): void => {
-    // Left button or touch/pen only; a right-drag is the browser's or the user's.
-    if (event.button !== 0) return;
+    // Left button (and touch/pen, which report 0) orbits; right button pans (ADR-0014 D5).
+    // Anything else — middle, back/forward — is left to the browser.
+    if (event.button !== 0 && event.button !== 2) return;
     pointerId = event.pointerId;
+    gesture = event.button === 2 ? 'pan' : 'orbit';
     lastX = event.clientX;
     lastY = event.clientY;
     target.setPointerCapture(event.pointerId);
-    target.classList.add('is-dragging');
+    target.classList.add(gesture === 'pan' ? 'is-panning' : 'is-dragging');
     event.preventDefault();
   };
 
@@ -171,17 +238,27 @@ export function attachOrbitControls(options: OrbitControlOptions): OrbitControls
     lastX = event.clientX;
     lastY = event.clientY;
     if (dx === 0 && dy === 0) return;
-    apply(dragOrbit(camera, dx, dy));
+    apply(
+      gesture === 'pan'
+        ? panBy(camera, dx, dy, target.clientHeight)
+        : dragOrbit(camera, dx, dy),
+    );
   };
 
   const endDrag = (event: PointerEvent): void => {
     if (pointerId !== event.pointerId) return;
     pointerId = null;
-    target.classList.remove('is-dragging');
+    target.classList.remove('is-dragging', 'is-panning');
     if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
     // One URL write per gesture, not per pixel: history.replaceState is rate-limited by browsers
     // (Chrome throws after ~100 calls in 30 s, which a drag would hit in a second).
     scheduleCommit();
+  };
+
+  // A right-drag is a pan, so the context menu must not open on release. Only on the canvas: the
+  // rest of the page (and the HUD's own text selection) keeps its menu.
+  const onContextMenu = (event: MouseEvent): void => {
+    event.preventDefault();
   };
 
   const onWheel = (event: WheelEvent): void => {
@@ -204,6 +281,7 @@ export function attachOrbitControls(options: OrbitControlOptions): OrbitControls
   target.addEventListener('pointerup', endDrag);
   target.addEventListener('pointercancel', endDrag);
   target.addEventListener('wheel', onWheel, { passive: false });
+  target.addEventListener('contextmenu', onContextMenu);
 
   return {
     dispose() {
@@ -213,7 +291,8 @@ export function attachOrbitControls(options: OrbitControlOptions): OrbitControls
       target.removeEventListener('pointerup', endDrag);
       target.removeEventListener('pointercancel', endDrag);
       target.removeEventListener('wheel', onWheel);
-      target.classList.remove('is-dragging');
+      target.removeEventListener('contextmenu', onContextMenu);
+      target.classList.remove('is-dragging', 'is-panning');
     },
   };
 }

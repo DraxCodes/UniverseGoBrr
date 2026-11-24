@@ -9,6 +9,8 @@ interface UniverseDebugState {
   from: string | null;
   t: number | null;
   camera: [number, number, number, number, number];
+  /** The frame-local point the camera looks at; `[0,0,0]` until the view is panned. */
+  target: readonly [number, number, number];
   precision: 'fixed' | 'naive' | null;
 }
 

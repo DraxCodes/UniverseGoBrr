@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "20261124T222037-e5e851ae",
+  "kind": "security",
+  "status": "passed",
+  "startedAt": "2026-11-24T21:48:00.000Z",
+  "endedAt": "2026-11-24T22:16:00.000Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Security lens over lane 4 panning (uncommitted working tree vs 667aa43): the camera `target`, the new `tgt=x,y,z` URL parameter, right-drag panning in attachOrbitControls, and the target shift in rebaseCamera. Is `tgt` bounded on read; can any value reach the URL or the DOM as markup; can a pan change the address, grow history or advance the clock; does the eye stay derived at every construction site; can the pan math produce NaN/Infinity; did adding button 2 weaken the left-drag path.",
+  "commit": "667aa43..working tree (wip/layer-3)",
+  "models": [
+    "surplus/glm-5.3 (audit)"
+  ],
+  "verdict": "PASS, one LOW coverage finding, no exposures. All six claims confirmed. (1) parseTarget rejects arity != 3, empty parts, non-finite values and |value| > MAX_POSITION_M (1e30); the tgt branch runs only when cameraExplicit was set by a successful parseCamera, so a target can never arrive without an eye. (2) No injection: tgt is written only from formatted numbers, formatNumber maps -0 to \"0\", the percent-decodes in the reader can only introduce characters that cannot restructure a query, and the HUD writes the target through textContent/.title properties. (3) A pan touches only the camera object: the URL is written from a 250 ms debounced commit on gesture end, historyWrite still pushes only when the formatted address changes, and only commitTravel calls advanceClock. (4) The eye stays derived at every production site (orbitTo, defaultSystemCamera, aimFrom, rebaseCamera, the r reset); parseCamera is the reader, not a manipulation. (5) panBy guards viewportHeightPx and distance, cameraBasis clamps the degenerate pole, orbitParams clamps asin, and the 1e30 read cap keeps the float32 uniform finite. (6) Buttons 0 and 2 only; middle/back/forward ignored; contextmenu suppressed on the canvas element only and removed on dispose; pointer capture released on pointerup and pointercancel; the left-drag path is unchanged.",
+  "notes": "Finding (LOW, coverage): parseTarget's overflow/non-finite/empty-part rejections were unpinned by tests — the guard was present and correct, but only the orphan and arity-2 forms were asserted. Fixed in the same commit: two tests now cover '1e300,0,0', 'NaN,0,0', 'Infinity,0,0', '1,,3', '1,2,3,4' and ' , , ' (all fall back to the origin with an issue), plus a panned round-trip that normalises -0; the suite went 265 -> 267. No production code changed in response to the audit. Two informational notes, no action: contextmenu suppression on #stage is unconditional, so a plain right-click without a drag and the keyboard-invoked menu are also swallowed (deliberate); and there is no write-side clamp on |target| from repeated panning (read-side 1e30 only, unreachable at ~1e8 maximal gestures, harmless under camera-relative rendering). Tests were run for real in the audit session: 23 files, 265 tests passed (the pre-fix count). npx tsc --noEmit exit 0. npm run probe:pan was not run by the auditor; the script was reviewed statically, and the chair ran it end to end (15/15). No secret, credential, absolute path or personal data in the diff; the probe binds 127.0.0.1:4173 only and writes to gitignored .scratch/pan-probe. No external content is read, so no prompt-injection surface; tgt is parsed strictly as numbers. OWASP DOM XSS Prevention Cheat Sheet Rules 6-7 (safe sinks), checked 2026-11-24, complies; the 250 ms debounce keeps history writes far under the June 2026 rate-limiting behaviour. The auditor widened its read twice, each for a named question: src/render/camera.ts (pole clamp) and src/gpu/renderer.ts + index.html (what the renderer receives; whether the contextmenu element is the canvas). Cost: cents, one seat, one pass.",
+  "evidence": [
+    { "path": "src/input/orbit-controls.ts", "kind": "artifact" },
+    { "path": "src/input/orbit-controls.test.ts", "kind": "artifact" },
+    { "path": "src/state/url-state.ts", "kind": "artifact" },
+    { "path": "src/state/url-state.test.ts", "kind": "artifact" },
+    { "path": "src/frame/rebase.ts", "kind": "artifact" },
+    { "path": "src/frame/rebase.test.ts", "kind": "artifact" },
+    { "path": "src/main.ts", "kind": "artifact" },
+    { "path": "src/ui/hud.ts", "kind": "artifact" },
+    { "path": "tools/pan-probe.mjs", "kind": "artifact" },
+    { "path": "docs/adr/0014-camera-target-and-panning.md", "kind": "artifact" }
+  ]
+}

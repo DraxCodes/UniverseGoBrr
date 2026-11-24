@@ -259,14 +259,14 @@ export function aimFrom(from: Vec3, at: Vec3): Camera {
   const dy = at.y - from.y;
   const dz = at.z - from.z;
   const length = Math.hypot(dx, dy, dz);
-  if (!(length > 0)) return { ...from, yaw: 0, pitch: 0 };
+  if (!(length > 0)) return { x: from.x, y: from.y, z: from.z, yaw: 0, pitch: 0, target: at };
 
   const forward = { x: dx / length, y: dy / length, z: dz / length };
   const pitch = Math.asin(clamp(forward.y, -1, 1));
   const cosPitch = Math.cos(pitch);
   // Looking straight up or down leaves yaw arbitrary; 0 is stable and costs nothing.
   const yaw = Math.abs(cosPitch) < 1e-9 ? 0 : Math.atan2(-forward.x, -forward.z);
-  return { x: from.x, y: from.y, z: from.z, yaw, pitch };
+  return { x: from.x, y: from.y, z: from.z, yaw, pitch, target: at };
 }
 
 function fround3(v: Vec3): Vec3 {

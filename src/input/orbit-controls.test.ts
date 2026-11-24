@@ -8,18 +8,46 @@ import {
   orbitDistance,
   orbitParams,
   orbitTo,
+  panBy,
   zoomBy,
   zoomEdge,
 } from './orbit-controls';
-import { cameraBasis, projectPoint, multiply, reverseZProjection, viewFromBasis } from '../render/camera';
+import {
+  FOV_Y_RAD,
+  cameraBasis,
+  projectPoint,
+  multiply,
+  reverseZProjection,
+  viewFromBasis,
+} from '../render/camera';
 
 const SCALE = 1.96e12; // outermost orbit of the reference system, metres
-const HOME = { x: 0, y: 1.75 * SCALE, z: 2.35 * SCALE, yaw: 0, pitch: -0.6400881527617461 };
+const ORIGIN = { x: 0, y: 0, z: 0 };
+const HOME = {
+  x: 0,
+  y: 1.75 * SCALE,
+  z: 2.35 * SCALE,
+  yaw: 0,
+  pitch: -0.6400881527617461,
+  target: ORIGIN,
+};
 
-/** Where the star appears on screen, given a camera and an aspect ratio. */
-function starOnScreen(camera: { x: number; y: number; z: number; yaw: number; pitch: number }) {
+/** Where the world point `p` appears on screen, given a camera and an aspect ratio. */
+function pointOnScreen(
+  camera: { x: number; y: number; z: number; yaw: number; pitch: number },
+  point: { x: number; y: number; z: number },
+) {
   const vp = multiply(reverseZProjection(16 / 9, 0.002), viewFromBasis(cameraBasis(camera.yaw, camera.pitch)));
-  return projectPoint(vp, { x: -camera.x, y: -camera.y, z: -camera.z });
+  return projectPoint(vp, {
+    x: point.x - camera.x,
+    y: point.y - camera.y,
+    z: point.z - camera.z,
+  });
+}
+
+/** Where the star at the frame origin appears on screen. */
+function starOnScreen(camera: { x: number; y: number; z: number; yaw: number; pitch: number }) {
+  return pointOnScreen(camera, ORIGIN);
 }
 
 describe('orbit parameters round-trip', () => {
@@ -118,6 +146,72 @@ describe('dragging', () => {
   });
 });
 
+describe('panning', () => {
+  const HEIGHT_PX = 1080;
+
+  it('moves the target and the eye together, keeping angles and distance', () => {
+    const before = orbitParams(HOME);
+    const panned = panBy(HOME, 120, -80, HEIGHT_PX);
+    const after = orbitParams(panned);
+
+    expect(Math.abs(after.distance - before.distance) / before.distance).toBeLessThan(1e-12);
+    expect(after.yaw).toBeCloseTo(before.yaw, 9);
+    expect(after.pitch).toBeCloseTo(before.pitch, 9);
+
+    // The eye-to-target offset is preserved: the view slides, it does not swing.
+    for (const axis of ['x', 'y', 'z'] as const) {
+      const beforeOffset = HOME[axis] - ORIGIN[axis];
+      const afterOffset = panned[axis] - panned.target[axis];
+      expect(Math.abs(afterOffset - beforeOffset) / Math.max(1, Math.abs(beforeOffset))).toBeLessThan(
+        1e-12,
+      );
+    }
+  });
+
+  it('turns pixels into metres at the target depth, not the frame scale', () => {
+    const { distance } = orbitParams(HOME);
+    const metresPerPixel = (2 * distance * Math.tan(FOV_Y_RAD / 2)) / HEIGHT_PX;
+    const panned = panBy(HOME, 1, 0, HEIGHT_PX);
+    const moved = Math.hypot(
+      panned.target.x - ORIGIN.x,
+      panned.target.y - ORIGIN.y,
+      panned.target.z - ORIGIN.z,
+    );
+    expect(moved).toBeCloseTo(metresPerPixel, 6);
+  });
+
+  it('keeps the point it panned to dead centre', () => {
+    const panned = panBy(HOME, 240, -160, HEIGHT_PX);
+    const projected = pointOnScreen(panned, panned.target);
+    // 10⁻⁶ NDC is a fraction of a pixel: the rest is float32 in the projection matrix.
+    expect(Math.abs(projected.x)).toBeLessThan(1e-6);
+    expect(Math.abs(projected.y)).toBeLessThan(1e-6);
+  });
+
+  it('orbits around the panned target afterwards, not the frame origin', () => {
+    const panned = panBy(HOME, 300, 180, HEIGHT_PX);
+    const distance = orbitDistance(panned);
+    const turned = dragOrbit(panned, 90, -40);
+    expect(orbitDistance(turned)).toBeCloseTo(distance, 3);
+    // The target is unchanged by an orbit, and still projects to the centre.
+    expect(turned.target).toEqual(panned.target);
+    const projected = pointOnScreen(turned, turned.target);
+    expect(Math.abs(projected.x)).toBeLessThan(1e-6);
+    expect(Math.abs(projected.y)).toBeLessThan(1e-6);
+  });
+
+  it('is a no-op without a viewport height or a distance', () => {
+    const noHeight = panBy(HOME, 100, 100, 0);
+    expect(noHeight.x).toBeCloseTo(HOME.x, 9);
+    expect(noHeight.target).toEqual(HOME.target);
+
+    const atTarget = { ...HOME, x: 0, y: 0, z: 0 };
+    const noDistance = panBy(atTarget, 100, 100, HEIGHT_PX);
+    expect(noDistance.x).toBe(0);
+    expect(noDistance.target).toEqual(ORIGIN);
+  });
+});
+
 describe('zooming', () => {
   it('scales distance and keeps the angles', () => {
     const before = orbitParams(HOME);
@@ -126,6 +220,13 @@ describe('zooming', () => {
     expect(after.distance).toBeCloseTo(before.distance * 0.5, 3);
     expect(after.yaw).toBeCloseTo(before.yaw, 9);
     expect(after.pitch).toBeCloseTo(before.pitch, 9);
+  });
+
+  it('keeps a panned target: the wheel is not a reset', () => {
+    const panned = panBy(HOME, 200, -100, 1080);
+    const zoomed = zoomBy(panned, 0.5, SCALE);
+    expect(zoomed.target).toEqual(panned.target);
+    expect(orbitDistance(zoomed)).toBeCloseTo(orbitDistance(panned) * 0.5, 3);
   });
 
   it('clamps at both ends so the frame always has a usable view', () => {

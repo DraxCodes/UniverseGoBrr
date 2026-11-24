@@ -53,7 +53,14 @@ describe('scene assembly', () => {
     // The whole point of ADR-0008: nothing absolute reaches the GPU. Every float32 here must be
     // a fraction of a unit, not a fraction of an astronomical unit.
     const scale = displayScaleM(SYSTEM);
-    const camera = { x: 1.49e11, y: 2.5 * scale, z: 3e11, yaw: 0.4, pitch: -0.6 };
+    const camera = {
+      x: 1.49e11,
+      y: 2.5 * scale,
+      z: 3e11,
+      yaw: 0.4,
+      pitch: -0.6,
+      target: { x: 0, y: 0, z: 0 },
+    };
     const scene = buildSceneFrame(SYSTEM, camera, 1e6, ASPECT);
 
     const magnitudes = [
@@ -224,6 +231,7 @@ describe('presentation constants', () => {
       z: Math.cos(pitch) * distance,
       yaw: 0,
       pitch,
+      target: { x: 0, y: 0, z: 0 },
     };
     const scene = buildSceneFrame(SYSTEM, camera, 0, ASPECT, 1080, 0.9);
     expect(scene.lod).toBe(0.9);

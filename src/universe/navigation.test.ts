@@ -21,7 +21,7 @@ function candidate(text: string, x: number, y: number, z: number): AnchorCandida
 }
 
 /** `yaw = 0, pitch = 0` looks down `-z`, so `-z` is straight ahead and `+x` is to the right. */
-const LEVEL_EYE: Camera = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 };
+const LEVEL_EYE: Camera = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, target: { x: 0, y: 0, z: 0 } };
 
 describe('nearestAnchors', () => {
   const stars = [

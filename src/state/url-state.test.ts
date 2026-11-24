@@ -21,7 +21,7 @@ describe('parseUrlState', () => {
     expect(new Date(state.epochMs).toISOString()).toBe(DEFAULT_EPOCH_ISO);
     expect(state.address).toEqual(DEFAULT_ADDRESS);
     expect(state.t).toBeNull();
-    expect(state.camera).toEqual({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0 });
+    expect(state.camera).toEqual({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0, target: { x: 0, y: 0, z: 0 } });
     expect(state.precision).toBeNull();
   });
 
@@ -36,7 +36,7 @@ describe('parseUrlState', () => {
     expect(new Date(state.epochMs).toISOString()).toBe('2024-02-29T12:34:56.000Z');
     expect(formatAddress(state.address)).toBe('v1/0.3.-7.12');
     expect(state.t).toBe(-120.5);
-    expect(state.camera).toEqual({ x: 12, y: -4, z: 40, yaw: 0.6, pitch: 0.15 });
+    expect(state.camera).toEqual({ x: 12, y: -4, z: 40, yaw: 0.6, pitch: 0.15, target: { x: 0, y: 0, z: 0 } });
     expect(state.precision).toBe('naive');
   });
 
@@ -54,7 +54,7 @@ describe('parseUrlState', () => {
     expect(state.seed).toBe(DEFAULT_SEED);
     expect(new Date(state.epochMs).toISOString()).toBe(DEFAULT_EPOCH_ISO);
     expect(state.t).toBeNull();
-    expect(state.camera).toEqual({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0 });
+    expect(state.camera).toEqual({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0, target: { x: 0, y: 0, z: 0 } });
     expect(state.address).toEqual(DEFAULT_ADDRESS);
     expect(state.precision).toBeNull();
     expect(issues).toHaveLength(6);
@@ -74,7 +74,7 @@ describe('parseUrlState', () => {
   it('rejects a camera with a missing component instead of reading it as zero', () => {
     const { state, issues } = parseUrlState('?cam=1,2,3,4,');
     expect(issues).toHaveLength(1);
-    expect(state.camera).toEqual({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0 });
+    expect(state.camera).toEqual({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0, target: { x: 0, y: 0, z: 0 } });
   });
 
   /**
@@ -85,11 +85,11 @@ describe('parseUrlState', () => {
   it('rejects magnitudes that would become Infinity once stored as float32', () => {
     const huge = parseUrlState('?cam=1e300,0,0,0,0');
     expect(huge.issues).toHaveLength(1);
-    expect(huge.state.camera).toEqual({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0 });
+    expect(huge.state.camera).toEqual({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0, target: { x: 0, y: 0, z: 0 } });
 
     const tiny = parseUrlState('?cam=0,0,0,0,-1e300');
     expect(tiny.issues).toHaveLength(1);
-    expect(tiny.state.camera).toEqual({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0 });
+    expect(tiny.state.camera).toEqual({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0, target: { x: 0, y: 0, z: 0 } });
 
     const time = parseUrlState('?t=1e300');
     expect(time.issues).toHaveLength(1);
@@ -113,7 +113,7 @@ describe('urlForState', () => {
       address: { version: 1, levels: [0, 3, -7, 12] },
       from: { version: 1, levels: [0, 9] },
       t: 1200,
-      camera: { x: 12, y: -4, z: 40, yaw: 0.6, pitch: 0.15 },
+      camera: { x: 12, y: -4, z: 40, yaw: 0.6, pitch: 0.15, target: { x: 5, y: -2, z: 9 } },
       cameraExplicit: true,
       precision: null,
     };
@@ -124,6 +124,7 @@ describe('urlForState', () => {
     expect(url).toContain('addr=v1/0.3.-7.12');
     expect(url).toContain('from=v1/0.9');
     expect(url).toContain('cam=12,-4,40,0.6,0.15');
+    expect(url).toContain('tgt=5,-2,9');
     expect(url).not.toContain('precision=');
 
     const { state: reparsed, issues } = parseUrlState(new URL(url, 'http://local').search);
@@ -146,6 +147,46 @@ describe('urlForState', () => {
 
   it('omits from when there is no trail', () => {
     expect(urlForState(defaultState(), '/')).not.toContain('from=');
+  });
+
+  it('omits tgt until the view is panned, so an unpanned link is unchanged', () => {
+    expect(urlForState(defaultState(), '/')).not.toContain('tgt=');
+  });
+
+  it('parses a panned target, and rejects one without an eye to look from', () => {
+    const panned = parseUrlState('?cam=12,-4,40,0.6,0.15&tgt=5,-2,9');
+    expect(panned.issues).toEqual([]);
+    expect(panned.state.camera.target).toEqual({ x: 5, y: -2, z: 9 });
+
+    // A target with no `cam` would leave the default eye at the frame origin looking elsewhere;
+    // the pair belongs together, so it is reported and ignored.
+    const orphan = parseUrlState('?tgt=5,-2,9');
+    expect(orphan.state.camera.target).toEqual({ x: 0, y: 0, z: 0 });
+    expect(orphan.issues.some((issue) => issue.includes('tgt needs cam'))).toBe(true);
+
+    const malformed = parseUrlState('?cam=12,-4,40,0.6,0.15&tgt=5,9');
+    expect(malformed.state.camera.target).toEqual({ x: 0, y: 0, z: 0 });
+    expect(malformed.issues.some((issue) => issue.includes('tgt "5,9"'))).toBe(true);
+  });
+
+  it('rejects a target that is out of range, non-finite, or missing a component', () => {
+    // The read-side cap keeps the value inside what the float32 uniform can carry; a link is
+    // untrusted input, so every malformed form must fall back to the origin rather than throw.
+    for (const bad of ['1e300,0,0', 'NaN,0,0', 'Infinity,0,0', '1,,3', '1,2,3,4', ' , , ']) {
+      const parsed = parseUrlState(`?cam=12,-4,40,0.6,0.15&tgt=${bad}`);
+      expect(parsed.state.camera.target).toEqual({ x: 0, y: 0, z: 0 });
+      expect(parsed.issues.some((issue) => issue.includes('tgt'))).toBe(true);
+    }
+  });
+
+  it('round-trips a panned target, and normalises a negative zero', () => {
+    const state = defaultState();
+    state.camera.target = { x: -0, y: 5, z: -0 };
+    const url = urlForState(state, '/');
+    expect(url).toContain('tgt=0,5,0');
+
+    const back = parseUrlState(new URL(url, 'http://local').search).state;
+    expect(back.camera.target).toEqual({ x: 0, y: 5, z: 0 });
   });
 
   it('round-trips the precision debug switch', () => {

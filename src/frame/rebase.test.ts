@@ -61,6 +61,35 @@ describe('rebaseCamera: the shift convention', () => {
     const back = rebaseCamera(there, vec3(-shift.x, -shift.y, -shift.z));
     expect([back.x, back.y, back.z]).toEqual([camera.x, camera.y, camera.z]);
   });
+
+  it('shifts a target with the eye, so the view direction is preserved', () => {
+    const camera: FrameCamera = {
+      x: 100,
+      y: 0,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      target: { x: 90, y: 0, z: 0 },
+    };
+    const moved = rebaseCamera(camera, vec3(50, 0, 0));
+    expect(moved.x).toBe(50);
+    expect(moved.target).toEqual({ x: 40, y: 0, z: 0 });
+
+    // The eye-to-target offset — which is the whole meaning of the view — is unchanged.
+    const before = {
+      x: camera.x - camera.target!.x,
+      y: camera.y - camera.target!.y,
+      z: camera.z - camera.target!.z,
+    };
+    const after = { x: moved.x - moved.target!.x, y: moved.y - moved.target!.y, z: moved.z - moved.target!.z };
+    expect(after).toEqual(before);
+  });
+
+  it('leaves a camera that has no target exactly as it was', () => {
+    const camera: FrameCamera = { x: 1, y: 2, z: 3, yaw: 0, pitch: 0 };
+    const moved = rebaseCamera(camera, vec3(1, 1, 1));
+    expect('target' in moved).toBe(false);
+  });
 });
 
 describe('rebaseCamera: the picture must not change', () => {

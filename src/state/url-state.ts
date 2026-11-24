@@ -11,6 +11,7 @@ import {
   sameAddress,
   type Address,
 } from '../frame/address';
+import { WORLD_ORIGIN, type Vec3 } from '../frame/position';
 import type { PrecisionMode } from '../frame/precision-probe';
 
 export interface Camera {
@@ -19,6 +20,17 @@ export interface Camera {
   z: number;
   yaw: number;
   pitch: number;
+  /**
+   * The frame-local point the camera orbits and looks at (ADR-0014). The eye stays on the ray
+   * `target − forward(yaw, pitch) · distance`, so panning moves this and the eye together and the
+   * next drag keeps orbiting the same point.
+   *
+   * It is a **position**, not a place: the address is still the destination (ADR-0004), and a pan
+   * never changes which frame you are in. `cam` keeps carrying the eye; the target rides in its own
+   * `tgt` parameter and is absent when it is the frame origin, so every existing link and every
+   * capture shot is unchanged.
+   */
+  target: Vec3;
 }
 
 export interface UrlState {
@@ -70,6 +82,7 @@ export const DEFAULT_CAMERA: Readonly<Camera> = Object.freeze({
   z: 0,
   yaw: 0,
   pitch: 0,
+  target: WORLD_ORIGIN,
 });
 
 const SEED_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
@@ -104,7 +117,7 @@ export function defaultState(): UrlState {
     address: DEFAULT_ADDRESS,
     from: null,
     t: null,
-    camera: { ...DEFAULT_CAMERA },
+    camera: { ...DEFAULT_CAMERA, target: { ...DEFAULT_CAMERA.target } },
     cameraExplicit: false,
     precision: null,
   };
@@ -190,6 +203,24 @@ export function parseUrlState(search: string): ParsedUrlState {
     }
   }
 
+  if (params.has('tgt')) {
+    const raw = params.get('tgt') ?? '';
+    const target = parseTarget(raw);
+    if (!target) {
+      issues.push(
+        `tgt "${raw}" must be x,y,z (metres) within ±${MAX_POSITION_M.toExponential()}; ` +
+          'looking at the frame origin.',
+      );
+    } else if (!state.cameraExplicit) {
+      // A target with no eye has no meaning: the default camera sits at the frame origin, so
+      // looking at a point elsewhere would leave the eye inside the star. The pair belongs
+      // together, and the writer always emits both.
+      issues.push('tgt needs cam (the eye) to go with it; ignoring the target.');
+    } else {
+      state.camera = { ...state.camera, target };
+    }
+  }
+
   if (params.has('precision')) {
     const raw = (params.get('precision') ?? '').trim();
     if (raw === 'fixed' || raw === 'naive') {
@@ -217,7 +248,26 @@ function parseCamera(raw: string): Camera | null {
   }
   if (!within(yaw, MAX_ANGLE_RAD) || !within(pitch, MAX_ANGLE_RAD)) return null;
 
-  return { x, y, z, yaw, pitch };
+  return { x, y, z, yaw, pitch, target: WORLD_ORIGIN };
+}
+
+/**
+ * Parse the optional `tgt` parameter: the point the camera looks at.
+ *
+ * Three numbers rather than five, and the same position cap as the eye. It is **not** merged into
+ * `cam`: keeping it separate means a link that never pans is byte-identical to the Layer 2/3
+ * format, and a reader that does not know about panning still parses the eye and angles.
+ */
+function parseTarget(raw: string): Vec3 | null {
+  const parts = raw.split(',').map((part) => part.trim());
+  if (parts.length !== 3 || parts.some((part) => part === '')) return null;
+
+  const [x, y, z] = parts.map(Number);
+  if (!isFiniteNumber(x) || !isFiniteNumber(y) || !isFiniteNumber(z)) return null;
+  if (!within(x, MAX_POSITION_M) || !within(y, MAX_POSITION_M) || !within(z, MAX_POSITION_M)) {
+    return null;
+  }
+  return { x, y, z };
 }
 
 function within(value: number, limit: number): boolean {
@@ -239,8 +289,13 @@ export function urlForState(state: UrlState, pathname: string): string {
     params.set('t', formatNumber(state.t));
   }
 
-  const { x, y, z, yaw, pitch } = state.camera;
+  const { x, y, z, yaw, pitch, target } = state.camera;
   params.set('cam', [x, y, z, yaw, pitch].map(formatNumber).join(','));
+  // Only a panned view writes a target. An origin-hunting `tgt=0,0,0` on every link would be noise,
+  // and it would make an old link and a new one differ for no reason.
+  if (target.x !== 0 || target.y !== 0 || target.z !== 0) {
+    params.set('tgt', [target.x, target.y, target.z].map(formatNumber).join(','));
+  }
 
   if (state.precision !== null) {
     params.set('precision', state.precision);

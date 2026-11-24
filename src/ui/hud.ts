@@ -201,7 +201,14 @@ export function mountHud(
     // Position and angles are separate rows: an eye 20 AU out plus yaw/pitch on one line ran
     // past the HUD's fixed width at 1920 and clipped the pitch value mid-number.
     cameraEl.textContent = `${f(camera.x)}, ${f(camera.y)}, ${f(camera.z)}`;
-    viewEl.textContent = `yaw ${angle(camera.yaw)}, pitch ${angle(camera.pitch)}`;
+    // A panned view is still the same place, but the eye no longer looks at the frame origin.
+    // Say so quietly (the coordinates already moved), and keep the target in the tooltip so a
+    // shared link's `tgt` can be checked against the HUD.
+    const panned = camera.target.x !== 0 || camera.target.y !== 0 || camera.target.z !== 0;
+    viewEl.textContent = `yaw ${angle(camera.yaw)}, pitch ${angle(camera.pitch)}${panned ? ' · panned' : ''}`;
+    viewEl.title = panned
+      ? `looking at ${f(camera.target.x)}, ${f(camera.target.y)}, ${f(camera.target.z)}`
+      : 'looking at the frame origin';
     // The compass is a direction, so its numbers follow the eye rather than the place.
     updateBearings();
   }

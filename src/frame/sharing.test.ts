@@ -49,7 +49,14 @@ function stateFor(levels: readonly number[], camera: Scale['camera']): UrlState 
     address: { version: 1, levels },
     from: null,
     t: 1200,
-    camera: { x: camera[0], y: camera[1], z: camera[2], yaw: camera[3], pitch: camera[4] },
+    camera: {
+      x: camera[0],
+      y: camera[1],
+      z: camera[2],
+      yaw: camera[3],
+      pitch: camera[4],
+      target: { x: 0, y: 0, z: 0 },
+    },
     cameraExplicit: true,
     precision: null,
   };

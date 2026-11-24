@@ -95,26 +95,28 @@ structure is checked by `src/status-page.test.ts`; its content is the owner's to
 
 ## Doing
 
-**Lane 3 (compass + clickable address HUD) is built; the tier masks with panning are next.** Lane 2
-shipped a committed travel as one atomic state change (ADR-0012): `planTravel` in
-`src/universe/travel.ts` returns the method, the distance in the shared galaxy frame and
-`Δt = d / v(method)` — or a plain reason it refuses, never an invented number. The arrival camera is
-the destination's opening view, the clock's mode is preserved (pinned `t` moves; a live epoch shifts
-back, so the orrery does not freeze), and the URL is written once as one history entry. `popstate`
-re-enters the coordinate, so Back and Forward change the picture instead of only the address bar.
+**Lane 4 is down to the tier masks.** Lane 2 shipped a committed travel as one atomic state change
+(ADR-0012): `planTravel` in `src/universe/travel.ts` returns the method, the distance in the shared
+galaxy frame and `Δt = d / v(method)` — or a plain reason it refuses, never an invented number. The
+arrival camera is the destination's opening view, the clock's mode is preserved (pinned `t` moves; a
+live epoch shifts back, so the orrery does not freeze), and the URL is written once as one history
+entry. `popstate` re-enters the coordinate, so Back and Forward change the picture instead of only
+the address bar.
 
-Lane 3 gives that a control. The address is now clickable lines: following one is a **free
-zoom-out** — the address and camera change, no universe time passes, and it still gets a history
-entry because Back retraces places (ADR-0013). The compass lists the three nearest **drawn** stars
-plus a "came from" pin, each row a click that commits the same travel the debug surface does. The
-pin rides in the link as `from=`, as a coordinate rather than stored journey state. The zoom-out
-lands face-on and framing the whole disc: the star's yaw carried over was near edge-on, and the
-orbit camera looks at the home star rather than the galactic centre, so the framing distance accounts
-for the `0.55 R` offset. The history rule is now just "did the address change?", so a camera gesture
-cannot push and a place always does.
+Lane 3 gave that a control: the address is clickable lines, following one is a **free zoom-out**
+(ADR-0013), and the compass lists the three nearest **drawn** stars plus a `from=` pin.
 
-Still not built in Layer 4: the tier masks and right-drag panning. After those: the deferred visual
-pass and the root `LICENSE`/product name.
+Lane 4's panning is now built (ADR-0014). The camera is `target + yaw/pitch/distance` with the eye
+**derived**, so a right-drag slides the target and the eye together at the target's depth — the point
+under the cursor stays grabbed at any zoom — and the next orbit turns around the point you panned
+to instead of snapping back to the frame origin. The target rides in the link as `tgt=` only when it
+is not the origin, so an unpanned link is byte-identical to lane 3's. A pan is a gesture, not a
+place: it replaces the current history entry and costs no universe time. The wheel and the zoom
+clamps measure eye-to-target, not eye-to-origin, or a panned view would look like a zoom-out.
+
+Still not built: the **tier masks**. The owner's 2026-11-24 call is **not this round** — the effect
+is WGSL work, and it goes to Neon with a state machine and a first pass from here; when it is gated,
+a 6 or 7 on `perception` is a pass with work routed, not a failure (the Layer 3 precedent).
 
 Mechanism notes: `docs/notes/reentering-a-coordinate.md` (why every address change rebuilds the
 scene), `docs/notes/powershell-writes-cp1252.md` and
@@ -122,30 +124,30 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
 
 ## Next
 
-1. **Layer 4 (travel tiers) is in its last lane.** `council-layer-4.md` §10 records the owner's
+1. **Layer 4's tier masks** are the last piece. `council-layer-4.md` §10 records the owner's
    answers: **A**, address-origin frames, rebasing on tier crossings only; a tier crossing is a
-   **journey**; **time advances by `d / v(method)`** (ADR-0010); tiers + panning first, compass
-   second. **Lane P passes** (§8), so the rebase is address-only. **Lane 1**
-   (`src/frame/rebase.ts`), **both halves of placement**, **lane 2** (travel state + URL history,
-   ADR-0012) and **lane 3** (compass + clickable address HUD, ADR-0013) are done. Next: the tier
-   masks with right-drag panning (lane 4), which is also what unlocks a view-preserving zoom-out.
-   The security lens has run on the placement consumer, the root-guard fix and lane 2
-   (`.scratch/runs/layer4-travel-state-audit.json`); it raised two low findings — a crafted `?t=`
-   or `?epoch=` at the edge of the reader's range could make an arrival link reload as a *different*
-   state — both fixed in the same commit by making `advanceClock` refuse an unrepresentable arrival.
-   Lane 3's lens (`.scratch/runs/layer4-compass-navigation-audit.json`) is a clean PASS, no
-   findings: `from` is bounded by the address parser, every new DOM sink is `textContent`, and the
-   zoom-out policy cannot be escaped from the debug surface.
+   **journey**; **time advances by `d / v(method)`** (ADR-0010). **Lane P passes** (§8), so the
+   rebase is address-only. **Lane 1** (`src/frame/rebase.ts`), **both halves of placement**,
+   **lane 2** (travel state + URL history, ADR-0012), **lane 3** (compass + clickable address HUD,
+   ADR-0013) and **panning** (camera target, ADR-0014) are done. Only `warp` and `transwarp` are
+   reachable — `impulse` is no travel action and `subspace` is refused for lack of a root layout.
+   The security lens has run on the placement consumer, the root-guard fix, lane 2
+   (`.scratch/runs/layer4-travel-state-audit.json`), lane 3
+   (`.scratch/runs/layer4-compass-navigation-audit.json`) and lane 4 panning
+   (`.scratch/runs/layer4-pan-audit.json`) — the last three are clean PASSes. Lane 4's lens raised
+   one LOW coverage finding: `parseTarget`'s overflow/non-finite/empty-part rejections were correct
+   but unpinned. Two tests now cover every rejection form and a `-0` round-trip (265 → 267 tests);
+   no production code changed. Lane 2's lens raised two low findings — a crafted `?t=` or `?epoch=`
+   at the edge of the reader's range could make an arrival link reload as a *different* state — both
+   fixed by making `advanceClock` refuse an unrepresentable arrival.
 2. The deferred visual pass: read `iterations/layer-3-iteration-2-deferred.md` before touching tone,
    grading, density balance or reference claims. Re-gate here when it returns.
 3. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon
    handoffs*, working detail in `docs/notes/two-agent-workflow.md`. The chair asks before any
    handoff; gate scoring never leaves this workflow.
-4. **Panning binding is settled** (owner, 2026-11-24): left-drag keeps yaw/pitch as today,
-   **right-drag pans**, and the context menu is suppressed only while a right-drag is active. It is
-   still **unimplemented**: it arrives with the tier work (lane 4) and touches
-   `src/input/orbit-controls.ts`'s "position is derived from angles and distance" invariant plus
-   ADR-0003's framing-vs-travel split.
+4. **Panning is done** (owner binding 2026-11-24: left-drag orbits, right-drag pans; the context
+   menu is suppressed on the canvas). What is *not* done is touch: a phone has no right button, so
+   two-finger pan waits with the mobile layout (spec §1).
 
 
 ## Blocked
@@ -176,12 +178,16 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
   time, and still pushes a history entry. The compass lists the three nearest *drawn* stars plus the
   `from=` pin; the pin is a place carried in the link, not stored journey state. Only the galaxy line
   zooms out in v1 (levels carry no scale), face-on and framing the whole disc. Consequence:
-  `rebaseCamera` still has no production consumer; a view-preserving zoom-out needs the camera
-  `target` from lane 4's panning.
-- **Panning is right-drag; left-drag keeps yaw/pitch** (owner, 2026-11-24). The canvas suppresses
-  the context menu while a right-drag is active. `orbit-controls.ts` ignores every button except 0
-  today, so this adds a `button === 2` path rather than remapping the existing one. Touch/pen
-  panning waits with the mobile layout (spec §1).
+  `rebaseCamera` still has no production consumer; the camera `target` now exists (ADR-0014), but the
+  translation path would look along the disc plane, so the reframe is kept.
+- **Panning is right-drag; left-drag keeps yaw/pitch** (ADR-0014, owner 2026-11-24). The camera now
+  carries a **target**; the eye is derived as `target − forward · distance`, so panning moves the
+  target and the eye together and the next orbit turns around the panned point. The canvas
+  suppresses the context menu. The target rides in the link as `tgt=` only when it is not the frame
+  origin. Touch/pen panning waits with the mobile layout (spec §1).
+- **The zoom-out stays a face-on reframe, even now that a target exists** (ADR-0013 unchanged). A
+  translation-preserving zoom-out would look along the disc's own plane, which reads as a band; the
+  target made the option available, not correct.
 - **The address grid is the world; the picture is a view of it** (ADR-0011, owner 2026-11-24). Every
   drawn light is a rendered address that resolves to the same thing when you arrive; placement is
   `placement(seed, address)`, never the inverse; occupancy is one rule shared by the renderer and
@@ -241,6 +247,12 @@ The decision record is tracked, so a clone on another machine is enough to resum
 - `src/universe/placement.test.ts` (new) — determinism, containment in the galaxy's disc, exclusion
   from the local sphere, distinct addresses, root refusal, and the stream replay that proves the
   generator and placement share one law.
+- `src/input/orbit-controls.ts` — the camera is target + yaw/pitch/distance, the eye is derived;
+  `panBy` is right-drag, `dragOrbit` is left-drag, both preserve the target.
+- `src/state/url-state.ts` — `Camera.target` and the `tgt=` parameter (absent = frame origin).
+- `src/main.ts` — `__ugb.state.target`, the HUD says `· panned`.
+- `tools/pan-probe.mjs` (new) — the end-to-end pan evidence (`npm run probe:pan`).
+- `docs/adr/0014-camera-target-and-panning.md` — the decision and its limits.
 - `src/universe/system.ts` — `starProfile` and `SIZE_FRACTION` exported so authored content reuses
   the generator's definitions instead of a drifting copy.
 
@@ -265,14 +277,19 @@ The decision record is tracked, so a clone on another machine is enough to resum
 
 ## Verification
 
-- `npm test` — pass, 23 files, **255 tests**.
-- `npm run build` — pass, `tsc --noEmit && vite build`, clean; **90.57 kB JS / 32.48 kB gzip**.
+- `npm test` — pass, 23 files, **267 tests**.
+- `npm run build` — pass, `tsc --noEmit && vite build`, clean; **92.07 kB JS / 32.93 kB gzip**.
 - `npm run probe:travel` — **12/12 checks** (arrival-link reload, Back, Forward, framing write).
 - `npm run probe:compass` — **20/20 checks**: the address renders as lines with only the current
   one inert; the compass rows name a place, a bearing and a distance; a drag turns a bearing; a row
   travels to exactly its address and pins the departure; the arrival link reproduces the pin; the
   zoom-out keeps `t` and `epoch`, gains one history entry, and Back returns to the star; the root
   line is refused without moving the page. Screenshots: `.scratch/compass-probe/`.
+- `npm run probe:pan` — **15/15 checks**: the opening view targets the origin and the link carries no
+  `tgt`; a real right-drag moves the target and the eye by the same vector with the angle unchanged;
+  the panned link carries `tgt`; history does not grow; the HUD says `panned`; a left-drag keeps the
+  target and changes the angle; the wheel keeps it; the reloaded link reproduces target and eye; `R`
+  clears it. Screenshot: `.scratch/pan-probe/pan-system.png`.
 - Placement check — the disc-law extraction was **bit-identical**, proved locally with an
   exact-double digest of the 45,001 / 22,501 / 13,601-star cases before and after (a scratch
   comparison, not checked in: the last bits of transcendentals are engine-dependent, so a
@@ -289,9 +306,8 @@ The decision record is tracked, so a clone on another machine is enough to resum
   skill references rather than repo paths, 2 are version strings in a ticket that the pattern mistakes
   for paths. On `wip/layer-3`: 181 refs across 47 files, and the same 4 remain — the two skill
   references and the two version strings.
-- `npm run capture` — **20/20 shots pass**, unchanged by the compass work (the galaxy shots use
-  explicit cameras, so the zoom-out framing does not move them). The last new shot was
-  `layer3-sol-1080p`.
+- `npm run capture` — **20/20 shots pass**, unchanged by panning: every shot sets its camera
+  explicitly, and a shot that never pans writes no `tgt`. The last new shot was `layer3-sol-1080p`.
 - Sol visual check — `layer3-sol-1080p` shows all eight bodies, the HUD reads
   `v1/0.0.0 · 3 levels` and `G-type · 8 planets · ×1930–18438 real`. Judged on a 1:1 crop after the
   downscaled image suggested the corona hid Mercury and Venus; it does not, which is why the

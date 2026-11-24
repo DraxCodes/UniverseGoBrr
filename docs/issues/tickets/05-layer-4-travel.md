@@ -8,8 +8,11 @@ world and the picture is a view of it. **Both halves of placement are built**
 (`src/universe/placement.ts`, with the shared disc law in `src/universe/disc.ts`): every address has
 a position **and** the picture draws by address, so every drawn light carries one
 (`GALAXY_VERSION` 5 → 6). Speed constants are confirmed (see the end of this brief). **Lane 2 is
-built** (`src/universe/travel.ts`, the history rule, Back/Forward re-entry; ADR-0012). Still ahead:
-the compass, and the tier masks with panning.
+built** (`src/universe/travel.ts`, the history rule, Back/Forward re-entry; ADR-0012), **lane 3 is
+built** (the compass, clickable address lines, free zoom-out; ADR-0013), and **panning is built**
+(the camera target, right-drag panning, `tgt=`; ADR-0014). Still ahead: the tier masks. The owner's
+2026-11-24 answer on those: **not this round** — the state machine and effect go to Neon, and the
+`perception` gate is scored with a lower bar (a 6 or 7 is a pass with work routed, not a failure).
 
 ## Deliverable (spec §7, row 4)
 
@@ -89,10 +92,14 @@ bearing, distance, click to travel); an on-canvas needle is later work.
 
 ## D5 - Panning
 
-Deferred here from Layer 3 (status.md, open question 4). Left-click X/Y panning changes the
-camera `target`, which is the same generalisation as travel: `target + yaw/pitch/distance`. It must
-not break the "position is derived" invariant or the precision window; it belongs with the rebase
-work, not before it.
+Deferred here from Layer 3 (status.md, open question 4). Panning changes the camera `target`, which
+is the same generalisation as travel: `target + yaw/pitch/distance`. It must not break the "position
+is derived" invariant or the precision window; it belongs with the rebase work, not before it.
+
+**Decided (owner, 2026-11-24): left-drag keeps orbit, right-drag pans.** Built, with the target
+generalisation and `tgt=` in the URL — see "Lane 4 mechanics" under D7 and ADR-0014. `rebaseCamera`
+is still without a production consumer: the galaxy zoom-out stays a face-on reframe, because a
+translation-preserving one would look along the disc's own plane.
 
 ## D6 - Time during travel
 
@@ -105,7 +112,7 @@ different numbers. Speed constants and the placement prerequisite are in ADR-001
 ## D7 - The URL and sharing contract
 
 A link already carries `seed`, `addr`, `cam`, `t`, `epoch`. During travel the address, the camera
-and possibly `t` all change. The contract must say:
+and possibly `t` all change, and a panned view adds `tgt`. The contract must say:
 
 - when the URL is rewritten (per frame is wasteful and makes history unusable);
 - whether a mid-travel link is legal (it probably must be, or a reload loses the journey);
@@ -126,8 +133,9 @@ History discipline (`historyWrite` in `src/state/url-state.ts`):
 Two honest limits: a **live** clock can only be advanced by moving its epoch (the alternative
 freezes the orrery), so a live arrival link drifts with the wall clock exactly like every live link
 already does; a **pinned** arrival link is exact. And `rebaseCamera` still has no production
-consumer — under ADR-0012 an arrival is re-framed, not translated, and so is the lane-3 zoom-out
-(ADR-0013), so its first consumer is the camera-target work in lane 4.
+consumer: under ADR-0012 an arrival is re-framed, not translated, and so is the lane-3 zoom-out
+(ADR-0013); lane 4's panning moves within one frame and never rebases either (ADR-0014). Its first
+consumer will be a travel that keeps the departure's offset instead of re-framing — not this layer.
 
 ### Lane 2 mechanics, as built
 
@@ -173,6 +181,36 @@ consumer — under ADR-0012 an arrival is re-framed, not translated, and so is t
   lines, the rows and their addresses, a drag changing a bearing, a row travelling and pinning the
   departure, the arrival link reproducing the pin, the zoom-out keeping `t`/`epoch` and gaining one
   history entry, Back returning to the star, and a refused root leaving the page alone.
+
+### Lane 4 mechanics, as built: the camera target and panning
+
+- **`Camera` gained `target: Vec3`** (`src/state/url-state.ts`). The eye stays **derived**:
+  `target − forward(yaw, pitch) · distance`. Every function in `src/input/orbit-controls.ts`
+  (`orbitTo`, `orbitParams`, `dragOrbit`, `zoomBy`, `panBy`) returns a camera satisfying that, so the
+  renderer's contract is unchanged and the invariant several tests rely on still holds — only the
+  point the angles and distance are relative to became explicit, and it is the frame origin by
+  default.
+- **`orbitDistance` is eye-to-target**, and the orbit-controls clamp, the wheel's `notchFactor`
+  input and the HUD's scene row all use it. Measuring from the frame origin would make a panned view
+  look like a zoom-out and fire the clamp at the wrong moment.
+- **`panBy(camera, dxPx, dyPx, viewportHeightPx)`** moves target and eye by the same vector at
+  `2 · distance · tan(FOV/2) / viewportHeightPx` metres per pixel, so the grabbed point stays under
+  the cursor. Right-drag pans; left-drag still orbits; the canvas suppresses `contextmenu` so the
+  browser menu does not open at the end of a pan.
+- **`tgt=x,y,z` in the URL**, written only when the target is not the origin. A link that never pans
+  is byte-identical to the lane 2/3 format. `tgt` without `cam` is reported and ignored — a target
+  with no eye has no meaning.
+- **A pan is a gesture, not a place**: the address cannot change (ADR-0004), so `historyWrite`
+  replaces the current entry, Back never grows, and no universe time passes (ADR-0010).
+- **The HUD** appends `· panned` to the view row and puts the target in its tooltip, so a shared
+  link's `tgt` can be checked against what is on screen.
+- **Evidence:** `src/input/orbit-controls.test.ts` (the eye-to-target invariant, target-preserving
+  orbit/wheel, a grabbed point staying centred, metres-per-pixel at the target's depth, no-op
+  guards); `src/state/url-state.test.ts` (`tgt` round-trip, absence, orphan, malformed);
+  `npm run probe:pan` (`tools/pan-probe.mjs`) drives the built app with real mouse buttons: an
+  unpanned link carries no `tgt`, a right-drag moves the target and the eye by the same vector with
+  the angle unchanged, history does not grow, a left-drag keeps the target and changes the angle,
+  the wheel keeps it, the reloaded link reproduces target and eye, and `R` clears it.
 
 ## D8 - No new content
 

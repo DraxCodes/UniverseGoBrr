@@ -90,7 +90,7 @@
   <body>
     <main>
       <h1>UniverseGoBrr <span>build status</span></h1>
-      <p class="meta">Updated 2026-11-24 · update 8 · branch <code>wip/layer-3</code> · edited in the same commit as <code>docs/issues/status.md</code></p>
+      <p class="meta">Updated 2026-11-24 · update 9 · branch <code>wip/layer-3</code> · edited in the same commit as <code>docs/issues/status.md</code></p>
       <p class="lede">
         <strong>V1 is:</strong> fly from a galaxy arm down to a lit planet, cross the distance between
         systems with a real travel time, and send a friend the view. No gameplay. Layer 6 (walking on
@@ -105,7 +105,9 @@
         distance over speed, and the view lands on the destination. Back and Forward walk between the
         places you have been. The address is now clickable lines that zoom out to the galaxy for free,
         and a compass lists the nearest drawn stars plus where you came from — each row is a jump.
-        Next are the tier masks with right-drag panning.
+        Right-drag now pans: the view slides, and the next orbit turns around the point you panned to.
+        What is left is the tier masks — the effect that hides the frame swap. That is shader work, so
+        it is a Neon candidate rather than something to rush here.
       </p>
 
       <h2>Remaining to V1</h2>
@@ -121,8 +123,8 @@
           </tr>
           <tr>
             <td>L4</td>
-            <td class="task">Tier masks and panning<em>Warp, slipstream, wormhole; the effect that hides the frame swap. Left-drag orbits, right-drag pans.</em></td>
-            <td class="status s-next">Next</td>
+            <td class="task">Tier masks<em>Warp streaks for a local warp, a tunnel for a transwarp: the effect that hides the frame swap. WGSL — a Neon candidate.</em></td>
+            <td class="status s-neon">Neon candidate</td>
           </tr>
           <tr>
             <td>L3</td>
@@ -205,6 +207,11 @@
             <td class="task">Travel state and URL history<em>A jump is one state change: destination view, clock by distance over speed, one history entry. Back walks places, not mouse moves.</em></td>
             <td class="status s-done">Done</td>
           </tr>
+<tr>
+            <td>L4</td>
+            <td class="task">Panning<em>The camera looks at a target, so right-drag slides the view and the next orbit turns around the point you grabbed. The link carries the target only when it is panned.</em></td>
+            <td class="status s-done">Done</td>
+          </tr>
         </tbody>
       </table>
 
@@ -220,8 +227,8 @@
           squarely Neon's domain. Worth asking once Layer 4 lands.
         </li>
         <li>
-          <strong>Layer 4 tier masks — ask first.</strong> Warp streaks are WGSL, but they are effects
-          plumbing rather than procedural noise. Your call whether that is worth a branch.
+          <strong>Layer 4 tier masks.</strong> Warp streaks and the transwarp tunnel are WGSL effect
+          work. Next up, and the branch to cut when you say go.
         </li>
       </ul>
       <p class="note">
@@ -235,9 +242,9 @@
       </ul>
       <p class="note">
         Your call on the arrival view is in: a jump lands on the destination's opening view, and a
-        live clock keeps running instead of freezing. That was the last Layer 4 design question.
-        Placement is complete — a light you can see is one you can link to and travel to — and the
-        only thing still waiting is the name.
+        live clock keeps running instead of freezing. Panning is in too — right-drag slides the view.
+        Placement is complete, so a light you can see is one you can link to and travel to. The only
+        thing still waiting is the name.
       </p>
 
       <h2>After V1</h2>

@@ -4,7 +4,7 @@ import { createRenderer, type RendererHandle } from './gpu/renderer';
 import { createPrecisionProbe } from './frame/precision-probe';
 import { formatAddress, parseAddress, sameAddress, type Address } from './frame/address';
 import { mountHud, showFatal, type CompassEntry } from './ui/hud';
-import { attachOrbitControls, orbitTo } from './input/orbit-controls';
+import { attachOrbitControls, orbitDistance, orbitTo } from './input/orbit-controls';
 import { defaultSystemCamera, displayScaleM } from './render/system-scene';
 import { GALAXY_MAX_DISTANCE_M } from './render/galaxy-scene';
 import { notchFactor } from './render/scale';
@@ -145,6 +145,8 @@ window.__ugb = {
       from: state.from ? formatAddress(state.from) : null,
       t: state.t,
       camera: cameraSnapshot(state.camera),
+      /** The point the camera looks at (ADR-0014). `[0,0,0]` until the view is panned. */
+      target: [state.camera.target.x, state.camera.target.y, state.camera.target.z] as const,
       precision: state.precision,
     };
   },
@@ -472,7 +474,9 @@ async function init(attempt: number): Promise<AppHandle> {
         // zoom-out from the default view is edge-on, and it would leave the row reading
         // "K-type · 9 planets" at 45 000 ly while the whole galaxy fills the frame.
         const identity = created.galaxyFrame()?.identity ?? 0;
-        const distance = Math.hypot(state.camera.x, state.camera.y, state.camera.z);
+        // The zoom rate follows the orbit distance (eye to target), not the eye's distance from
+        // the frame origin: after a pan both move together, so the wheel keeps its feel.
+        const distance = orbitDistance(state.camera);
         const boost = notchFactor(distance, WHEEL_BASE) / WHEEL_BASE;
         if (identity > 0.5) {
           hud.setScene('one galaxy · ×1 real');
@@ -523,7 +527,9 @@ async function init(attempt: number): Promise<AppHandle> {
     } else if (event.key.toLowerCase() === 'r') {
       // Reset means "the framing this scene opens with", not "the origin" — the origin is
       // inside the star.
-      const home = system ? defaultSystemCamera(system) : { ...DEFAULT_CAMERA };
+      const home = system
+        ? defaultSystemCamera(system)
+        : { ...DEFAULT_CAMERA, target: { ...DEFAULT_CAMERA.target } };
       Object.assign(state.camera, home);
       persist();
       hud.setCamera(state.camera);

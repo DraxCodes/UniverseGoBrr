@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "kind": "security",
+  "status": "passed",
+  "startedAt": "2026-11-24T21:20:00.000Z",
+  "endedAt": "2026-11-24T21:45:00.000Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Security lens over lane 3 (uncommitted working tree vs d90743b): the new `from` URL parameter, the compass (nearestAnchors/bearingOf), the free zoom-out (planZoomOut/galaxyFraming/commitZoomOut), and every DOM sink added to the HUD. Can a crafted ?from= cause unbounded work or a wrong-but-plausible coordinate; can any value reach the DOM as markup; can __ugb.zoomOut or a crafted depth escape the policy; can a hostile address hang the compass; did the diff weaken the lane-2 clock refusals or the root guard.",
+  "commit": "d90743b..working tree (wip/layer-3)",
+  "models": [
+    "surplus/glm-5.3 (audit)"
+  ],
+  "verdict": "PASS, no findings. All five claims confirmed. (1) ?from= is bounded twice: parseAddress caps the string at 900 chars before splitting, the level count at 64 and each level at |x| <= 2,147,483,647; from is dropped on any parse issue and when it names the current address. placement is O(1) per call (hash over a <=900-char string, one RNG draw) and returns null/{0,0,0} for the root and galaxy depths, so a deep from cannot crash. (2) No DOM injection: every sink added in hud.ts assigns textContent/dataset/.title/.className as properties; a grep for innerHTML|outerHTML|insertAdjacentHTML|document.write|eval|setAttribute over all of src/ has zero matches. The invalid-from echo in the issues line is textContent and bounded to 900 chars (the too-long case is echo-free). Click handlers close over Address objects, never strings read back from the DOM. (3) The zoom-out policy holds: only integer depth === GALAXY_DEPTH with levels.length >= 2 passes, and galaxyFrame then does O(1) work. pushState/replaceState exist only in writeUrl and are fed only by urlForState (URLSearchParams-encoded). (4) No hang: nearestAnchors is one pass with K=3 over the tier-budgeted galaxy.stars; compassEntries calls placement at most twice (origin and pin). (5) The diff does not touch advanceClock's 1e20 cap or four-digit ISO floor, and galaxy.ts (the root guard) is unmodified.",
+  "notes": "Tests were run for real in the audit session: 23 files, 255 tests, 255 passed, 0 failed. New coverage includes every planZoomOut refusal (root, already-here, finer level, negative, non-integer), from drop/reject/round-trip, and the property that a camera gesture cannot grow history. No secret, credential, absolute path or personal data in the diff; the probe binds 127.0.0.1 only and window.__ugb exposes state, not credentials. No external content is read, so no prompt-injection surface; URL params are validated data. OWASP DOM-Based XSS Prevention Cheat Sheet Rules 6-7 (textContent as a safe sink), checked 2026-11-24, complies. The auditor reviewed tools/compass-probe.mjs statically (it had already been run by the chair, 20/20) and widened its read to address.ts, disc.ts, placement.ts and galaxy.ts only to answer the named questions. Cost: cents, one seat, one pass.",
+  "evidence": [
+    {
+      "path": "src/universe/navigation.ts",
+      "sha256": "sha256:ba90cefcb8e2efeb0a5a575b027aeb8dd144b956b1a2dea6ef4ecd291aaece14",
+      "kind": "artifact"
+    },
+    {
+      "path": "src/universe/navigation.test.ts",
+      "sha256": "sha256:b49c7ac95c32370a655e28c1cb6b25c56a349f7be41f67356d8f51f90d4664ad",
+      "kind": "artifact"
+    },
+    {
+      "path": "src/state/url-state.ts",
+      "sha256": "sha256:f774c0b004ab8edcc90c69034d325232a777b071a5c4cbf57bff030da87c6b5f",
+      "kind": "artifact"
+    },
+    {
+      "path": "src/state/url-state.test.ts",
+      "sha256": "sha256:710c91250a98ad31de3507199c6bd56201cd5a2472226416c5384fda0c9bee61",
+      "kind": "artifact"
+    },
+    {
+      "path": "src/main.ts",
+      "sha256": "sha256:0c202f9205e976e3c6a37e3d1bd89f5c6afd17886a3cea4a71f0623488f47435",
+      "kind": "artifact"
+    },
+    {
+      "path": "src/ui/hud.ts",
+      "sha256": "sha256:a98ea4a62bfe9bd39cf8936d592aed351b01e3cf942519cfef1561acf2425335",
+      "kind": "artifact"
+    },
+    {
+      "path": "tools/compass-probe.mjs",
+      "sha256": "sha256:f33744c1f4e44923e2141722744e46129a791652860c9c241e31fd2a97d53912",
+      "kind": "artifact"
+    },
+    {
+      "path": "docs/adr/0013-zoom-out-is-a-free-reframe.md",
+      "sha256": "sha256:8b2ef27731ed2af11458a5a8fbe33bd3652acd55aa7a24a34996e2296a10db9e",
+      "kind": "artifact"
+    }
+  ]
+}

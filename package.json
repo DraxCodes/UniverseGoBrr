@@ -15,7 +15,8 @@
     "probe:state": "node tools/state-probe.mjs",
     "probe:live": "node tools/live-probe.mjs",
     "probe:watchdog": "node tools/watchdog-probe.mjs",
-    "probe:travel": "node tools/travel-probe.mjs"
+    "probe:travel": "node tools/travel-probe.mjs",
+    "probe:compass": "node tools/compass-probe.mjs"
   },
   "devDependencies": {
     "@webgpu/types": "^0.1.74",

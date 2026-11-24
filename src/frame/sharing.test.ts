@@ -47,6 +47,7 @@ function stateFor(levels: readonly number[], camera: Scale['camera']): UrlState 
     seed: 'ugb-0000',
     epochMs: Date.parse('2000-01-01T00:00:00.000Z'),
     address: { version: 1, levels },
+    from: null,
     t: 1200,
     camera: { x: camera[0], y: camera[1], z: camera[2], yaw: camera[3], pitch: camera[4] },
     cameraExplicit: true,

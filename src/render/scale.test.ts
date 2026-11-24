@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { FOV_Y_RAD } from './camera';
+import { GALAXY_MAX_DISTANCE_M } from './galaxy-scene';
 import {
   GALAXY_RADIUS_M,
   SYSTEM_EXTENT_M,
   VOID_ZOOM_BOOST,
+  galaxyFramingDistanceM,
   notchFactor,
   voidCompression,
 } from './scale';
@@ -72,5 +75,33 @@ describe('the void is compressed in traversal, not in position', () => {
     expect(voidCompression(SYSTEM_EXTENT_M)).toBe(0);
     expect(voidCompression(GALAXY_RADIUS_M)).toBe(0);
     expect(voidCompression(1e17)).toBeGreaterThan(0.5);
+  });
+});
+describe('the galaxy framing distance', () => {
+  it('fits the whole disc, which is off-centre from the star the camera orbits', () => {
+    // The orbit camera looks at the home star; the galactic centre is 0.55 R away from it, so
+    // the farthest disc point is 1.55 R from the origin. Framing on R alone (the first version)
+    // put the disc's far edge well outside the frame.
+    const centreOffsetM = 0.55 * GALAXY_RADIUS_M;
+    const distanceM = galaxyFramingDistanceM(centreOffsetM);
+    expect(Math.atan((centreOffsetM + GALAXY_RADIUS_M) / distanceM)).toBeCloseTo(
+      FOV_Y_RAD / 2,
+      12,
+    );
+  });
+
+  it('is inside the range the orbit controls allow the camera to reach', () => {
+    // The zoom-out reframe writes this distance into the URL; a value the controls clamp would
+    // snap on the next wheel notch, which is the class of bug the "position is derived" rule
+    // exists to prevent.
+    const distanceM = galaxyFramingDistanceM(0.55 * GALAXY_RADIUS_M);
+    expect(distanceM).toBeLessThan(GALAXY_MAX_DISTANCE_M);
+    expect(distanceM).toBeGreaterThan(GALAXY_RADIUS_M);
+  });
+
+  it('moves the camera out when the centre is farther from the star', () => {
+    expect(galaxyFramingDistanceM(0.1 * GALAXY_RADIUS_M)).toBeLessThan(
+      galaxyFramingDistanceM(0.9 * GALAXY_RADIUS_M),
+    );
   });
 });

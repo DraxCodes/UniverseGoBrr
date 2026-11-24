@@ -2,16 +2,18 @@ import './styles.css';
 import { initDevice, type GpuContext } from './gpu/device';
 import { createRenderer, type RendererHandle } from './gpu/renderer';
 import { createPrecisionProbe } from './frame/precision-probe';
-import { formatAddress, parseAddress } from './frame/address';
-import { mountHud, showFatal } from './ui/hud';
-import { attachOrbitControls } from './input/orbit-controls';
+import { formatAddress, parseAddress, sameAddress, type Address } from './frame/address';
+import { mountHud, showFatal, type CompassEntry } from './ui/hud';
+import { attachOrbitControls, orbitTo } from './input/orbit-controls';
 import { defaultSystemCamera, displayScaleM } from './render/system-scene';
 import { GALAXY_MAX_DISTANCE_M } from './render/galaxy-scene';
 import { notchFactor } from './render/scale';
 import { AU_M, describeSystem } from './universe/system';
 import { resolveSystem } from './universe/authored';
 import { generateGalaxy, type Galaxy, type GalaxyTier } from './universe/galaxy';
-import { LY_M } from './universe/disc';
+import { LY_M, galaxyAddressOf, galaxyFrame } from './universe/disc';
+import { placement } from './universe/placement';
+import { galaxyFraming, nearestAnchors, planZoomOut } from './universe/navigation';
 import { planTravel, type TravelPlan } from './universe/travel';
 import {
   DEFAULT_CAMERA,
@@ -45,6 +47,8 @@ let bootGeneration = 0;
 let currentEntryAddress = '';
 /** The HUD's notice sink, set by `init`, so module-level travel can report without the HUD. */
 let notice: (text: string) => void = () => {};
+/** The compass rows this boot is showing, so the debug surface can report them. */
+let currentCompass: readonly CompassEntry[] = [];
 
 /**
  * The impostor budget this build opens with. "Rich" is the desktop default; the renderer's
@@ -116,6 +120,19 @@ window.__ugb = {
   travel(to: string) {
     return commitTravel(to);
   },
+  /** Follow an address line: free zoom-out to the galaxy (ADR-0013). */
+  zoomOut(depth: number) {
+    return commitZoomOut(depth);
+  },
+  /** The compass rows as the HUD is showing them, for capture evidence. */
+  get compass() {
+    return currentCompass.map((entry) => ({
+      address: formatAddress(entry.address),
+      label: entry.label,
+      note: entry.note,
+      distanceM: entry.distanceM,
+    }));
+  },
   /** The browser history depth, so a capture can prove a framing write did not grow it. */
   get historyLength() {
     return history.length;
@@ -125,6 +142,7 @@ window.__ugb = {
       seed: state.seed,
       epoch: new Date(state.epochMs).toISOString(),
       address: formatAddress(state.address),
+      from: state.from ? formatAddress(state.from) : null,
       t: state.t,
       camera: cameraSnapshot(state.camera),
       precision: state.precision,
@@ -142,25 +160,27 @@ window.__ugb = {
 /**
  * Write a coordinate to the URL under the history contract in `url-state.ts`.
  *
- * `framing` (a camera gesture, the boot camera, a key that only moves the eye) replaces the
- * current entry; `arrival` (a committed travel) pushes, unless the page is already on that
- * address. One entry per place is what makes Back retrace places instead of mouse movements.
+ * The rule lives in `historyWrite`: a write that changes the address is a place and gets its own
+ * entry; a write that keeps it replaces in place. One entry per place is what makes Back retrace
+ * places instead of mouse movements.
  */
-function writeUrl(next: UrlState, kind: 'arrival' | 'framing'): void {
+function writeUrl(next: UrlState): void {
   const nextAddress = formatAddress(next.address);
-  const method = historyWrite(currentEntryAddress, nextAddress, kind);
+  const method = historyWrite(currentEntryAddress, nextAddress);
   const url = urlForState(next, location.pathname);
 
   if (method === 'push') {
     history.pushState(null, '', url);
-    currentEntryAddress = nextAddress;
   } else {
     history.replaceState(null, '', url);
   }
+  // The page is on this entry now, whichever kind of write it was: a later write has to compare
+  // against the address actually in the address bar, not the last one that happened to push.
+  currentEntryAddress = nextAddress;
 }
 
 function persist(): void {
-  writeUrl(state, 'framing');
+  writeUrl(state);
 }
 
 /**
@@ -212,6 +232,8 @@ function commitTravel(toText: string): UniverseTravelResult {
   const next: UrlState = {
     ...state,
     address: parsed.address,
+    // The compass's "came from" pin. A coordinate, not journey state (see `UrlState.from`).
+    from: state.address,
     t: clock.t,
     epochMs: clock.epochMs,
     // "See the destination" (owner, 2026-11-24): the arrival camera is exactly the opening
@@ -221,7 +243,7 @@ function commitTravel(toText: string): UniverseTravelResult {
     cameraExplicit: true,
   };
 
-  writeUrl(next, 'arrival');
+  writeUrl(next);
   notice(
     `${plan.method} · ${describeDistanceM(plan.distanceM)} · ${describeDurationS(plan.elapsedS)}`,
   );
@@ -240,6 +262,112 @@ function commitTravel(toText: string): UniverseTravelResult {
 function describeDistanceM(metres: number): string {
   const ly = metres / LY_M;
   return ly >= 0.1 ? `${ly.toFixed(1)} ly` : `${(metres / AU_M).toFixed(1)} AU`;
+}
+
+/** How many neighbouring stars the compass lists. The pin is a fourth row, not one of these. */
+const COMPASS_ANCHOR_LIMIT = 3;
+
+/**
+ * The compass rows for one coordinate: the nearest drawn stars, then the `from` pin.
+ *
+ * Both halves are content. The anchors come from the galaxy the picture is drawing, so a row is a
+ * light you can see; the pin is the place the last travel started, which the link carries
+ * (`UrlState.from`). "Came from" is a label on a place, never a stored journey.
+ *
+ * The pin is only offered when it sits in the same galaxy as the current place: distance across
+ * galaxies is unmodelled (ADR-0010), so a row for one would show a made-up number.
+ */
+function compassEntries(galaxy: Galaxy, address: Address, from: Address | null): CompassEntry[] {
+  const origin = placement(state.seed, address) ?? { x: 0, y: 0, z: 0 };
+  const anchors = nearestAnchors(galaxy.stars, address, origin, COMPASS_ANCHOR_LIMIT);
+
+  const entries: CompassEntry[] = anchors.map((anchor) => ({
+    address: anchor.address,
+    label: anchor.home ? 'home star' : formatAddress(anchor.address),
+    distanceM: anchor.distanceM,
+    offset: anchor.offset,
+    note: anchor.home ? 'home' : null,
+  }));
+
+  if (
+    from &&
+    !sameAddress(from, address) &&
+    sameAddress(galaxyAddressOf(from), galaxyAddressOf(address))
+  ) {
+    const position = placement(state.seed, from);
+    if (position) {
+      const offset = {
+        x: position.x - origin.x,
+        y: position.y - origin.y,
+        z: position.z - origin.z,
+      };
+      const distanceM = Math.hypot(offset.x, offset.y, offset.z);
+      if (distanceM > 0) {
+        const existing = entries.find((entry) => sameAddress(entry.address, from));
+        if (existing) {
+          entries[entries.indexOf(existing)] = {
+            ...existing,
+            note: existing.note === null ? 'came from' : `${existing.note} · came from`,
+          };
+        } else {
+          entries.push({
+            address: from,
+            label: formatAddress(from),
+            distanceM,
+            offset,
+            note: 'came from',
+          });
+        }
+      }
+    }
+  }
+
+  return entries;
+}
+
+/**
+ * Follow a line of the address HUD: zoom out to the galaxy, **free** (ADR-0013).
+ *
+ * This is a **reframe**, not a travel. No universe time passes and the clock's mode is untouched —
+ * you are changing which frame you look at the same neighbourhood from.
+ *
+ * The camera goes to `galaxyFraming`: face-on to the disc (so "the galaxy" is a galaxy and not a
+ * band) and far enough out that the whole disc is inside the frame despite the orbit camera
+ * looking at the home star rather than the galactic centre. The eye stays on the ray its angles
+ * describe, which keeps the orbit-control invariant, so the next drag continues from this view
+ * instead of snapping back to the origin.
+ *
+ * A true translation-preserving zoom-out needs a camera *target*, because after a pure rebase the
+ * eye is no longer on that ray and the next drag would snap the view back to the origin. That
+ * generalisation is the panning work in lane 4.
+ *
+ * The address changes, so it gets a history entry (Back returns to the star) even though nothing
+ * costs any time.
+ */
+function commitZoomOut(depth: number): UniverseNavigationResult {
+  if (!app) return { ok: false, reason: 'the app is not ready' };
+
+  const plan = planZoomOut(state.address, depth);
+  if (!plan.ok) {
+    notice(`zoom out: ${plan.reason}`);
+    return { ok: false, reason: plan.reason };
+  }
+
+  // The centre comes from the galaxy's frame, not from the generated population: the frame is the
+  // cheap part, and a zoom-out must not pay for a whole galaxy just to place the camera.
+  const framing = galaxyFraming(galaxyFrame(state.seed, plan.address).centre);
+
+  const next: UrlState = {
+    ...state,
+    address: plan.address,
+    camera: orbitTo(framing.yaw, framing.pitch, framing.distanceM),
+    cameraExplicit: true,
+  };
+
+  writeUrl(next);
+  notice(`zoomed out to ${formatAddress(plan.address)} · no time passed`);
+  void start();
+  return { ok: true, reason: null };
 }
 
 function describeDurationS(seconds: number): string {
@@ -261,7 +389,14 @@ async function init(attempt: number): Promise<AppHandle> {
   // what turns "consecutive same-address pushes" into a replace.
   currentEntryAddress = formatAddress(state.address);
 
-  const hud = mountHud(state, parsed.issues);
+  const hud = mountHud(state, parsed.issues, {
+    zoomOut: (depth) => {
+      commitZoomOut(depth);
+    },
+    travelTo: (address) => {
+      commitTravel(formatAddress(address));
+    },
+  });
   notice = (text) => hud.notice(text);
   hud.setStatus('acquiring GPU device');
 
@@ -283,6 +418,12 @@ async function init(attempt: number): Promise<AppHandle> {
     state.camera = defaultSystemCamera(system);
     state.cameraExplicit = true;
   }
+
+  // The compass is built from the population the picture already draws, so an anchor is a light
+  // you can see (ADR-0011) and the search costs one pass over an array that exists anyway. The
+  // `from` pin is appended only when the link carried one and it is not the place itself.
+  currentCompass = galaxy ? compassEntries(galaxy, state.address, state.from) : [];
+  if (galaxy) hud.setCompass(currentCompass);
 
   gpu = await initDevice();
   if (disposed || attempt !== bootGeneration) {

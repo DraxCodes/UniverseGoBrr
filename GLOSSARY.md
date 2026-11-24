@@ -16,6 +16,9 @@ column. New terms get added by `/domain-modeling` when a concept is actually set
 | **Cell** | An int64 grid index giving an exact absolute position, paired with a float32 local offset. **Deferred to Layer 4** (ADR-0008); the address and `Position` carry identity until travel needs it. | "chunk" (means a *generated* unit) |
 | **Chunk** | A unit of generated content at a node, cached on entry. | — |
 | **Level** | One step of the hierarchy: universe → quadrant → sector → system → body. | "zoom level" (conflicts with render LOD) |
+| **Zoom out** | Following an address line to an ancestor frame. A **reframe**, not a travel: the address and camera change, no universe time passes, and it still earns a history entry (ADR-0013). | "travel out", "fly out" (both imply elapsed time) |
+| **Anchor** | A place the compass offers as a jump target: a **drawn** star of the current galaxy, with the address that produced it. Never a place you happened to visit (ADR-0013). | "waypoint" (implies a stored route) |
+| **Pin / came from** | The address the last committed travel started from, carried in the link as `from=` and treated as a coordinate, not journey state (ADR-0013). | "history", "trail" (both sound like stored motion) |
 | **Display name** | The human-facing label for a level (`"Sol"`, `"Region 4211"`), resolved from the address for the HUD only. Never written into a link, and a rename never changes an address. Must be depth-indexed with a fallback, because the address has no fixed depth. | "title" (implies canvas text) |
 
 ## Generation

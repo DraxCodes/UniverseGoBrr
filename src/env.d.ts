@@ -5,6 +5,8 @@ interface UniverseDebugState {
   seed: string;
   epoch: string;
   address: string;
+  /** The compass pin: where the last committed travel started, or null. */
+  from: string | null;
   t: number | null;
   camera: [number, number, number, number, number];
   precision: 'fixed' | 'naive' | null;
@@ -33,6 +35,18 @@ interface UniverseTravelResult {
   elapsedS: number | null;
 }
 
+interface UniverseNavigationResult {
+  ok: boolean;
+  reason: string | null;
+}
+
+interface UniverseCompassRow {
+  address: string;
+  label: string;
+  note: string | null;
+  distanceM: number;
+}
+
 interface UniverseDebug {
   readonly ready: boolean;
   readonly error: string | null;
@@ -59,8 +73,12 @@ interface UniverseDebug {
   sampleCanvas(): Promise<{ mean: number; stdev: number; samples: number }>;
   /** Debug only: stall the next N frames so the tier watchdog can be observed. */
   forceSlowFrames(frames: number): void;
-  /** Commit a travel to `to`; the user-facing trigger arrives with the compass. */
+  /** Commit a travel to `to`; the compass rows call the same path. */
   travel(to: string): UniverseTravelResult;
+  /** Follow an address line: free zoom-out to that ancestor depth (ADR-0013). */
+  zoomOut(depth: number): UniverseNavigationResult;
+  /** The compass rows the HUD is showing, in order. */
+  readonly compass: readonly UniverseCompassRow[];
   /** Browser history depth, so a capture can prove a framing write did not grow it. */
   readonly historyLength: number;
 }

@@ -157,6 +157,97 @@ body {
   white-space: pre-wrap;
 }
 
+/*
+ * The address is a row of lines you can follow outward (spec §5). Buttons inside a
+ * pointer-events: none panel have to opt in, or they look clickable and are not.
+ */
+.hud__address {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+  flex-wrap: wrap;
+}
+
+.hud__crumb {
+  pointer-events: auto;
+  margin: 0;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.hud__crumb:hover,
+.hud__crumb:focus-visible {
+  background: rgba(120, 190, 255, 0.16);
+  text-decoration: underline;
+}
+
+.hud__here {
+  color: var(--ink);
+}
+
+.hud__slash {
+  color: var(--ink-faint);
+}
+
+.hud__compass-block {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.hud__compass-title {
+  margin: 0 0 4px;
+  color: var(--ink-faint);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.hud__compass {
+  display: grid;
+  gap: 1px;
+}
+
+.hud__anchor {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 46px 62px;
+  gap: 8px;
+  margin: 0;
+  padding: 1px 3px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hud__anchor:hover,
+.hud__anchor:focus-visible {
+  background: rgba(120, 190, 255, 0.16);
+}
+
+.hud__anchor-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud__anchor-bearing,
+.hud__anchor-distance {
+  color: var(--ink-dim);
+  text-align: right;
+  white-space: nowrap;
+}
+
 .hud__hint {
   margin: 10px 0 0;
   color: var(--ink-faint);

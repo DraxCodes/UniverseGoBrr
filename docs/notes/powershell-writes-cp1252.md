@@ -19,13 +19,19 @@ outside cp1252 becomes a literal `?`, so the corruption is lossy and silent.
 
 ## Cause
 
-PowerShell 5.1's `Set-Content`, `Out-File` and `>` default to the **ANSI codepage**
+PowerShell 5.1's `Set-Content`, `Out-File`, `Add-Content` and `>` default to the **ANSI codepage**
 (`[System.Text.Encoding]::Default`), which is **1252** on this machine — not UTF-8. `Get-Content`
 decodes with the same codepage, so the round trip is lossy in both directions:
 
 - the three UTF-8 bytes `E2 80 94` (em dash) are read as three cp1252 characters and written back
   as garbage, or collapsed to one `0x97`;
 - anything cp1252 cannot represent (thin spaces, arrows, `≈`) is written as `?`.
+
+**`Add-Content` is not the safe half of this.** Appending a here-string containing `·` or `°` to an
+otherwise-UTF-8 file writes those two chars as single cp1252 bytes (`0xB7`, `0xB0`), so a file that
+was valid UTF-8 becomes a *mixed* file with two invalid sequences in the new text and valid
+multibyte sequences above it. The `edit` tool then refuses the whole file even though the damage is
+two bytes. Append with the `write` tool or a Node script, never with `Add-Content`.
 
 PowerShell 7 defaults to UTF-8 and does not do this. The harness runs 5.1.
 
@@ -76,6 +82,13 @@ Decode **valid UTF-8 sequences as UTF-8** and route only invalid bytes through c
 throwaway script that did this for the handoff decoded with `TextDecoder('utf-8', { fatal: true })`
 per candidate sequence, fell back to a cp1252 map for single bytes, and reported each repair so the
 result could be checked. It found exactly one damaged byte.
+
+A second trap in the repair itself: reading the whole file as cp1252 and writing it back as UTF-8
+**double-encodes the bytes that were already valid**. Each byte of an existing `E2 88 92` becomes a
+cp1252 character, and re-encoding turns one 3-byte character into nine bytes of mojibake — the file
+is still valid UTF-8, so the `edit` tool now accepts it and quietly saves the garbage. Repair at the
+byte level (replace only the invalid single bytes with their UTF-8 sequences), then read the touched
+lines back and compare them with what you meant to write.
 
 After repairing, verify rather than trust: the file should validate as UTF-8 and keep its original
 line endings (`CRLF count` and `bare LF` from the byte view above).

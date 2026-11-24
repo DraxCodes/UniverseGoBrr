@@ -79,6 +79,14 @@ Open: are anchors **content** (nearest generated nodes, which cost a search) or 
 (the trail you actually travelled)? The former is honest and expensive; the latter is cheap and
 lies about the neighbourhood.
 
+**Answered (owner, 2026-11-24) and landed — ADR-0013, lane 3 below.** Anchors are **content**: the
+three nearest stars the galaxy population is already drawing, so the compass cannot point at
+something the picture does not show (ADR-0011). The pin is the place the last committed travel
+started, carried in the link as `from=` and treated as a coordinate. The address line is a **free
+zoom-out**: it changes the address and the camera but costs no universe time, and still gets a
+history entry because Back retraces places. v1 offers the compass as a HUD list (anchors + pin,
+bearing, distance, click to travel); an on-canvas needle is later work.
+
 ## D5 - Panning
 
 Deferred here from Layer 3 (status.md, open question 4). Left-click X/Y panning changes the
@@ -110,16 +118,16 @@ link and enter it". So a mid-travel link is the arrival link: it is legal, it pi
 when the clock was pinned, and there is no stored `jour` parameter for a crafted link to mismatch.
 History discipline (`historyWrite` in `src/state/url-state.ts`):
 
-- a camera gesture is a `replace`; only a committed arrival `push`es;
-- a repeated address on the current entry collapses to `replace`;
-- no write without a user arrival can push, so a scripted boundary oscillation cannot grow history;
+- **the rule is the address**: a write that changes it `push`es, a write that keeps it `replace`s;
+- a camera gesture cannot change the address (ADR-0004), so a gesture always replaces;
+- a repeat of the current entry's address collapses to `replace`;
 - Back/Forward re-enter the coordinate, because `popstate` rebuilds the scene from the URL.
 
 Two honest limits: a **live** clock can only be advanced by moving its epoch (the alternative
 freezes the orrery), so a live arrival link drifts with the wall clock exactly like every live link
 already does; a **pinned** arrival link is exact. And `rebaseCamera` still has no production
-consumer — under ADR-0012 an arrival is re-framed, not translated, so its first consumer is the
-address HUD's zoom-out in lane 3.
+consumer — under ADR-0012 an arrival is re-framed, not translated, and so is the lane-3 zoom-out
+(ADR-0013), so its first consumer is the camera-target work in lane 4.
 
 ### Lane 2 mechanics, as built
 
@@ -139,6 +147,32 @@ address HUD's zoom-out in lane 3.
   `npm run probe:travel` (`tools/travel-probe.mjs`) drives the built app (travel → arrival link
   reload → Back → Forward → framing write) and is the check to re-run after any `start()`/`init()`
   change, including that the arrival link reproduces the address, camera and epoch exactly.
+
+### Lane 3 mechanics, as built
+
+- **`src/universe/navigation.ts`** holds the three answers to "what is within reach of this
+  address": `nearestAnchors` (one pass over the drawn galaxy, best-K, deterministic tie-break by
+  address text), `bearingOf` (the renderer's own `cameraBasis`, so the printed bearing is the
+  direction the eye is pointing), `planZoomOut` (the address-line policy) and `galaxyFraming` (the
+  face-on camera that fits the whole disc).
+- **`from` in `UrlState`.** A committed travel sets `from` to the departure address; the link
+  carries it as `from=`. A malformed or self-pointing pin is dropped with an issue, never a crash.
+  The pin is shown only when it is in the current galaxy, because a cross-galaxy distance is
+  unmodelled (ADR-0010).
+- **`writeUrl` now sets `currentEntryAddress` on every write**, not only on `push`. A framing write
+  that changed the address would otherwise leave the comparison stale and turn the next navigation
+  into a duplicate `push`.
+- **The zoom-out is one reframe.** `commitZoomOut(depth)` writes the ancestor address and
+  `orbitTo(framing.yaw, framing.pitch, framing.distanceM)`, then re-enters through `start()`.
+  `galaxyFrame(seed, address).centre` supplies the offset without generating a population.
+- **The HUD is the v1 control.** Address segments are buttons; the compass is a list of rows, each
+  a button that commits the same travel `window.__ugb.travel` does. Bearings are re-rendered on
+  every camera change; distances are fixed to the place.
+- **Evidence:** `src/universe/navigation.test.ts` (anchors, bearings, policy, framing, orbit
+  invariant); `npm run probe:compass` (`tools/compass-probe.mjs`) drives the built app: the address
+  lines, the rows and their addresses, a drag changing a bearing, a row travelling and pinning the
+  departure, the arrival link reproducing the pin, the zoom-out keeping `t`/`epoch` and gaining one
+  history entry, Back returning to the star, and a refused root leaving the page alone.
 
 ## D8 - No new content
 

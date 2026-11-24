@@ -8,6 +8,7 @@ import {
   DEFAULT_ADDRESS,
   formatAddress,
   parseAddress,
+  sameAddress,
   type Address,
 } from '../frame/address';
 import type { PrecisionMode } from '../frame/precision-probe';
@@ -26,6 +27,17 @@ export interface UrlState {
   epochMs: number;
   /** The frame this coordinate is in. Unbounded depth; see ADR-0008. */
   address: Address;
+  /**
+   * Where the last committed travel started, or `null` when this coordinate was not reached by
+   * travelling (a fresh link, or a boot). This is the compass's "came from" pin.
+   *
+   * It is a **coordinate, not journey state**: the previous place is a place, and the compass can
+   * compute a bearing to it like any other anchor. The council's "the journey is derived, never
+   * stored" is about in-between motion, which this is not — nothing here says how far through a
+   * jump the traveller is. A link carrying it reproduces the trail exactly, which a session-only
+   * variable could not (ADR-0012: a shared link and an arrival are the same state).
+   */
+  from: Address | null;
   /** Pinned `t` in seconds since the epoch. `null` means the clock is live. */
   t: number | null;
   /** Camera offset inside the address's frame, in metres and radians. */
@@ -90,6 +102,7 @@ export function defaultState(): UrlState {
     seed: DEFAULT_SEED,
     epochMs: DEFAULT_EPOCH_MS,
     address: DEFAULT_ADDRESS,
+    from: null,
     t: null,
     camera: { ...DEFAULT_CAMERA },
     cameraExplicit: false,
@@ -131,6 +144,21 @@ export function parseUrlState(search: string): ParsedUrlState {
       issues.push(
         `addr "${raw}" is not a valid address (${parsed.issue ?? 'unknown reason'}); ` +
           `using ${formatAddress(DEFAULT_ADDRESS)}.`,
+      );
+    }
+  }
+
+  if (params.has('from')) {
+    const raw = (params.get('from') ?? '').trim();
+    const parsed = parseAddress(raw);
+    if (parsed.address) {
+      // A pin pointing at the place you are is not a trail; keep it out rather than show "came
+      // from here". Silently dropping it is safe because nothing else depends on `from`.
+      if (!sameAddress(parsed.address, state.address)) state.from = parsed.address;
+    } else {
+      issues.push(
+        `from "${raw}" is not a valid address (${parsed.issue ?? 'unknown reason'}); ` +
+          'showing no trail.',
       );
     }
   }
@@ -205,6 +233,7 @@ export function urlForState(state: UrlState, pathname: string): string {
   params.set('seed', state.seed);
   params.set('epoch', new Date(state.epochMs).toISOString());
   params.set('addr', formatAddress(state.address));
+  if (state.from) params.set('from', formatAddress(state.from));
 
   if (state.t !== null) {
     params.set('t', formatNumber(state.t));
@@ -321,20 +350,18 @@ export type HistoryWrite = 'push' | 'replace';
 /**
  * The history contract for the URL that is the single source of truth (council §9, lane 2).
  *
- * A camera gesture is `framing`: it replaces the current entry, because one drag is not a place.
- * A committed arrival is the only thing that gets a new entry, so Back retraces places rather than
- * every nudge of the mouse. A repeat of the address the page is already on collapses to a replace,
- * so an automatic bounce (if one is ever added) cannot fill history with duplicates.
+ * **The rule is the address, and only the address.** A write that changes it is a place you went
+ * to and gets its own entry; a write that keeps it — a drag, a zoom, a reset, the boot
+ * normalisation — replaces in place. So Back retraces places rather than every nudge of the mouse,
+ * and a zoom-out (an address change that costs no universe time) is still undoable with Back.
  *
- * The property the risk seat asked for is therefore structural: **a write with no user arrival
- * never pushes**, so a scripted boundary oscillation cannot change `history.length`.
+ * An earlier version took a caller-supplied `arrival`/`framing` label and trusted it. That put the
+ * property in the caller's hands: a zoom-out labelled `framing` would have silently overwritten the
+ * entry for the star it left, and Back would have skipped it. The label is gone because the
+ * address already answers the question, and only a committed navigation can change it (ADR-0004:
+ * the address is driven by choice, never by where the camera drifted to).
  */
-export function historyWrite(
-  currentEntryAddress: string,
-  nextAddress: string,
-  kind: 'arrival' | 'framing',
-): HistoryWrite {
-  if (kind === 'framing') return 'replace';
+export function historyWrite(currentEntryAddress: string, nextAddress: string): HistoryWrite {
   return nextAddress === currentEntryAddress ? 'replace' : 'push';
 }
 

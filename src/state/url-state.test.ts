@@ -111,6 +111,7 @@ describe('urlForState', () => {
       seed: 'ugb-0042',
       epochMs: Date.parse('2000-01-01T00:00:00.000Z'),
       address: { version: 1, levels: [0, 3, -7, 12] },
+      from: { version: 1, levels: [0, 9] },
       t: 1200,
       camera: { x: 12, y: -4, z: 40, yaw: 0.6, pitch: 0.15 },
       cameraExplicit: true,
@@ -121,6 +122,7 @@ describe('urlForState', () => {
     expect(url.startsWith('/?')).toBe(true);
     expect(url).toContain('epoch=2000-01-01T00:00:00.000Z');
     expect(url).toContain('addr=v1/0.3.-7.12');
+    expect(url).toContain('from=v1/0.9');
     expect(url).toContain('cam=12,-4,40,0.6,0.15');
     expect(url).not.toContain('precision=');
 
@@ -129,8 +131,21 @@ describe('urlForState', () => {
     expect(reparsed.seed).toBe(state.seed);
     expect(reparsed.epochMs).toBe(state.epochMs);
     expect(formatAddress(reparsed.address)).toBe(formatAddress(state.address));
+    expect(formatAddress(reparsed.from!)).toBe(formatAddress(state.from!));
     expect(reparsed.t).toBe(state.t);
     expect(reparsed.camera).toEqual(state.camera);
+  });
+
+  it('drops a from that points at the place itself, and rejects a malformed one', () => {
+    expect(parseUrlState('?addr=v1/0.3&from=v1/0.3').state.from).toBeNull();
+
+    const bad = parseUrlState('?addr=v1/0.3&from=nowhere');
+    expect(bad.state.from).toBeNull();
+    expect(bad.issues.some((issue) => issue.includes('from "nowhere"'))).toBe(true);
+  });
+
+  it('omits from when there is no trail', () => {
+    expect(urlForState(defaultState(), '/')).not.toContain('from=');
   });
 
   it('round-trips the precision debug switch', () => {
@@ -234,22 +249,24 @@ describe('advanceClock', () => {
 });
 
 describe('historyWrite', () => {
-  it('replaces on framing and pushes only on a new arrival', () => {
-    expect(historyWrite('v1/0.1', 'v1/0.2', 'framing')).toBe('replace');
-    expect(historyWrite('v1/0.1', 'v1/0.2', 'arrival')).toBe('push');
+  it('pushes when the address changes and replaces when it does not', () => {
+    expect(historyWrite('v1/0.1', 'v1/0.2')).toBe('push');
+    expect(historyWrite('v1/0.2', 'v1/0.2')).toBe('replace');
   });
 
-  it('collapses a repeated address to a replace', () => {
-    expect(historyWrite('v1/0.2', 'v1/0.2', 'arrival')).toBe('replace');
+  it('gives a free zoom-out its own entry, because it changes the place', () => {
+    // Zoom-out costs no universe time but does move the address, so Back has to undo it. Under
+    // the old caller-labelled contract a zoom-out passed as `framing` would have overwritten the
+    // star's entry and Back would have skipped the star entirely.
+    expect(historyWrite('v1/0.3', 'v1/0')).toBe('push');
   });
 
-  it('never pushes without a user arrival, so an oscillation cannot grow history', () => {
-    // A scripted boundary bounce is a sequence of framing writes at alternating addresses.
-    const addresses = ['v1/0.1', 'v1/0.2', 'v1/0.1', 'v1/0.2'];
-    const writes = addresses.map((next, i) => {
-      const current = addresses[i - 1] ?? next;
-      return historyWrite(current, next, 'framing');
-    });
+  it('cannot grow history from a camera gesture, because a gesture cannot change the address', () => {
+    // The risk seat's concern was a scripted boundary oscillation. The camera never writes an
+    // address (ADR-0004), so a gesture's write is always same-address and always a replace.
+    const writes = ['v1/0.1', 'v1/0.1', 'v1/0.1'].map((next, i, all) =>
+      historyWrite(all[i - 1] ?? next, next),
+    );
     expect(writes.every((write) => write === 'replace')).toBe(true);
   });
 });

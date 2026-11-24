@@ -23,7 +23,7 @@
         <div><dt>status</dt><dd id="hud-status">booting</dd></div>
         <div><dt>seed</dt><dd id="hud-seed">—</dd></div>
         <div><dt>epoch</dt><dd id="hud-epoch">—</dd></div>
-        <div><dt>address</dt><dd id="hud-address">—</dd></div>
+        <div><dt>address</dt><dd id="hud-address" class="hud__address">—</dd></div>
         <div><dt>t</dt><dd id="hud-time">—</dd></div>
         <div><dt>camera</dt><dd id="hud-camera">-</dd></div>
         <div><dt>view</dt><dd id="hud-view">-</dd></div>
@@ -33,6 +33,16 @@
         <div><dt>pipeline</dt><dd id="hud-pipeline">—</dd></div>
         <div><dt>fps</dt><dd id="hud-fps">—</dd></div>
       </dl>
+
+      <!--
+        The compass: nearby drawn stars, and where the last travel started. Rows are buttons, so
+        a place you can see is a place you can go (spec §3.2). The HUD is pointer-events: none, so
+        these opt back in.
+      -->
+      <div class="hud__compass-block">
+        <p class="hud__compass-title">compass</p>
+        <div id="hud-compass" class="hud__compass" hidden></div>
+      </div>
 
       <p id="hud-issues" class="hud__issues" hidden></p>
       <p class="hud__hint">drag orbit <span>·</span> wheel zoom <span>·</span> <kbd>P</kbd> pause <span>·</span> <kbd>R</kbd> reset <span>·</span> <kbd>F</kbd> fullscreen</p>

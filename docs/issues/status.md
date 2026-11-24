@@ -95,43 +95,47 @@ structure is checked by `src/status-page.test.ts`; its content is the owner's to
 
 ## Doing
 
-**Lane 2 (travel state + URL history) is built; the compass and the tier masks are next.** A
-committed travel is now one atomic state change (ADR-0012): `planTravel` in `src/universe/travel.ts`
-returns the method, the distance in the shared galaxy frame and `Δt = d / v(method)` — or a plain
-reason it refuses, never an invented number. The arrival camera is the destination's opening view,
-the clock's mode is preserved (pinned `t` moves; a live epoch shifts back, so the orrery does not
-freeze), and the URL is written once as one history entry. `popstate` now re-enters the coordinate,
-so Back and Forward change the picture instead of only the address bar; a framing write never grows
-history.
+**Lane 3 (compass + clickable address HUD) is built; the tier masks with panning are next.** Lane 2
+shipped a committed travel as one atomic state change (ADR-0012): `planTravel` in
+`src/universe/travel.ts` returns the method, the distance in the shared galaxy frame and
+`Δt = d / v(method)` — or a plain reason it refuses, never an invented number. The arrival camera is
+the destination's opening view, the clock's mode is preserved (pinned `t` moves; a live epoch shifts
+back, so the orrery does not freeze), and the URL is written once as one history entry. `popstate`
+re-enters the coordinate, so Back and Forward change the picture instead of only the address bar.
 
-The user-facing trigger is deliberately still the debug surface (`window.__ugb.travel('v1/0.9')`);
-the compass and the clickable address HUD bring the real control in lane 3. The jump is a hard cut
-until the tier masks land. Evidence: `npm run probe:travel` (`tools/travel-probe.mjs`) drives the
-built app (travel → arrival-link reload → Back → Forward → framing write), including that the arrival
-link reproduces the address, camera and epoch exactly. Mechanism note:
-`docs/notes/reentering-a-coordinate.md`.
+Lane 3 gives that a control. The address is now clickable lines: following one is a **free
+zoom-out** — the address and camera change, no universe time passes, and it still gets a history
+entry because Back retraces places (ADR-0013). The compass lists the three nearest **drawn** stars
+plus a "came from" pin, each row a click that commits the same travel the debug surface does. The
+pin rides in the link as `from=`, as a coordinate rather than stored journey state. The zoom-out
+lands face-on and framing the whole disc: the star's yaw carried over was near edge-on, and the
+orbit camera looks at the home star rather than the galactic centre, so the framing distance accounts
+for the `0.55 R` offset. The history rule is now just "did the address change?", so a camera gesture
+cannot push and a place always does.
 
-Still not built in Layer 4: the compass and address HUD, and the tier masks with panning (right-drag,
-left-drag keeps yaw/pitch). After those: the deferred visual pass and the root `LICENSE`/product
-name.
+Still not built in Layer 4: the tier masks and right-drag panning. After those: the deferred visual
+pass and the root `LICENSE`/product name.
 
-Two new environment notes landed with this commit, both traps this session paid for:
-`docs/notes/powershell-writes-cp1252.md` and `docs/notes/git-reset-hard-and-opencode-json.md`, plus
-`docs/notes/inverted-smoothstep-erases-field.md` for the two regressions fixed while wrapping up.
+Mechanism notes: `docs/notes/reentering-a-coordinate.md` (why every address change rebuilds the
+scene), `docs/notes/powershell-writes-cp1252.md` and
+`docs/notes/git-reset-hard-and-opencode-json.md` (environment traps).
 
 ## Next
 
-1. **Layer 4 (travel tiers) is decided and has started.** `council-layer-4.md` §10 records the
-   owner's answers: **A**, address-origin frames, rebasing on tier crossings only; a tier crossing
-   is a **journey**; **time advances by `d / v(method)`** (ADR-0010); tiers + panning first, compass
-   second. **Lane P passes** (§8), so the rebase is address-only. **Lane 1** (`src/frame/rebase.ts`),
-   **both halves of placement**, and **lane 2** (travel state + URL history, ADR-0012) are done.
-   Next: the compass and clickable address HUD (lane 3), then the tier masks with right-drag panning
-   (lane 4). The security lens has now run on the placement consumer, the root-guard fix and lane 2
-   (`.scratch/runs/layer4-travel-state-audit.json`); it raised two low findings — a crafted `?t=` or
-   `?epoch=` at the edge of the reader's range could make an arrival link reload as a *different*
+1. **Layer 4 (travel tiers) is in its last lane.** `council-layer-4.md` §10 records the owner's
+   answers: **A**, address-origin frames, rebasing on tier crossings only; a tier crossing is a
+   **journey**; **time advances by `d / v(method)`** (ADR-0010); tiers + panning first, compass
+   second. **Lane P passes** (§8), so the rebase is address-only. **Lane 1**
+   (`src/frame/rebase.ts`), **both halves of placement**, **lane 2** (travel state + URL history,
+   ADR-0012) and **lane 3** (compass + clickable address HUD, ADR-0013) are done. Next: the tier
+   masks with right-drag panning (lane 4), which is also what unlocks a view-preserving zoom-out.
+   The security lens has run on the placement consumer, the root-guard fix and lane 2
+   (`.scratch/runs/layer4-travel-state-audit.json`); it raised two low findings — a crafted `?t=`
+   or `?epoch=` at the edge of the reader's range could make an arrival link reload as a *different*
    state — both fixed in the same commit by making `advanceClock` refuse an unrepresentable arrival.
-   Run it again at the next commit boundary: the compass and the travel trigger are what come next.
+   Lane 3's lens (`.scratch/runs/layer4-compass-navigation-audit.json`) is a clean PASS, no
+   findings: `from` is bounded by the address parser, every new DOM sink is `textContent`, and the
+   zoom-out policy cannot be escaped from the debug surface.
 2. The deferred visual pass: read `iterations/layer-3-iteration-2-deferred.md` before touching tone,
    grading, density balance or reference claims. Re-gate here when it returns.
 3. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon
@@ -167,8 +171,13 @@ Two new environment notes landed with this commit, both traps this session paid 
   rebased departure offset. The clock's mode is preserved: a pinned `t` moves forward, a live epoch
   shifts back, so a live orrery never freezes. The URL is written once, as one history entry, so a
   travel is exactly "write the arrival link and enter it" and a mid-travel link is the arrival link.
-  Consequence: `rebaseCamera` still has no production consumer; the address HUD's zoom-out is its
-  first.
+- **Zoom-out is a free reframe; anchors are drawn stars; the trail is a coordinate** (ADR-0013,
+  owner 2026-11-24). Following an address line changes the address and camera but spends no universe
+  time, and still pushes a history entry. The compass lists the three nearest *drawn* stars plus the
+  `from=` pin; the pin is a place carried in the link, not stored journey state. Only the galaxy line
+  zooms out in v1 (levels carry no scale), face-on and framing the whole disc. Consequence:
+  `rebaseCamera` still has no production consumer; a view-preserving zoom-out needs the camera
+  `target` from lane 4's panning.
 - **Panning is right-drag; left-drag keeps yaw/pitch** (owner, 2026-11-24). The canvas suppresses
   the context menu while a right-drag is active. `orbit-controls.ts` ignores every button except 0
   today, so this adds a `button === 2` path rather than remapping the existing one. Touch/pen
@@ -256,8 +265,14 @@ The decision record is tracked, so a clone on another machine is enough to resum
 
 ## Verification
 
-- `npm test` — pass, 21 files, **204 tests**.
-- `npm run build` — pass, `tsc --noEmit && vite build`, clean; **81.11 kB JS / 29.29 kB gzip**.
+- `npm test` — pass, 23 files, **255 tests**.
+- `npm run build` — pass, `tsc --noEmit && vite build`, clean; **90.57 kB JS / 32.48 kB gzip**.
+- `npm run probe:travel` — **12/12 checks** (arrival-link reload, Back, Forward, framing write).
+- `npm run probe:compass` — **20/20 checks**: the address renders as lines with only the current
+  one inert; the compass rows name a place, a bearing and a distance; a drag turns a bearing; a row
+  travels to exactly its address and pins the departure; the arrival link reproduces the pin; the
+  zoom-out keeps `t` and `epoch`, gains one history entry, and Back returns to the star; the root
+  line is refused without moving the page. Screenshots: `.scratch/compass-probe/`.
 - Placement check — the disc-law extraction was **bit-identical**, proved locally with an
   exact-double digest of the 45,001 / 22,501 / 13,601-star cases before and after (a scratch
   comparison, not checked in: the last bits of transcendentals are engine-dependent, so a
@@ -274,7 +289,9 @@ The decision record is tracked, so a clone on another machine is enough to resum
   skill references rather than repo paths, 2 are version strings in a ticket that the pattern mistakes
   for paths. On `wip/layer-3`: 181 refs across 47 files, and the same 4 remain — the two skill
   references and the two version strings.
-- `npm run capture` — **20/20 shots pass**; the new shot is `layer3-sol-1080p`.
+- `npm run capture` — **20/20 shots pass**, unchanged by the compass work (the galaxy shots use
+  explicit cameras, so the zoom-out framing does not move them). The last new shot was
+  `layer3-sol-1080p`.
 - Sol visual check — `layer3-sol-1080p` shows all eight bodies, the HUD reads
   `v1/0.0.0 · 3 levels` and `G-type · 8 planets · ×1930–18438 real`. Judged on a 1:1 crop after the
   downscaled image suggested the corona hid Mercury and Venus; it does not, which is why the

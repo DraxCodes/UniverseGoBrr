@@ -17,12 +17,29 @@
  * not the structure — expressed in the variable the user actually turns.
  */
 
+import { FOV_Y_RAD } from './camera';
+
 /** At or below this, the controls behave exactly as Layer 2 did. */
 export const SYSTEM_EXTENT_M = 1e13;
 /** The galaxy's radius; at and beyond it the constant Layer 2 rate resumes. */
 export const GALAXY_RADIUS_M = 5e20;
 /** Bumped when the schedule changes. Like `SYSTEM_VERSION`: changing it changes the feel. */
 export const SCALE_VERSION = 1;
+
+/**
+ * The camera distance at which a disc of radius `R`, centred `centreOffsetM` from the frame
+ * origin, just fits the vertical field of view.
+ *
+ * Derived, not tuned. Because the orbit camera always looks at the **frame origin** (the home
+ * star) and the galactic centre is `HOME_RADIUS_FRACTION · R` away from it, the farthest point in
+ * the disc is `centreOffsetM + R` from the origin. A point at that distance in the view plane
+ * subtends `atan((centreOffsetM + R) / d)`, so `d = (centreOffsetM + R) / tan(FOV/2)` puts the
+ * whole disc inside the frame. Using `R` alone — the first version — framed a disc that was not
+ * centred and cropped its far side.
+ */
+export function galaxyFramingDistanceM(centreOffsetM: number): number {
+  return (centreOffsetM + GALAXY_RADIUS_M) / Math.tan(FOV_Y_RAD / 2);
+}
 
 /**
  * How much faster the void is crossed, as an exponent on the base factor: 4 means the peak

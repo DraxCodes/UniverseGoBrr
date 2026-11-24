@@ -1,14 +1,8 @@
----
-date: 2026-11-24
-verified_against: wip/layer-3, after ADR-0011
-files:
-  - src/universe/disc.ts
-  - src/universe/placement.ts
-  - src/universe/galaxy.ts
-status: active
----
-
 # Placement uses a second stream, not the population's
+
+**Written 2026-11-24**, against `src/universe/placement.ts`, `src/universe/disc.ts` and
+`src/universe/galaxy.ts` (commit `3c0e6ad`).
+**Demonstrated by:** `npx vitest run src/universe/placement.test.ts`.
 
 **Cause.** `generateGalaxy` draws its stars from one sequential mulberry32 stream: the position of
 the *k*-th star depends on every draw before it, including the brightness and colour draws between

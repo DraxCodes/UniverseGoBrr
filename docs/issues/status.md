@@ -44,8 +44,8 @@ For exact commit ids, read `git log --oneline -5`; this file deliberately does n
   crossings only**, with the approach probe before any code and the focus rebase out of v1. The
   seats' shared weak point — a focus rebase that would have to be stored to survive a shared link —
   is why the chair dropped it. Record: `council-layer-4.md`; dissent is in §8.
-- **Lane P, the approach probe: PASSES.** `src/render/approach-probe.ts` (+ 12 assertions in its
-  test, `npm test` 169/169). Worst float32 body displacement is **5.3×10⁻⁵ px** against a half-pixel
+- **Lane P, the approach probe: PASSES.** `src/render/approach-probe.ts` (+ 13 assertions in its
+  test). Worst float32 body displacement is **5.3×10⁻⁵ px** against a half-pixel
   bar, at every approach radius, direction and resolution tested (1920/2560/3840). So v1 is
   **address-only**: no focus rebase, and the council's open question is closed with a number. The
   counterweight is recorded too — at **true scale** the near plane sits 1,412 real Earth radii out,
@@ -64,7 +64,7 @@ For exact commit ids, read `git log --oneline -5`; this file deliberately does n
 
 **Layer 4 lane 1 (the rebase module) is done; lane 2 is next.** `src/frame/rebase.ts` is
 `rebaseCamera(camera, originShiftM)` — translation only, shift never absolute, pure — plus the
-offset bound. 13 assertions, including "a 10 ly rebase moves a body under 0.001 px". The council's
+offset bound. 14 assertions, including "a 10 ly rebase moves a body under 0.001 px". The council's
 dead-band rider was **dropped deliberately**: under A nothing continuously changes the address, so a
 hysteresis constant would have asserted a literal. It has no production consumer yet, by design.
 Still unbuilt: **`placement(seed, address)`** (ADR-0010's prerequisite for `d`), lane 2's history

@@ -419,7 +419,7 @@ must leave history length constant.
 
 ### Lane 1 landed (2026-11-24), and one council rider was dropped
 
-`src/frame/rebase.ts` is `rebaseCamera(camera, originShiftM)` plus the offset bound. Thirteen
+`src/frame/rebase.ts` is `rebaseCamera(camera, originShiftM)` plus the offset bound. Fourteen
 assertions, including the invariant that matters: **a rebase must not change the picture.** A 10 ly
 shift moves a body by under 0.001 px, and the test takes the viewing depth as an argument so it
 cannot silently assert the wrong ratio (the cost is `ulp(shift) / depth`, so 10 ly of shift is 10⁻⁵

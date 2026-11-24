@@ -105,14 +105,15 @@ The decision record is tracked, so a clone on another machine is enough to resum
 - `npm test` — pass, 16 files, 141 tests, on the merged `wip/layer-3` (the gatekeeper also ran them
   on the unmerged `566a303`).
 - `npm run build` — pass, `tsc --noEmit && vite build`, clean; 76.98 kB JS / 27.55 kB gzip.
-- `base doctor` — no errors; `docs.issues: docs/issues`, 45 markdown files under `docs/`, 8 ADRs.
-- Doc path check — 177 backticked refs that look like paths (one or more slashes plus a file
-  extension), resolved against the repo root or the file's own directory, across the 46 project
-  markdown files (`docs/` 43, plus `AGENTS.md`, `README.md`, `GLOSSARY.md`). On `main` 10 do not
-  resolve and all are accounted for: 6 name Layer 3 files that exist only on `wip/layer-3`, 2 are
-  `AGENTS.md` skill references rather than repo paths, and 2 are version strings in a ticket that the
-  pattern mistakes for paths. On `wip/layer-3` the same check leaves 4 — the two skill references and
-  the two version strings.
+- `base doctor` — no errors; `docs.issues: docs/issues`, 45 markdown files under `docs/` on `main`
+  (46 on `wip/layer-3`, which adds `galaxy-local-field-collapse.md`), 8 ADRs.
+- Doc path check — backticked refs that look like paths (one or more slashes plus a file extension),
+  resolved against the repo root or the file's own directory, over the project markdown files (`docs/`
+  plus `AGENTS.md`, `README.md`, `GLOSSARY.md`). On `main`: 177 refs across 46 files, 10 unresolved
+  and all accounted for — 6 name Layer 3 files that exist only on `wip/layer-3`, 2 are `AGENTS.md`
+  skill references rather than repo paths, 2 are version strings in a ticket that the pattern mistakes
+  for paths. On `wip/layer-3`: 181 refs across 47 files, and the same 4 remain — the two skill
+  references and the two version strings.
 - `npm run capture` — 19/19 shots pass (on `566a303`; not re-run after the docs-only merge).
 - `npm run probe:live` — `{steps:81, decreases:0, handoffSteps:2, maxCount:45000}` (on `566a303`).
 - `npm run probe:watchdog` — rich 45000 → medium 22500, status `ready` (on `566a303`).

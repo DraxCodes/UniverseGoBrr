@@ -274,6 +274,14 @@ from `addr` alone today, and it is the address HUD's problem (lane 3), not a par
 No check was shipped: a warning that fires on a legitimate galaxy framing trains people to ignore
 the HUD.
 
+**Ask 1's deeper half, decided (owner, 2026-11-24): ADR-0011.** The council never asked *what a
+level contains*, and the answer turned out to be load-bearing. The address grid is now the world and
+the picture is a view of its occupied cells, so every light is somewhere you can go. The first
+consequence landed with the decision: `generateGalaxy` used to key on the full address, making every
+address the centre of a private galaxy; it now keys on the galaxy's own level. `GALAXY_VERSION`
+4 → 5, and the `layer3-galaxy-*` shots are re-captured against the new roll. Lane 3's address HUD is
+now the thing that will have to say which frame the camera is in, exactly as this paragraph says.
+
 **Ask 2 (history) and Ask 3 (derive, never store)** stand unchanged, and are lane 2's contract.
 
 ## 5. Experience thesis

@@ -4,6 +4,7 @@ import {
   GALAXY_TIER_STARS,
   GALAXY_VERSION,
   LOCAL_RADIUS_M,
+  galaxyAddressOf,
   generateGalaxy,
   toDiscFrame,
 } from './galaxy';
@@ -28,9 +29,9 @@ describe('the galaxy is a pure function of (seed, address)', () => {
     expect(a.centre).toEqual(b.centre);
   });
 
-  it('produces a different galaxy for a different address', () => {
+  it('produces a different galaxy for a different galaxy', () => {
     const a = generateGalaxy(SEED, HOME, 'low');
-    const b = generateGalaxy(SEED, address('v1/4.-2.8'), 'low');
+    const b = generateGalaxy(SEED, address('v1/5.-2.7'), 'low');
     // The centre is seeded, so it is the cheapest stable discriminator.
     expect(a.centre).not.toEqual(b.centre);
   });
@@ -55,6 +56,37 @@ describe('the galaxy is a pure function of (seed, address)', () => {
     const counts = GALAXY_TIER_STARS.rich;
     expect(a.stars.length).toBe(1 + counts.local + counts.disc);
     expect(b.stars.length).toBe(a.stars.length);
+  });
+});
+
+describe('a galaxy is identified by its own level, not by where you stand', () => {
+  /**
+   * This is the bug the placement decision exposed: the generator used to key on the full
+   * address, so every address was the centre of a private galaxy. Warp one star over, look
+   * back, and the arms had been redrawn. ADR-0011 fixes the identity at the galaxy's own level.
+   */
+
+  it('returns one galaxy for every address inside it, at any depth', () => {
+    const galaxy = generateGalaxy(SEED, address('v1/4'), 'low');
+    for (const inside of ['v1/4.-2.7', 'v1/4.-2.8', 'v1/4.0', 'v1/4.-2.7.1', 'v1/4.9.9.9.9']) {
+      const star = generateGalaxy(SEED, address(inside), 'low');
+      expect(star.stars, inside).toEqual(galaxy.stars);
+      expect(star.centre, inside).toEqual(galaxy.centre);
+    }
+  });
+
+  it('still separates two galaxies', () => {
+    const a = generateGalaxy(SEED, address('v1/4.-2.7'), 'low');
+    const b = generateGalaxy(SEED, address('v1/5.-2.7'), 'low');
+    expect(a.centre).not.toEqual(b.centre);
+  });
+
+  it('reports the level it keyed on, so a caller can ask rather than guess', () => {
+    expect(galaxyAddressOf(address('v1/4.-2.7.1'))).toEqual(address('v1/4'));
+    expect(galaxyAddressOf(address('v1/4'))).toEqual(address('v1/4'));
+    // The root is shallower than a galaxy; it is returned unchanged rather than rejected, so an
+    // address that is already that big still has an answer.
+    expect(galaxyAddressOf(address('v1/')).levels).toEqual([]);
   });
 });
 
@@ -152,7 +184,10 @@ describe('the population has the right shape', () => {
       weighted += (Math.hypot(cosine[bin]!, sine[bin]!) / n) * n;
       total += n;
     }
-    // Re-aimed rejects measured ~0.175 here; sampling onto the arms lifts it to ~0.29.
+    // Re-aimed rejects measured ~0.175 under the old keying; sampling onto the arms lifts it to
+    // ~0.29 historically and 0.43 on `v1/4` as now keyed (ADR-0011 re-rolled which galaxy `HOME`
+    // resolves to). The bar stays at 0.25: it is the "reads as arms, not as an oval" threshold,
+    // not a record of one roll.
     expect(weighted / total).toBeGreaterThan(0.25);
 
     // And the arms are not filaments over black: the uniform inter-arm fraction keeps a

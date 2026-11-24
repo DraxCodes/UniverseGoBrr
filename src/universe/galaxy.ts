@@ -1,9 +1,17 @@
 /**
- * One galaxy, generated from `(seed, address)` and rendered nowhere in particular.
+ * One galaxy, generated from `(seed, galaxy address)` and rendered nowhere in particular.
  *
  * Structure only, no GPU and no camera: the same address produces the same stars in any order,
  * on any machine (ADR-0005). Positions are **real metres relative to the home star**, so the
  * renderer can subtract the camera in doubles exactly as Layer 2 already does (ADR-0008).
+ *
+ * **A galaxy is identified by its own level, not by the address you are standing at**
+ * (ADR-0011). Every address inside one galaxy resolves to the same galaxy, so walking to a
+ * neighbouring star and looking back shows the sky you left. Keying the generator on the full
+ * address instead — which this did until the placement decision — meant every address was the
+ * centre of a private galaxy: warp one star over and the arms were redrawn. `GALAXY_DEPTH` and
+ * `galaxyAddressOf` are that rule, enforced here rather than at the call sites so a new caller
+ * cannot reintroduce the bug.
  *
  * Two fields, because they answer two different questions:
  *
@@ -22,7 +30,7 @@
 
 import { fnv1a32 } from '../lib/hash';
 import { createRng, type Rng } from '../lib/random';
-import { formatAddress, type Address } from '../frame/address';
+import { ancestorAddress, formatAddress, type Address } from '../frame/address';
 import { GALAXY_RADIUS_M } from '../render/scale';
 
 /**
@@ -42,8 +50,40 @@ import { GALAXY_RADIUS_M } from '../render/scale';
  */
 export const GALAXY_STREAM_VERSION = 3;
 
-/** Bumped whenever the generator's output would change; old links break loudly (ADR-0005). */
-export const GALAXY_VERSION = 4;
+/**
+ * Bumped whenever the generator's output would change; old links break loudly (ADR-0005).
+ *
+ * 4 → 5: a galaxy is now keyed by its own level instead of the full address (ADR-0011). A link
+ * whose address is one level deep (`v1/0`, the capture default) is unchanged, because it *was*
+ * already naming its galaxy. Every deeper link — including Sol at `v1/0.0.0` — now shows the
+ * galaxy it lives in rather than a private one, which is a different sky.
+ */
+export const GALAXY_VERSION = 5;
+
+/**
+ * The level at which a galaxy is identified: the address's outermost level.
+ *
+ * **A shortcut, and it says so.** ADR-0008 keeps a level's *kind* out of the address — it comes
+ * from the generator at that depth, not from the string — so in principle "which galaxy am I in"
+ * is a walk up the levels until one answers "galaxy". That walk needs the per-depth kinds the
+ * address HUD is going to introduce. Until it exists, one fixed depth is the honest stand-in:
+ * it is the only depth the app currently names (`v1/0` in the capture manifest), and it is the
+ * depth Sol sits one level below (`v1/0.0.0`).
+ *
+ * The day levels carry kinds, this constant becomes the walk and nothing else changes: callers
+ * ask `galaxyAddressOf`, not the depth.
+ */
+export const GALAXY_DEPTH = 1;
+
+/**
+ * The address a galaxy is keyed by: the ancestor of `address` at `GALAXY_DEPTH`.
+ *
+ * Two addresses inside one galaxy return the same value, which is the whole point — see the
+ * module comment. An address that is already that shallow is returned unchanged.
+ */
+export function galaxyAddressOf(address: Address): Address {
+  return ancestorAddress(address, GALAXY_DEPTH);
+}
 
 /**
  * The galactic plane's inclination to the orrery's orbital plane (world `y = 0`), as a signed
@@ -232,7 +272,11 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
   const counts = GALAXY_TIER_STARS[tier];
   // The tier is deliberately not in the keys: each field draws its own stream and keeps a
   // prefix when the count falls, so a quality drop does not re-roll the galaxy.
-  const key = `${seed}|${formatAddress(address)}|galaxy|v${GALAXY_STREAM_VERSION}`;
+  //
+  // The address is normalised to its galaxy's own level here, not at the call sites: two stars in
+  // one galaxy must return the same array from this function, and a caller that passes a deeply
+  // nested address must not be able to get a private galaxy out of it (ADR-0011).
+  const key = `${seed}|${formatAddress(galaxyAddressOf(address))}|galaxy|v${GALAXY_STREAM_VERSION}`;
   const frameRng = createRng(fnv1a32(`${key}|frame`));
   const localRng = createRng(fnv1a32(`${key}|local`));
   const discRng = createRng(fnv1a32(`${key}|disc`));

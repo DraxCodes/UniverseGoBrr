@@ -120,6 +120,21 @@ export function parentAddress(address: Address): Address | null {
 }
 
 /**
+ * The ancestor `depth` levels deep: the frame of `address` that contains it at that size.
+ *
+ * Unlike `parentAddress` this never returns `null` and never throws: a depth outside the
+ * address is a normal question with an obvious answer. A depth of zero is the root, which
+ * contains everything; a depth at or beyond the address's own length is the address itself,
+ * because a frame cannot have an ancestor deeper than itself. Both cases come up when a
+ * generator asks "which galaxy am I in?" for an address that may already *be* that galaxy.
+ */
+export function ancestorAddress(address: Address, depth: number): Address {
+  if (depth <= 0) return { version: address.version, levels: [] };
+  if (depth >= address.levels.length) return address;
+  return { version: address.version, levels: address.levels.slice(0, depth) };
+}
+
+/**
  * The address as a person reads it. The root would otherwise show as "0 levels", which
  * looks like a missing value rather than the largest frame there is.
  */

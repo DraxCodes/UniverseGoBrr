@@ -141,8 +141,9 @@ async function init(): Promise<AppHandle> {
   // The system is resolved from the address alone (ADR-0005): an authored node (spec §3.6) wins,
   // otherwise the generator does. A shared link reproduces either one exactly; nothing is cached.
   const system = probe ? null : resolveSystem(state.seed, state.address);
-  // The galaxy is generated once, from the same (seed, address), in real metres. It is the
-  // backdrop the system sits in; nothing about it is persisted or cached across loads (ADR-0005).
+  // The galaxy is generated once, in real metres, and is the backdrop the home system sits in.
+  // It is keyed on the galaxy's own level rather than this address (ADR-0011), so every star in
+  // one galaxy gets the same sky; nothing about it is persisted or cached across loads (ADR-0005).
   const galaxy = system ? generateGalaxy(state.seed, state.address, GALAXY_TIER) : null;
   currentGalaxy = galaxy;
 

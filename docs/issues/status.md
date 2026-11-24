@@ -63,6 +63,16 @@ structure is checked by `src/status-page.test.ts`; its content is the owner's to
   spans system→galaxy across twelve orders of magnitude** (the `layer3-galaxy-*` shots sit at
   1.3×10²¹ m under a system address), so "which frame is this camera in" is the address HUD's
   problem, not a parser check.
+- **Galaxy identity: fixed (ADR-0011).** `generateGalaxy` used to key on the *full* address, so every
+  address was the centre of a private galaxy — warp one star over, look back, and the arms had been
+  redrawn. It now keys on the galaxy's own level (`galaxyAddressOf`, `GALAXY_DEPTH = 1`), applied
+  inside the generator so no call site can reintroduce it. `GALAXY_VERSION` 4 → 5; `v1/0` is
+  unchanged (it already named its galaxy), every deeper link — Sol included — now shows the galaxy
+  it lives in. All 20 captures re-shot: 14 draw a galaxy at a deeper address, so their backdrop is a
+  different roll of the same law, and the arm acceptance still passes (measured m=2 0.429 for
+  `v1/4`, bar 0.25). The four boot-orrery shots at `v1/0` and the two precision probes are unchanged
+  by construction. **The layer-3 gate was scored against the old roll**, so the deferred visual pass
+  sees a different galaxy than the one that scored 6/10.
 
 ## Doing
 
@@ -71,8 +81,9 @@ structure is checked by `src/status-page.test.ts`; its content is the owner's to
 offset bound. 14 assertions, including "a 10 ly rebase moves a body under 0.001 px". The council's
 dead-band rider was **dropped deliberately**: under A nothing continuously changes the address, so a
 hysteresis constant would have asserted a literal. It has no production consumer yet, by design.
-Still unbuilt: **`placement(seed, address)`** (ADR-0010's prerequisite for `d`), lane 2's history
-and journey rules, the compass, and the tier masks.
+The placement direction is settled (ADR-0011: the address grid is the world), so the next code is
+**`placement(seed, address)`** — a position, never an inverse — followed by lane 2's history and
+journey rules, the compass, and the tier masks.
 
 Two new environment notes landed with this commit, both traps this session paid for:
 `docs/notes/powershell-writes-cp1252.md` and `docs/notes/git-reset-hard-and-opencode-json.md`, plus
@@ -99,11 +110,9 @@ Two new environment notes landed with this commit, both traps this session paid 
 
 ## Blocked
 
-- **Nothing wanted from the owner to start.** Two small constants are open and both can be answered
-  at the first build step: the speed table in ADR-0010 (proposed, unconfirmed) and the placement
-  choice (hash-to-position vs a deterministic star from the galaxy's population).
-- Nothing technical. The 1650-class proxy is unavailable, so floor performance stays an argument,
-  never a measurement.
+- **Nothing wanted from the owner to start.** One small constant is open and can be answered at the
+  first build step: the speed table in ADR-0010 (proposed, unconfirmed). The placement *direction*
+  is settled (ADR-0011); only its density and occupancy numbers are ours to choose.
 - Nothing technical. The 1650-class proxy is unavailable, so floor performance stays an argument,
   never a measurement.
 
@@ -115,6 +124,12 @@ Two new environment notes landed with this commit, both traps this session paid 
 - **Travel time is distance over speed** (ADR-0010): `Δt = d / v(method)`, measured in the parent
   frame. Camera gestures never advance `t`. This entails `placement(seed, address)`, which also
   serves the compass. The speed table is proposed, not confirmed.
+- **The address grid is the world; the picture is a view of it** (ADR-0011, owner 2026-11-24). Every
+  drawn light is a rendered address that resolves to the same thing when you arrive; placement is
+  `placement(seed, address)`, never the inverse; occupancy is one rule shared by the renderer and
+  the resolver; a tier change loses detail, not inhabitants. Immediate consequence shipped: a
+  galaxy is keyed on its own level (`galaxyAddressOf`, `GALAXY_DEPTH = 1`), so walking to a
+  neighbouring star no longer redraws the sky. `GALAXY_VERSION` 4 → 5.
 - **Authored nodes reserve a new address and ignore the seed** (ADR-0009). Sol is `v1/0.0.0`; a
   hand-authored node that keeps varying with the seed cannot be an anchor, and overwriting a
   procedural address rewrites somebody's shared link.

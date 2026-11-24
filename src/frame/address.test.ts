@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_ADDRESS,
   MAX_LEVELS,
+  ancestorAddress,
   childAddress,
   describeAddress,
   formatAddress,
@@ -64,6 +65,21 @@ describe('address', () => {
     expect(formatAddress(parentAddress(sector!)!)).toBe('v1/4');
     expect(formatAddress(parentAddress(parentAddress(sector!)!)!)).toBe('v1/');
     expect(parentAddress({ version: 1, levels: [] })).toBeNull();
+  });
+
+  it('names the ancestor at a depth, and answers rather than refusing at the edges', () => {
+    // Unlike `parentAddress`, this is asked by a generator rather than by a zoom button, so every
+    // depth is a normal question: zero is the root, past the address's own length is the address.
+    const deep = parseAddressOrThrow('v1/4.-2.7.1');
+    expect(formatAddress(ancestorAddress(deep, 1))).toBe('v1/4');
+    expect(formatAddress(ancestorAddress(deep, 3))).toBe('v1/4.-2.7');
+    expect(formatAddress(ancestorAddress(deep, 4))).toBe('v1/4.-2.7.1');
+    expect(formatAddress(ancestorAddress(deep, 9))).toBe('v1/4.-2.7.1');
+    expect(formatAddress(ancestorAddress(deep, 0))).toBe('v1/');
+    expect(formatAddress(ancestorAddress(deep, -1))).toBe('v1/');
+    // A shallow address is its own ancestor, which is the case that made the galaxy keying work
+    // for `v1/0` without a special case.
+    expect(formatAddress(ancestorAddress(DEFAULT_ADDRESS, 1))).toBe('v1/0');
   });
 
   it('rejects malformed addresses and says why', () => {

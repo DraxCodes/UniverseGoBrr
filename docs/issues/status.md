@@ -44,16 +44,21 @@ For exact commit ids, read `git log --oneline -5`; this file deliberately does n
   crossings only**, with the approach probe before any code and the focus rebase out of v1. The
   seats' shared weak point — a focus rebase that would have to be stored to survive a shared link —
   is why the chair dropped it. Record: `council-layer-4.md`; dissent is in §8.
+- **Lane P, the approach probe: PASSES.** `src/render/approach-probe.ts` (+ 12 assertions in its
+  test, `npm test` 169/169). Worst float32 body displacement is **5.3×10⁻⁵ px** against a half-pixel
+  bar, at every approach radius, direction and resolution tested (1920/2560/3840). So v1 is
+  **address-only**: no focus rebase, and the council's open question is closed with a number. The
+  counterweight is recorded too — at **true scale** the near plane sits 1,412 real Earth radii out,
+  which makes landing a Layer 6 depth-range problem, not a rebase one. Note:
+  `docs/notes/metres-to-pixels-needs-the-projection.md`.
 
 ## Doing
 
-Nothing in flight in the code. **Layer 3's scope is complete**: the galaxy, the handoff, the HUD
-identity split and Sol are all in, and the deferred visual pass is the only remaining Layer 3 item.
-**Layer 3 iteration 2 is deferred, not abandoned**: the four gate flaws are fixed and measured, and
-the remaining gap is polish a stronger visual model is better placed to judge. Brief, measurements
-and the remaining debt: `iterations/layer-3-iteration-2-deferred.md`.
-The `perception` gate is not deferred as a mechanism and is never handed to Neon; gate scoring stays
-in this workflow.
+**Layer 4 lane 1 (the rebase module) is the next code.** The probe has closed its gate, so
+`src/frame/rebase.ts` can be written address-only: `rebaseToAddress(state, address)` and nothing
+else, with `FRAME_MARGIN` and the dead band as named constants. Still unbuilt from the council's
+plan: `placement(seed, address)` (ADR-0010's prerequisite, needed for `d`), the history rule, the
+compass and the tier masks.
 
 Two new environment notes landed with this commit, both traps this session paid for:
 `docs/notes/powershell-writes-cp1252.md` and `docs/notes/git-reset-hard-and-opencode-json.md`, plus
@@ -61,12 +66,11 @@ Two new environment notes landed with this commit, both traps this session paid 
 
 ## Next
 
-1. **Layer 4 (travel tiers) is decided and not started.** `council-layer-4.md` §10 records the
+1. **Layer 4 (travel tiers) is decided and has started.** `council-layer-4.md` §10 records the
    owner's answers: **A**, address-origin frames, rebasing on tier crossings only; a tier crossing
    is a **journey**; **time advances by `d / v(method)`** (ADR-0010), which entails
-   `placement(seed, address)`; tiers + panning first, compass second. The first build step is the
-   **approach probe** (lane P), not the rebase module - it decides whether a focus rule is ever
-   needed.
+   `placement(seed, address)`; tiers + panning first, compass second. **Lane P is done and passes**
+   (§8), so the rebase is address-only. Lane 1 (`src/frame/rebase.ts`) is next.
 2. The deferred visual pass: read `iterations/layer-3-iteration-2-deferred.md` before touching tone,
    grading, density balance or reference claims. Re-gate here when it returns.
 3. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon
@@ -75,7 +79,8 @@ Two new environment notes landed with this commit, both traps this session paid 
 4. Open owner question: when to add left-click X/Y camera panning (with zoom, pitch and yaw
    relative to the new centre). It couples to `src/input/orbit-controls.ts`'s "position is derived
    from angles and distance" invariant and to ADR-0003's framing-vs-travel split, so it belongs
-   with Layer 4's camera work rather than as a standalone change.
+   with Layer 4's camera work rather than as a standalone change. **D5 already answers the ordering
+   (with the tier work); what is unanswered is whether it is a drag or a modifier-click.**
 
 
 ## Blocked

@@ -331,14 +331,56 @@ defers the core loop a second time and leaves the compass pointing at nothing).
 inside one frame (then a derived focus rule ships with v1); or a capture pair that cannot be made
 identical at 1:1 under A without a per-scene hack (then C, not B).
 
+### The probe was run (2026-11-24) — it passes, so the focus rebase stays out of v1
+
+The gating measurement is now a claim in the repo rather than a scratch script:
+`src/render/approach-probe.ts`, asserted by `src/render/approach-probe.test.ts` (12 tests), in the
+same spirit as the Layer 1 precision probe.
+
+**What it measures.** It builds the real scene frame, rounds every body's camera-relative centre to
+float32 exactly as the instance buffer does (`renderer.ts` writes `planet.center` into a
+`Float32Array`), projects both the exact and the rounded value with one view-projection, and diffs
+the screen positions. Eight Sol bodies and nine procedural ones, ten approach radii from 1000 drawn
+radii down to 1.05 (grazing the drawn surface), from four directions, at 1920×1080, 2560×1440 and
+3840×2160.
+
+| Result | Sol | Procedural |
+| --- | --- | --- |
+| worst float32 body displacement | **5.3×10⁻⁵ px** | 4.2×10⁻⁵ px |
+| fewest float32 steps across a drawn disc | 20,003 | 18,747 |
+| deepest reverse-Z depth (clips at 1) | 0.200 | 0.201 |
+
+The bar was half a pixel. The measurement is four orders of magnitude below it, in every direction
+and at every resolution, including the closest legal approach.
+
+**Why it is small, stated so it is not mistaken for luck:** the stage divides by the system's own
+scale *before* rounding, so every float32 value is an offset inside the frame, about one unit
+across — never an absolute coordinate. The error is therefore a property of the frame, not of where
+the frame sits. This is what ADR-0008's camera-relative path bought, and it is why "the origin is
+astronomically far away" is not by itself a precision problem.
+
+**The counterweight, recorded so the pass is not over-read.** This holds for the *drawn* orrery,
+where bodies are exaggerated for legibility. At **true scale** the near plane sits 1,412 real Earth
+radii out (3,374 for the tested procedural world), so a camera cannot physically reach a surface —
+that is a Layer 6 depth-range problem, not a rebase. `trueScaleReach()` reports it and its test
+asserts it.
+
+**A failure the probe must be able to report.** Stretching the frame to 10⁹ drawn radii fails on
+float32 steps across the disc. A probe that can only pass is not evidence.
+
+**Decision consequence.** The open question in §8 is closed: v1 is **address-only**, no focus
+rebase. The dissent's cost — that retrofitting a second trigger later is more expensive than writing
+it now — is accepted knowingly, and is now cheap to re-open: the trigger would be added to
+`rebase.ts` as a derived pure function, which is exactly the shape the risk seat required.
+
 ## 9. Thread-split proposal
 
 Four lanes, non-overlapping write scopes. The probe lands before lane 1.
 
 | Lane | Writes | Depends on |
 | --- | --- | --- |
-| **P. Approach probe** | `.scratch/` only (throwaway `.ts` + `vite-node`) | nothing |
-| **1. Rebase** | `src/frame/rebase.ts` (new), `src/frame/rebase.test.ts` (new) | P |
+| **P. Approach probe** | `src/render/approach-probe.ts` + test; `.scratch/` printer | **done 2026-11-24, passes** |
+| **1. Rebase** | `src/frame/rebase.ts` (new), `src/frame/rebase.test.ts` (new) | P (closed: address-only) |
 | **2. Travel state + URL history** | `src/state/url-state.ts`, `src/main.ts` | 1 |
 | **3. Compass + address HUD** | `src/ui/hud.ts`, `src/ui/compass.ts` (new) | 2 (needs derived `t` and the history rule) |
 | **4. Tier masks** | `src/gpu/scene.wgsl`, `src/gpu/renderer.ts` | 1 (composites over the live destination) |

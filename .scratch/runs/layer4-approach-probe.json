@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "kind": "probe",
+  "status": "passed",
+  "startedAt": "2026-11-24T09:05:00.000Z",
+  "endedAt": "2026-11-24T09:20:00.000Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Layer 4 lane P: under address-origin frames, can the camera reach a body without the frame rebasing its origin onto that body?",
+  "commit": "f09261e (wip/layer-3, pushed to origin)",
+  "models": [
+    "surplus30/deepseek-v4.1-flash-1017 (measurement and implementation)"
+  ],
+  "verdict": "PASS. Worst float32 body displacement is 5.3e-5 px against a half-pixel bar, measured by building the real scene frame, rounding each body's camera-relative centre to float32 exactly as the instance buffer does, and diffing the projected positions. Two systems (authored Sol with 8 bodies, procedural v1/4.-2.7 with 9), ten approach radii from 1000 drawn radii down to 1.05, four directions, three resolutions. Fewest float32 steps across a drawn disc is 18,747 against a 64-step bar. Deepest reverse-Z depth 0.201 against the 1.0 near plane. Consequence: the focus rebase stays out of v1 and v1 is address-only, closing the council's open question in section 8 with a number rather than an argument.",
+  "notes": "The measurement is small for a stated reason, not by luck: buildSceneFrame divides by the system's own scale before rounding, so every float32 value is an offset inside the frame (~1 unit across), never an absolute coordinate. The error is a property of the frame, not of where the frame sits in the universe. Two counterweights are recorded so the pass cannot be over-read. (1) At true scale the near plane sits 1,412 real Earth radii out (3,374 for the tested procedural world), so a camera cannot reach a surface - that is a Layer 6 depth-range problem, not a rebase. (2) The frame DOES fail when stretched to 1e9 drawn radii, which is the negative control proving the probe can report failure. Two assertions were wrong on first writing and were corrected, both recorded in docs/notes/metres-to-pixels-needs-the-projection.md: a 6,848 m error that is 5.3e-5 px (metres and pixels are unrelated without the projection), and a float32 resolution ratio asserted as a smooth 10 when float32 steps change only at powers of two, so a decade is 8 or 16. No paid benchmark, no visual review, no council round. Cost: cents. The probe module is tree-shaken from the shipped bundle - dist size is byte-identical at 80.67 kB / 29.13 kB gzip.",
+  "evidence": [
+    "src/render/approach-probe.ts",
+    "src/render/approach-probe.test.ts",
+    "docs/notes/metres-to-pixels-needs-the-projection.md",
+    "docs/issues/council-layer-4.md"
+  ]
+}

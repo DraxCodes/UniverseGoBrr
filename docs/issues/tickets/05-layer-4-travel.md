@@ -1,8 +1,10 @@
 # 05 - Layer 4: travel tiers
 
 **Status: decided (owner, 2026-11-24).** D1, D2, D4 and D5 as recommended; **D3 amended** to
-`Δt = d / v(method)` (ADR-0010). The first build step is the approach probe (lane P), not the rebase
-module. Speed constants and one placement choice remain open (see the end of this brief).
+`Δt = d / v(method)` (ADR-0010). **Lane P is done and passes** (2026-11-24): approach stays inside
+one frame (worst 5.3×10⁻⁵ px), so the rebase is **address-only** and the focus rule is out of v1.
+The next build step is lane 1, `src/frame/rebase.ts`. Speed constants and one placement choice
+remain open (see the end of this brief).
 
 ## Deliverable (spec §7, row 4)
 

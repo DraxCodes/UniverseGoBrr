@@ -39,6 +39,11 @@ For exact commit ids, read `git log --oneline -5`; this file deliberately does n
   place precedence lives. Captured as `layer3-sol-1080p`. Decision: ADR-0009.
 - The **cosmic address HUD moved to Layer 4** (recorded in spec §7 row 3 and §9): it is half of the
   navigation compass, and the other half is travel.
+- **Layer 4 council convened** (2026-11-24, owner's instruction) at fixed point `014c312`, three
+  seats across two model lineages. Recommendation: **A, address-origin frames, rebasing on tier
+  crossings only**, with the approach probe before any code and the focus rebase out of v1. The
+  seats' shared weak point — a focus rebase that would have to be stored to survive a shared link —
+  is why the chair dropped it. Record: `council-layer-4.md`; dissent is in §8.
 
 ## Doing
 
@@ -57,10 +62,10 @@ Two new environment notes landed with this commit, both traps this session paid 
 ## Next
 
 1. **Layer 4 (travel tiers)** is the next skeleton piece, and the only open question is *how* to
-   build it, not whether. `tickets/05-layer-4-travel.md` and `council-layer-4.md` are drafted:
-   they lay out the options, the four triggers, and the decisions the owner must make (council
-   outcome, rebase strategy, travel feel). **Work stops at that decision point rather than
-   inventing one.**
+   build it, not whether. The council **convened** on 2026-11-24: `council-layer-4.md` holds the
+   three unedited seat proposals, the cross-critiques, the experience thesis, the trade-off register
+   and the recommendation (**A, address-origin, tier-only rebase**, focus gated on the approach
+   probe). **D1-D5 are the owner's**, and no code starts before they are answered.
 2. The deferred visual pass: read `iterations/layer-3-iteration-2-deferred.md` before touching tone,
    grading, density balance or reference claims. Re-gate here when it returns.
 3. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon
@@ -74,9 +79,12 @@ Two new environment notes landed with this commit, both traps this session paid 
 
 ## Blocked
 
-- **Layer 4 needs the owner before any code**: D0 (convene the council?), then D1 (rebase
-  strategy) and D2 (cut with a mask vs journey). Proposal: `council-layer-4.md`; brief:
-  `tickets/05-layer-4-travel.md`. Five of six council triggers hold, so the default is a council.
+- **Layer 4 needs the owner's decision (D1-D5) before any code.** The council convened on
+  2026-11-24 and its recommendation is recorded: **A, address-origin frames, rebasing on tier
+  crossings only**, with the approach probe run before the first line of the rebase module; the
+  focus rebase is out of v1 and gated on that probe. Three seats dissented on the focus question and
+  the dissent is recorded verbatim in `council-layer-4.md` §8. Brief:
+  `tickets/05-layer-4-travel.md`.
 - Nothing technical. The 1650-class proxy is unavailable, so floor performance stays an argument,
   never a measurement.
 

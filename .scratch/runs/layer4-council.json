@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "kind": "council",
+  "status": "passed",
+  "startedAt": "2026-11-24T08:05:00.000Z",
+  "endedAt": "2026-11-24T08:35:00.000Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Layer 4 council: what is a frame at travel time, what may a rebase change, and what must crossing a tier feel like?",
+  "commit": "014c312 (wip/layer-3, pushed to origin)",
+  "models": [
+    "surplus30/deepseek-v4.1-flash-1017 (chair, shape, experience)",
+    "surplus/glm-5.3 (risk)"
+  ],
+  "protocol": "council v1: one shared brief, two blind rounds (proposals, then cross-critique), no voting, chair triage",
+  "verdict": "Recommendation recorded, decision pending (owner's D1-D5). Build A: address-origin frames, rebasing on tier crossings only, with the approach probe before the first line of the rebase module; the focus rebase is out of v1 and gated on that probe. The three seats all chose A and all put the same load on one weak point - a focus rebase that must either be stored (a second representation, and an under-specified shared link) or derived (deterministic but hysteresis-bearing). Removing it resolves all three objections at once and matches the evidence that every scene already normalises to its own scale. Dissent recorded verbatim: experience and shape want the focus rebase in v1; risk accepts either but insists it is derived, never stored.",
+  "notes": "Two rounds, three seats, two model lineages. Round 1 blind and parallel; round 2 cross-critique with the other proposals pasted verbatim. No code written; every seat read-only. Notable corrections during the round: the experience seat initially claimed the perception rubric was not vendored - it is, at .opencode/skills/hillclimb/references/rubrics/perception.md, and the seat conceded and restated its 8/10 evidence in the rubric's shape. The shape seat changed its own signature so the frame layer keeps no content lookup (rebaseToFocus(camera, focus, address), caller resolves). The risk seat's crafted-cam claim was verified true: MAX_POSITION_M = 1e30 in src/state/url-state.ts, so a degenerate accepted cam currently renders a wrong image rather than reporting an issue. History rule tightened to: replaceState on rebase, pushState only on user-initiated arrival, same-addr pushes collapse, scripted oscillation leaves history length constant. Time rule tightened to: a mid-travel link pins the ARRIVAL t and the journey is derived from (addr, cam, t), never a stored parameter. The council cost is cents (three seats, two rounds, ~2.5k output words); no paid benchmark or visual probe was used.",
+  "evidence": [
+    "docs/issues/council-layer-4.md",
+    "docs/issues/tickets/05-layer-4-travel.md",
+    "docs/issues/spec.md",
+    "docs/issues/status.md",
+    "docs/adr/0008-camera-relative-and-unbounded-address.md",
+    "docs/adr/0003-travel-as-frame-rebase.md"
+  ]
+}

@@ -111,6 +111,7 @@ const ALPHA_BLEND: GPUBlendState = {
 };
 const ORBIT_SEGMENTS = 160;
 const SAMPLE_WIDTH = 640;
+const GALAXY_HDR_FORMAT: GPUTextureFormat = 'rgba16float';
 
 type Reload = {
   sky?: (source: string) => Promise<void>;
@@ -212,8 +213,8 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
   let starCorePipeline = await buildStarCorePipeline(device, format, sceneModule, scenePipelineLayout);
   let orbitPipeline = await buildOrbitPipeline(device, format, sceneModule, scenePipelineLayout);
 
-  // The galaxy has its own uniform (it needs the same camera but none of the star/planet data)
-  // and one instanced additive pipeline. There is no vertex buffer: the quad is generated.
+  // The galaxy accumulates additively into an offscreen rgba16float buffer, then composites onto
+  // the swapchain with a soft-shoulder tone curve so Layer 1/2 scenes and the orrery are untouched.
   const galaxyLayout = device.createBindGroupLayout({
     label: 'galaxy layout',
     entries: [
@@ -224,17 +225,38 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
       },
     ],
   });
+  const galaxyCompositeTexLayout = device.createBindGroupLayout({
+    label: 'galaxy hdr texture layout',
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { sampleType: 'unfilterable-float' },
+      },
+    ],
+  });
   const galaxyPipelineLayout = device.createPipelineLayout({
     bindGroupLayouts: [galaxyLayout],
+  });
+  const galaxyCompositePipelineLayout = device.createPipelineLayout({
+    bindGroupLayouts: [galaxyLayout, galaxyCompositeTexLayout],
   });
   const galaxyBindGroup = device.createBindGroup({
     label: 'galaxy params',
     layout: galaxyLayout,
     entries: [{ binding: 0, resource: { buffer: galaxyUniform } }],
   });
-  let galaxyPipeline = await buildGalaxyPipeline(device, format, galaxySource, galaxyPipelineLayout);
+  let { galaxyPipeline, galaxyCompositePipeline } = await buildGalaxyPipelines(
+    device,
+    format,
+    galaxySource,
+    galaxyPipelineLayout,
+    galaxyCompositePipelineLayout,
+  );
 
   let depth: GPUTexture | null = null;
+  let galaxyHdr: GPUTexture | null = null;
+  let galaxyHdrBindGroup: GPUBindGroup | null = null;
   let generation = 1;
   let frame = 0;
   let fps = 0;
@@ -326,8 +348,8 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
       galaxyParams[23] = 0;
       galaxyParams[24] = next.lod;
       galaxyParams[25] = GALAXY_GAIN;
-      galaxyParams[26] = time;
-      galaxyParams[27] = 0;
+      galaxyParams[26] = next.exposure;
+      galaxyParams[27] = time;
       device.queue.writeBuffer(galaxyUniform, 0, galaxyParams);
       if (next.count > 0) {
         device.queue.writeBuffer(
@@ -433,11 +455,53 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     return depth;
   }
 
+  function ensureGalaxyHdr(
+    width: number,
+    height: number,
+  ): { texture: GPUTexture; bindGroup: GPUBindGroup } {
+    if (!galaxyHdr || !galaxyHdrBindGroup || galaxyHdr.width !== width || galaxyHdr.height !== height) {
+      galaxyHdr?.destroy();
+      galaxyHdr = device.createTexture({
+        label: 'galaxy hdr',
+        size: [width, height],
+        format: GALAXY_HDR_FORMAT,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
+      galaxyHdrBindGroup = device.createBindGroup({
+        label: 'galaxy hdr view',
+        layout: galaxyCompositeTexLayout,
+        entries: [{ binding: 0, resource: galaxyHdr.createView() }],
+      });
+    }
+    return { texture: galaxyHdr, bindGroup: galaxyHdrBindGroup };
+  }
+
   function encodePass(
     encoder: GPUCommandEncoder,
     view: GPUTextureView,
     depthView: GPUTextureView,
+    hdrView: GPUTextureView | null,
+    hdrBindGroup: GPUBindGroup | null,
   ): void {
+    if (lastGalaxy && lastGalaxy.count > 0 && hdrView) {
+      const hdrPass = encoder.beginRenderPass({
+        label: 'galaxy hdr pass',
+        colorAttachments: [
+          {
+            view: hdrView,
+            clearValue: { r: 0, g: 0, b: 0, a: 0 },
+            loadOp: 'clear',
+            storeOp: 'store',
+          },
+        ],
+      });
+      hdrPass.setPipeline(galaxyPipeline);
+      hdrPass.setBindGroup(0, galaxyBindGroup);
+      hdrPass.setVertexBuffer(0, galaxyInstanceBuffer);
+      hdrPass.draw(6, lastGalaxy.count);
+      hdrPass.end();
+    }
+
     const pass = encoder.beginRenderPass({
       label: 'stage0 pass',
       colorAttachments: [
@@ -461,13 +525,12 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     pass.setBindGroup(0, skyBindGroup);
     pass.draw(3);
 
-    // The impostor field is drawn first and tests no depth: it is behind the orrery, and every
-    // system pass that follows paints over it. One draw call for up to 60k stars.
-    if (lastGalaxy && lastGalaxy.count > 0) {
-      pass.setPipeline(galaxyPipeline);
+    // Composite the tone-mapped galaxy HDR buffer additively over the sky before the orrery.
+    if (lastGalaxy && lastGalaxy.count > 0 && hdrBindGroup) {
+      pass.setPipeline(galaxyCompositePipeline);
       pass.setBindGroup(0, galaxyBindGroup);
-      pass.setVertexBuffer(0, galaxyInstanceBuffer);
-      pass.draw(6, lastGalaxy.count);
+      pass.setBindGroup(1, hdrBindGroup);
+      pass.draw(3);
     }
 
     if (system && lastScene) {
@@ -560,9 +623,16 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
   async function reloadGalaxy(source: string): Promise<void> {
     const token = ++reloadToken;
     try {
-      const next = await buildGalaxyPipeline(device, format, source, galaxyPipelineLayout);
+      const next = await buildGalaxyPipelines(
+        device,
+        format,
+        source,
+        galaxyPipelineLayout,
+        galaxyCompositePipelineLayout,
+      );
       if (disposed || token !== reloadToken) return;
-      galaxyPipeline = next;
+      galaxyPipeline = next.galaxyPipeline;
+      galaxyCompositePipeline = next.galaxyCompositePipeline;
       generation += 1;
       options.onPipeline(generation, null);
       console.info(`[ugb] galaxy rebuilt → pipeline generation ${generation}`);
@@ -616,10 +686,13 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
 
     const encoder = device.createCommandEncoder({ label: 'stage0 frame' });
     const depthTexture = ensureDepth(canvas.width, canvas.height);
+    const hdr = galaxyFrame && galaxyFrame.count > 0 ? ensureGalaxyHdr(canvas.width, canvas.height) : null;
     encodePass(
       encoder,
       context.getCurrentTexture().createView(),
       depthTexture.createView(),
+      hdr ? hdr.texture.createView() : null,
+      hdr ? hdr.bindGroup : null,
     );
     device.queue.submit([encoder.finish()]);
 
@@ -661,6 +734,17 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
       format: DEPTH_FORMAT,
       usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
+    const sampleGalaxyHdr = device.createTexture({
+      label: 'sample galaxy hdr',
+      size: [width, height],
+      format: GALAXY_HDR_FORMAT,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    const sampleGalaxyBindGroup = device.createBindGroup({
+      label: 'sample galaxy hdr view',
+      layout: galaxyCompositeTexLayout,
+      entries: [{ binding: 0, resource: sampleGalaxyHdr.createView() }],
+    });
     const readback = device.createBuffer({
       label: 'stage0 readback',
       size: bytesPerRow * height,
@@ -672,7 +756,13 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     writeParams(time, width, height);
     const galaxyFrame = writeGalaxy(time, width, height);
     writeScene(time, width, height, galaxyFrame?.lod ?? 0);
-    encodePass(encoder, texture.createView(), sampleDepth.createView());
+    encodePass(
+      encoder,
+      texture.createView(),
+      sampleDepth.createView(),
+      sampleGalaxyHdr.createView(),
+      sampleGalaxyBindGroup,
+    );
     encoder.copyTextureToBuffer(
       { texture },
       { buffer: readback, bytesPerRow },
@@ -712,6 +802,7 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
       readback.destroy();
       texture.destroy();
       sampleDepth.destroy();
+      sampleGalaxyHdr.destroy();
     }
   }
 
@@ -722,6 +813,7 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     resizeObserver.disconnect();
     window.removeEventListener('resize', resize);
     depth?.destroy();
+    galaxyHdr?.destroy();
     uniformBuffer.destroy();
     sceneUniform.destroy();
     galaxyUniform.destroy();
@@ -852,14 +944,19 @@ async function buildSkyPipeline(
  * camera-relative centre, a world-space radius and a colour/reveal. The pass writes no depth and
  * tests none, because it is behind the orrery and is drawn before it.
  */
-async function buildGalaxyPipeline(
+/**
+ * Two-stage galaxy pass: accumulate instanced additive impostors into an `rgba16float` HDR
+ * texture, then composite additively onto the swapchain through a soft-shoulder tone curve.
+ */
+async function buildGalaxyPipelines(
   device: GPUDevice,
   format: GPUTextureFormat,
   source: string,
   layout: GPUPipelineLayout,
-): Promise<GPURenderPipeline> {
+  compositeLayout: GPUPipelineLayout,
+): Promise<{ galaxyPipeline: GPURenderPipeline; galaxyCompositePipeline: GPURenderPipeline }> {
   const module = await compileModule(device, 'galaxy', source);
-  return guardPipeline(device, 'galaxy', () =>
+  const galaxyPipeline = await guardPipeline(device, 'galaxy', () =>
     device.createRenderPipelineAsync({
       label: 'galaxy impostors',
       layout,
@@ -883,7 +980,7 @@ async function buildGalaxyPipeline(
         entryPoint: 'fs_star',
         targets: [
           {
-            format,
+            format: GALAXY_HDR_FORMAT,
             blend: {
               color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
               alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
@@ -892,9 +989,31 @@ async function buildGalaxyPipeline(
         ],
       },
       primitive: { topology: 'triangle-list', cullMode: 'none' },
+    }),
+  );
+  const galaxyCompositePipeline = await guardPipeline(device, 'galaxy composite', () =>
+    device.createRenderPipelineAsync({
+      label: 'galaxy composite',
+      layout: compositeLayout,
+      vertex: { module, entryPoint: 'vs_composite' },
+      fragment: {
+        module,
+        entryPoint: 'fs_composite',
+        targets: [
+          {
+            format,
+            blend: {
+              color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+              alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+            },
+          },
+        ],
+      },
+      primitive: { topology: 'triangle-list', cullMode: 'none' },
       depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: 'always' },
     }),
   );
+  return { galaxyPipeline, galaxyCompositePipeline };
 }
 
 async function buildPlanetPipeline(

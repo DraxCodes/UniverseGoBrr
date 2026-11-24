@@ -71,6 +71,13 @@ the test this decision has to pass.
 - **Placement is the next function**, and its signature is settled by this record:
   `placement(seed, address) → position in the parent frame`. Its inputs are the seed and the
   address only.
+- **Placement is built** (`src/universe/placement.ts`), and the disc law it needs moved into
+  `src/universe/disc.ts` so the generator and placement call **one** function rather than two
+  drifting copies. The extraction was proved bit-identical before and after. It has no renderer
+  consumer yet: the picture still draws its own stream sample, so placement and the population
+  agree on the *law*, not on the *list*, and a drawn light does not carry an address. Closing that
+  is a re-roll of the population (and a capture re-shoot), recorded in
+  `docs/notes/placement-uses-a-second-stream.md` rather than pretended to be a refactor.
 - **Real galactic coordinates for Sol** stop being "a separate question" (cf. ADR-0009): Sol is in
   galaxy `v1/0`, and placement is what will eventually let it sit at its real 26,000 ly. Until
   then the address stays opaque identity on purpose.

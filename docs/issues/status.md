@@ -74,16 +74,34 @@ structure is checked by `src/status-page.test.ts`; its content is the owner's to
   by construction. **The layer-3 gate was scored against the old roll**, so the deferred visual pass
   sees a different galaxy than the one that scored 6/10.
 
+- **Placement: done (ADR-0011, first half).** `src/universe/placement.ts` — `placement(seed, address)`
+  returns a position in the parent frame, from the seed and the address only, never the inverse.
+  The galaxy node is its own frame origin; the root returns `null` — a normal state, like
+  `parentAddress` — because it contains everything and sits nowhere; a deeper address is a star
+  placed by the disc law. The law moved to
+  `src/universe/disc.ts` and is now **one function** both the generator and placement call, so a
+  placed star lands in the same bulge, the same exponential disc and on the same arms the picture
+  draws — asserted by replaying the generator's own `|disc` stream in `placement.test.ts`. The
+  extraction was proved **bit-identical** on three seed/address/tier cases (exact-double digest
+  before and after), so `GALAXY_VERSION` and `GALAXY_STREAM_VERSION` do not move and no capture
+  needed re-shooting. `PLACEMENT_VERSION 1`. **The list is not closed yet:** the renderer still
+  draws its own stream sample, so a drawn light carries no address. Why attaching addresses to the
+  current stars would be the wrong fix: `docs/notes/placement-uses-a-second-stream.md`.
+
 ## Doing
 
-**Layer 4 lane 1 (the rebase module) is done; lane 2 is next.** `src/frame/rebase.ts` is
+**Layer 4 lane 1 (rebase) and placement are done; the picture's address list is next.** Lane 1 is
 `rebaseCamera(camera, originShiftM)` — translation only, shift never absolute, pure — plus the
-offset bound. 14 assertions, including "a 10 ly rebase moves a body under 0.001 px". The council's
-dead-band rider was **dropped deliberately**: under A nothing continuously changes the address, so a
-hysteresis constant would have asserted a literal. It has no production consumer yet, by design.
-The placement direction is settled (ADR-0011: the address grid is the world), so the next code is
-**`placement(seed, address)`** — a position, never an inverse — followed by lane 2's history and
-journey rules, the compass, and the tier masks.
+offset bound, 14 assertions. The council's dead-band rider stays **dropped deliberately**: under A
+nothing continuously changes the address, so a hysteresis constant would assert a literal. Neither
+lane has a production consumer yet, by design.
+
+The remaining half of ADR-0011 is drawing the population **by address** rather than from a position
+stream: `generateGalaxy` would place `childAddress(galaxy, index)` and carry that address on the
+star. That is a real re-roll, not a refactor — bump `GALAXY_STREAM_VERSION`, then `GALAXY_VERSION`,
+then re-shoot the capture set and re-measure the arm acceptance. Until then placement and the
+picture agree on the *law*, not on the *list*. After that: lane 2's history and journey rules, the
+compass, and the tier masks.
 
 Two new environment notes landed with this commit, both traps this session paid for:
 `docs/notes/powershell-writes-cp1252.md` and `docs/notes/git-reset-hard-and-opencode-json.md`, plus
@@ -93,9 +111,10 @@ Two new environment notes landed with this commit, both traps this session paid 
 
 1. **Layer 4 (travel tiers) is decided and has started.** `council-layer-4.md` §10 records the
    owner's answers: **A**, address-origin frames, rebasing on tier crossings only; a tier crossing
-   is a **journey**; **time advances by `d / v(method)`** (ADR-0010), which entails
-   `placement(seed, address)`; tiers + panning first, compass second. **Lane P is done and passes**
-   (§8), so the rebase is address-only. Lane 1 (`src/frame/rebase.ts`) is next.
+   is a **journey**; **time advances by `d / v(method)`** (ADR-0010); tiers + panning first, compass
+   second. **Lane P passes** (§8), so the rebase is address-only. **Lane 1** (`src/frame/rebase.ts`)
+   and **placement** (`src/universe/placement.ts`) are done. Next: the picture draws by address,
+   then travel state/history, then the compass and tier masks.
 2. The deferred visual pass: read `iterations/layer-3-iteration-2-deferred.md` before touching tone,
    grading, density balance or reference claims. Re-gate here when it returns.
 3. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon
@@ -111,8 +130,8 @@ Two new environment notes landed with this commit, both traps this session paid 
 ## Blocked
 
 - **Nothing wanted from the owner to start.** One small constant is open and can be answered at the
-  first build step: the speed table in ADR-0010 (proposed, unconfirmed). The placement *direction*
-  is settled (ADR-0011); only its density and occupancy numbers are ours to choose.
+  first build step: the speed table in ADR-0010 (proposed, unconfirmed). Placement is built; only its
+  density and occupancy numbers are ours to choose.
 - Nothing technical. The 1650-class proxy is unavailable, so floor performance stays an argument,
   never a measurement.
 
@@ -174,13 +193,23 @@ The decision record is tracked, so a clone on another machine is enough to resum
   J2000 phases; periods from Kepler. `SOL_VERSION`, `SOL_ADDRESS = 'v1/0.0.0'`.
 - `src/universe/authored/sol.test.ts` (new) — reserved-address round-trip, seed independence,
   procedural fallback equality, real astronomy invariants.
+- `src/universe/disc.ts` (new) — the disc law: `galaxyFrame`, `sampleDiscStar`, `armStrength`, the
+  tilt and its constants. One function both the generator and placement call, so a placed star and
+  a drawn star cannot drift apart.
+- `src/universe/placement.ts` (new) — `placement(seed, address)` → position in the parent frame,
+  `PLACEMENT_VERSION`, `placementKey`. The root returns `null`; a galaxy node is its own origin; a
+  deeper address is a placed star. Never the inverse.
+- `src/universe/placement.test.ts` (new) — determinism, containment in the galaxy's disc, exclusion
+  from the local sphere, distinct addresses, root refusal, and the stream replay that proves the
+  generator and placement share one law.
 - `src/universe/system.ts` — `starProfile` and `SIZE_FRACTION` exported so authored content reuses
   the generator's definitions instead of a drifting copy.
 
 - `src/render/galaxy-scene.ts` (new) — packing, legibility, watchdog, convergence fade.
 - `src/gpu/galaxy.wgsl` (new) — instanced camera-facing quad, softened profile, `frame_info`.
-- `src/universe/galaxy.ts` — arms, bulge, `GALAXY_VERSION 4`, `GALAXY_STREAM_VERSION 3`, the -30°
-  galactic-plane tilt (`GALACTIC_PLANE_NORMAL`, `toDiscFrame`).
+- `src/universe/galaxy.ts` — arms, bulge, `GALAXY_VERSION 5`, `GALAXY_STREAM_VERSION 3` (now
+  re-exported from `disc.ts`), the -30° galactic-plane tilt (`GALACTIC_PLANE_NORMAL`,
+  `toDiscFrame`), and the population's brightness and colour laws.
 - `src/gpu/scene.wgsl` — `lod_meta`, ring/planet/core fades, corona handoff.
 - `src/gpu/renderer.ts` — galaxy pipeline, tier watchdog, `galaxyFrame()`, `forceSlowFrames`.
 - `src/main.ts` — HUD scene row keys off `GalaxyFrame.identity` (`fit × resolved`), not `lod`.
@@ -197,10 +226,14 @@ The decision record is tracked, so a clone on another machine is enough to resum
 
 ## Verification
 
-- `npm test` — pass, 17 files, **157 tests** (11 of them cover the authored registry and Sol: seed
-  independence, byte-identical procedural fallback, a per-node version that does not move
-  `SYSTEM_VERSION`, real axes and Kepler-derived periods).
-- `npm run build` — pass, `tsc --noEmit && vite build`, clean; **80.67 kB JS / 29.13 kB gzip**.
+- `npm test` — pass, 21 files, **204 tests**.
+- `npm run build` — pass, `tsc --noEmit && vite build`, clean; **81.11 kB JS / 29.29 kB gzip**.
+- Placement check — the disc-law extraction is **bit-identical** (exact-double digest of the
+  45,001 / 22,501 / 13,601-star cases before and after); placement is deterministic, stays inside
+  the galaxy's disc and outside the 120 ly local sphere, and replays the generator's `|disc` stream
+  exactly.
+- `npm run capture` — **not re-run for placement**: the galaxy output is bit-identical and placement
+  has no renderer consumer yet. The last full run, after the galaxy-identity fix, was 20/20.
 - `base doctor` — no errors; `docs.issues: docs/issues`, the doc tree and the ADR index check clean.
 - Doc path check — backticked refs that look like paths (one or more slashes plus a file extension),
   resolved against the repo root or the file's own directory, over the project markdown files (`docs/`

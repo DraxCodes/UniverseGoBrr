@@ -90,7 +90,7 @@
   <body>
     <main>
       <h1>UniverseGoBrr <span>build status</span></h1>
-      <p class="meta">Updated 2026-11-24 · branch <code>wip/layer-3</code> · edited in the same commit as <code>docs/issues/status.md</code></p>
+      <p class="meta">Updated 2026-11-24 · update 4 · branch <code>wip/layer-3</code> · edited in the same commit as <code>docs/issues/status.md</code></p>
       <p class="lede">
         <strong>V1 is:</strong> fly from a galaxy arm down to a lit planet, cross the distance between
         systems with a real travel time, and send a friend the view. No gameplay. Layer 6 (walking on
@@ -99,11 +99,10 @@
 
       <h2>Right now</h2>
       <p class="lede">
-        Layer 4, travel. The frame rebase and the approach probe are finished, and the galaxy now
-        keeps its identity when you move: a star next door shows you the same sky. The placement
-        direction is decided — the address grid is the world, and the picture is a view of it — so
-        every light you can see is somewhere you can go. Next task is <code>placement</code> itself:
-        without it nothing has a distance, and travel time and the compass both need one.
+        Layer 4, travel. The frame rebase, the approach probe and galaxy identity are done, and every
+        address now has a real position inside its galaxy — on the same arms the picture draws.
+        Next the picture draws the addresses it names, so a light you can see is one you can send a
+        link to. Then travel state, then the compass.
       </p>
 
       <h2>Remaining to V1</h2>
@@ -114,7 +113,7 @@
         <tbody>
           <tr>
             <td>L4</td>
-            <td class="task">Placement: address → position in its parent<em>Every node needs a position or no distance exists. Also feeds the compass.</em></td>
+            <td class="task">Picture draws by address<em>Every visible light carries an address, so “that star” is a place. The other half of placement.</em></td>
             <td class="status s-next">Next</td>
           </tr>
           <tr>
@@ -198,6 +197,11 @@
             <td class="task">Galaxy identity<em>One sky per galaxy. Walking to a neighbouring star no longer redraws the stars.</em></td>
             <td class="status s-done">Done</td>
           </tr>
+          <tr>
+            <td>L4</td>
+            <td class="task">Placement<em>Address → position in its galaxy, on the same arms the picture draws. Never the inverse.</em></td>
+            <td class="status s-done">Done</td>
+          </tr>
         </tbody>
       </table>
 
@@ -229,8 +233,9 @@
         <li><strong>Name:</strong> is UniverseGoBrr the product name?</li>
       </ul>
       <p class="note">
-        Placement is no longer on this list: the direction is decided, and the remaining numbers
-        (how many cells are occupied, how dense a neighbourhood is) are ours to pick.
+        Placement is built: every address now has a position, and the remaining density numbers are
+        ours to pick. What is still missing is the picture drawing from those addresses, so that a
+        light carries one.
       </p>
 
       <h2>After V1</h2>

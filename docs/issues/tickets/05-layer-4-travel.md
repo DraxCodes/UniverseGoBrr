@@ -4,7 +4,9 @@
 `Δt = d / v(method)` (ADR-0010). **Lane P is done and passes** (2026-11-24): approach stays inside
 one frame (worst 5.3×10⁻⁵ px), so the rebase is **address-only** and the focus rule is out of v1.
 **Lane 1 is done**, and the placement direction is decided (ADR-0011): the address grid is the
-world and the picture is a view of it, so the next build step is `placement(seed, address)`. Speed
+world and the picture is a view of it. **Placement itself is built**
+(`src/universe/placement.ts`, with the shared disc law in `src/universe/disc.ts`), so every address
+now has a position; what remains of ADR-0011 is drawing the population *by* address. Speed
 constants remain open (see the end of this brief).
 
 ## Deliverable (spec §7, row 4)
@@ -110,6 +112,8 @@ Layer 5 or later.
 position in its parent frame. Without it there is no distance, and without a distance D6 cannot be
 computed. It is one pure, versioned function - not a population - and the compass needs it too.
 ADR-0011 fixes which way round it goes: position from address, never address from a drawn star.
+**Shipped:** `src/universe/placement.ts` (`PLACEMENT_VERSION 1`), with the disc law it shares with
+the generator in `src/universe/disc.ts`.
 
 ## Evidence plan (to be finalised by the council)
 
@@ -155,7 +159,9 @@ Still open, and small enough to answer at the first build step:
 2. ~~**Placement choice**~~ - **answered 2026-11-24 (owner): the address grid is the world, and the
    picture is a view of its occupied cells (ADR-0011).** `placement(seed, address)` returns a
    position; it is never asked to invert a drawn star. The galaxy keying that made every address a
-   private galaxy was fixed with the decision (`GALAXY_VERSION` 4 → 5).
+   private galaxy was fixed with the decision (`GALAXY_VERSION` 4 → 5). **Shipped** as
+   `src/universe/placement.ts`; drawing the population *by* address is the remaining half and is a
+   population re-roll, not a refactor (`docs/notes/placement-uses-a-second-stream.md`).
 3. **Address HUD behaviour in v1** - read-only, or clickable-to-zoom-out from the first commit.
 
 Owner: the shape is settled. Nothing in the code assumes a decision that is not written down.

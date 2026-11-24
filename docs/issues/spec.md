@@ -249,7 +249,7 @@ Layer 2) can pick a model by whether it names the flaws a human eye sees.
 | 0 | **Dev loop** — Vite, HMR, shader hot reload, seed+epoch in URL, pinned `t`, capture harness; `open: false`, `strictPort: true`, no module-scope side effects (`docs/notes/vite-multiple-tabs.md`) | Multiplies everything after it |
 | 1 | **Camera-relative precision + unbounded address** — double subtraction before float32, `Position` type, versioned address; cells and rebasing deferred to Layer 4 (ADR-0008) | Skip it and every later layer inherits a broken coordinate system |
 | 2 | **One procedural star system** — star shader, orbits, lit planets, atmospheres, rotation | First screenshot; proves the foundation |
-| 3 | **Star field + one galaxy** — instanced impostors; a cell-keyed local field plus a disc/bulge/arm population; `displayRadiusM` compresses emptiness, not structure; the crossfade order is rings → point → arm → disc, with the home star findable at 1:1. Council: `council-layer-3.md`; brief: `tickets/04-layer-3-star-field-and-galaxy.md`. **Sol (§3.6) and the address HUD are deferred to a later Layer 3 brief.** | Scale made real |
+| 3 | **Star field + one galaxy** - instanced impostors; a cell-keyed local field plus a disc/bulge/arm population; `displayRadiusM` compresses emptiness, not structure; the crossfade order is rings → point → arm → disc, with the home star findable at 1:1. Council: `council-layer-3.md`; brief: `tickets/04-layer-3-star-field-and-galaxy.md`. **Sol (§3.6) is built** as the first authored node, at `v1/0.0.0` (ADR-0009), captured as `layer3-sol-1080p`. The address HUD **moved to Layer 4** - it is half of the navigation compass. | Scale made real |
 | 4 | **Travel tiers** — frame rebases, warp effects, navigation compass | The core loop |
 | 5 | **Nebulae** — volumetric beauty pass, real + procedural populations | Where `perception` earns its keep |
 | 6 | **Planet surfaces** — cube-sphere, terrain LOD, ground atmosphere | Hardest; possibly never |
@@ -262,8 +262,9 @@ population** by class (emission, reflection, planetary, dark) for abundance.
 
 1. **Actors layer** — Tier 1 only, or commit to Tier 2 simulation? *Expensive to reverse.
    Requires a council before implementation.* (ADR-0006 is `proposed`.)
-2. **Real astronomy scope** — does our own solar system exist, correct, alongside the
-   procedural population? (Recommended: yes, once, as the "compare to reality" anchor.)
+2. **Real astronomy scope** - does our own solar system exist, correct, alongside the
+   procedural population? **Answered: yes.** Sol is the first authored node, reserved at
+   `v1/0.0.0` (ADR-0009); everything not in the registry stays procedural.
 3. **Time base** — wall clock is assumed. Confirm that shared `epoch` coordinates are
    acceptable as the stability mechanism, rather than a frozen universe.
 4. **Landing** — confirmed super-long-term. Revisit only after Layer 5.
@@ -285,9 +286,9 @@ rearchitecture. Sequenced, not simultaneous.
 | **Postcards** — link with camera orientation preserved | URL state | Layer 4 | 0.5 d |
 | **Multi-wavelength views** — radio / IR / X-ray renderings | Rendering variant of existing structure | Layer 5 | 3–5 d |
 | **Gravitational lensing** around black holes | Post-process using known positions | Layer 5 | 2–3 d |
-| **Sol, correct** — real solar system as an anchor | Authored override (§3.6) | Layer 3 | 2–3 d |
-| **Procedural audio** — hum driven by density and proximity | Web Audio, no assets | Layer 4 | 2–3 d |
-| **Cosmic address HUD** — postal address, each line clickable to zoom out | Reads the frame hierarchy | Layer 3 | 1 d |
+| **Sol, correct** - real solar system as an anchor | Authored override (§3.6) | **shipped** | 2-3 d |
+| **Procedural audio** - hum driven by density and proximity | Web Audio, no assets | Layer 4 | 2-3 d |
+| **Cosmic address HUD** - postal address, each line clickable to zoom out | Reads the frame hierarchy; it is half the navigation compass, so it ships with travel | Layer 4 (moved from Layer 3) | 1 d |
 | **Breadcrumb + Home** — local trail, one-button return | Local storage only | Layer 3 | 1 d |
 | **Seed-varied arm count** — 2–4 arms instead of a fixed two | `armStrength` already takes an offsets list; only the legibility metric needs to measure the same `m` | Layer 3 | 0.5–1 d |
 | **Scale silhouettes** — human-height reference objects | Presentation only | Layer 2 | 0.5 d |

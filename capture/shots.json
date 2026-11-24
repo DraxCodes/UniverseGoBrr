@@ -1,5 +1,5 @@
 {
-  "notes": "Layer 2 + Layer 3 capture manifest. Desktop only: 1080p, 1440p and 4K at DPR 1, plus a 4K display at 200% OS scaling (1920 CSS px, DPR 2). The first four shots sweep the desktop widths over the same coordinate; 'layer2-orrery', 'layer2-orrery-1440p' and 'layer2-orrery-2160p' are the content shots at the seam's three declared widths, and the four 'layer2-closeup-*' shots frame one world each at ~9 body radii so surface detail can be judged at full size. The 1440p content shot exists because 2560 is the one width between both HUD zoom breakpoints, so it is the only way to observe the 1.25x tier. The two precision shots are a negative control: they differ only in the coordinate path the probe uses, so if 'naive' ever separates the markers the harness has stopped detecting the bug. The 'layer3-galaxy-*' shots pin one camera 2.6 R from the home star, with the disc inclined ~40 degrees and the galactic centre behind the home star: they prove the arms read at the seam's three widths and at 200% scaling, with the crossfade fully resolved (expectGalaxyLod 1). 'layer3-arm-edge-2160p' is a 1:1 4K crop of one arm and the inter-arm gap, where stipple would show. 'layer3-home-star-1080p' is a 1:1 crop around the nucleus and the home star, the D5 findability test. Mobile is a non-goal (spec §1); fullscreen is a display mode, not a separate layout. Light theme is not meaningful for the space scene.",
+  "notes": "Layer 2 + Layer 3 capture manifest. Desktop only: 1080p, 1440p and 4K at DPR 1, plus a 4K display at 200% OS scaling (1920 CSS px, DPR 2). The first four shots sweep the desktop widths over the same coordinate; 'layer2-orrery', 'layer2-orrery-1440p' and 'layer2-orrery-2160p' are the content shots at the seam's three declared widths, and the four 'layer2-closeup-*' shots frame one world each at ~9 body radii so surface detail can be judged at full size. The 1440p content shot exists because 2560 is the one width between both HUD zoom breakpoints, so it is the only way to observe the 1.25x tier. The two precision shots are a negative control: they differ only in the coordinate path the probe uses, so if 'naive' ever separates the markers the harness has stopped detecting the bug. The 'layer3-galaxy-*' shots pin one camera 2.6 R from the home star, with the disc inclined ~40 degrees and the galactic centre behind the home star: they prove the arms read at the seam's three widths and at 200% scaling, with the crossfade fully resolved (expectGalaxyLod 1). 'layer3-arm-edge-2160p' is a 1:1 4K crop of one arm and the inter-arm gap, where stipple would show. 'layer3-home-star-1080p' is a 1:1 crop around the nucleus and the home star, the D5 findability test. 'layer3-sol-1080p' is the authored Sol system at 'v1/0.0.0' (spec §3.6): real orbits, eight real planets, framed by 'defaultSystemCamera' exactly as the app frames it. Mobile is a non-goal (spec §1); fullscreen is a display mode, not a separate layout. Light theme is not meaningful for the space scene.",
   "shots": [
     {
       "name": "desktop-1080p",
@@ -202,6 +202,16 @@
       "camera": [726150025192868500000, 886130388030334300000, -614393258688281300000, 2.273020050191636, -0.75],
       "expectGalaxyLod": 1,
       "clip": { "x": 764, "y": 375, "width": 600, "height": 380 }
+    },
+    {
+      "name": "layer3-sol-1080p",
+      "width": 1920,
+      "height": 1080,
+      "seed": "ugb-0000",
+      "epoch": "2000-01-01T00:00:00.000Z",
+      "address": "v1/0.0.0",
+      "t": 1200,
+      "camera": [0, 5982676371316.203, 8051872710267.672, 0, -0.6390168339184684]
     }
   ]
 }

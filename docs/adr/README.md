@@ -10,6 +10,7 @@
 | 0006 | proposed | Actors are a separate, tiered, swappable layer; simulation is CPU-only. Requires a council. |
 | 0007 | accepted | One presentation: dark, with no theme system. Light is a property of the scene. |
 | 0008 | accepted | Camera-relative double subtraction now; int64 cells and rebasing deferred to Layer 4; the address is unbounded, has a root (`v1/`), and stays opaque identity. |
+| 0009 | accepted | Authored nodes reserve a new address and ignore the seed; the registry is data checked before the generator, versioned per node. Sol reserves `v1/0.0.0`. |
 
 Status is one of `proposed`, `accepted`, `superseded` (name the successor),
 `deprecated` or `rejected`. The numbered filename is `NNNN-slug.md`.

@@ -235,7 +235,12 @@ export function describeSystem(system: StarSystem): string {
   return `${system.star.class}-type · ${count} ${count === 1 ? 'planet' : 'planets'} · ×${body} real`;
 }
 
-const SIZE_FRACTION: Readonly<Record<PlanetClass, number>> = Object.freeze({
+/**
+ * Rendered radius as a fraction of the frame, by class. Exported for the same reason as
+ * `starProfile`: authored content (spec §3.6) must draw a gas giant at the generator's size, not
+ * at a second copy of the number that can drift.
+ */
+export const SIZE_FRACTION: Readonly<Record<PlanetClass, number>> = Object.freeze({
   rock: 0.010,
   'super-earth': 0.013,
   ocean: 0.011,
@@ -303,7 +308,11 @@ function atmosphereFor(rng: ReturnType<typeof createRng>, planetClass: PlanetCla
   }
 }
 
-function starProfile(starClass: StarClass): Star {
+/**
+ * The star's presentation for a spectral class. Exported so authored content (spec §3.6) uses the
+ * *same* definition as the generator rather than restating a colour and drifting from it.
+ */
+export function starProfile(starClass: StarClass): Star {
   // Approximate main-sequence values. Colour is linear RGB, already in the shader's space.
   switch (starClass) {
     case 'M':

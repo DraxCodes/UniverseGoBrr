@@ -74,34 +74,33 @@ structure is checked by `src/status-page.test.ts`; its content is the owner's to
   by construction. **The layer-3 gate was scored against the old roll**, so the deferred visual pass
   sees a different galaxy than the one that scored 6/10.
 
-- **Placement: done (ADR-0011, first half).** `src/universe/placement.ts` — `placement(seed, address)`
+- **Placement: done, both halves (ADR-0011).** `src/universe/placement.ts` — `placement(seed, address)`
   returns a position in the parent frame, from the seed and the address only, never the inverse.
   The galaxy node is its own frame origin; the root returns `null` — a normal state, like
   `parentAddress` — because it contains everything and sits nowhere; a deeper address is a star
-  placed by the disc law. The law moved to
-  `src/universe/disc.ts` and is now **one function** both the generator and placement call, so a
-  placed star lands in the same bulge, the same exponential disc and on the same arms the picture
-  draws — asserted by replaying the generator's own `|disc` stream in `placement.test.ts`. The
-  extraction was proved **bit-identical** on three seed/address/tier cases (exact-double digest
-  before and after), so `GALAXY_VERSION` and `GALAXY_STREAM_VERSION` do not move and no capture
-  needed re-shooting. `PLACEMENT_VERSION 1`. **The list is not closed yet:** the renderer still
-  draws its own stream sample, so a drawn light carries no address. Why attaching addresses to the
-  current stars would be the wrong fix: `docs/notes/placement-uses-a-second-stream.md`.
+  placed by the disc law. The law lives in `src/universe/disc.ts` and is **one function** both the
+  generator and placement call, so a placed star lands in the same bulge, the same exponential disc
+  and on the same arms the picture draws. **The picture now draws by address**
+  (`GALAXY_VERSION` 5 → 6): `generateGalaxy` walks the galaxy's children, asks `placedStarIn` for
+  each, and every `GalaxyStar` carries its `address`, so a drawn light is exactly the light
+  `placement(seed, star.address)` returns. `PLACEMENT_VERSION 2` (one child in nine is a local-field
+  star, `starKind`). `GALAXY_STREAM_VERSION` stays 3 because it now governs only the frame (centre
+  and arm phase), which did not change; the arm-acceptance measurement therefore stays comparable.
+  Captures re-shot 20/20; arm m=2 **0.428** (bar 0.25) and rendered pixel m2 **0.395**. Mechanism
+  and versioning: `docs/notes/population-draws-by-address.md`.
 
 ## Doing
 
-**Layer 4 lane 1 (rebase) and placement are done; the picture's address list is next.** Lane 1 is
-`rebaseCamera(camera, originShiftM)` — translation only, shift never absolute, pure — plus the
-offset bound, 14 assertions. The council's dead-band rider stays **dropped deliberately**: under A
-nothing continuously changes the address, so a hysteresis constant would assert a literal. Neither
-lane has a production consumer yet, by design.
+**The picture draws by address; travel state, the compass and tier masks are next.** The last half
+of ADR-0011 landed: `generateGalaxy` walks child addresses and every drawn star carries one, with
+appearance on its own address-keyed stream so a tier cut is still a prefix. Placement reached a
+renderer consumer for the first time, which is the moment the ticket said to re-run the security
+lens — that is due before the next layer starts.
 
-The remaining half of ADR-0011 is drawing the population **by address** rather than from a position
-stream: `generateGalaxy` would place `childAddress(galaxy, index)` and carry that address on the
-star. That is a real re-roll, not a refactor — bump `GALAXY_STREAM_VERSION`, then `GALAXY_VERSION`,
-then re-shoot the capture set and re-measure the arm acceptance. Until then placement and the
-picture agree on the *law*, not on the *list*. After that: lane 2's history and journey rules, the
-compass, and the tier masks.
+Still not built in Layer 4: lane 2's travel history and journey rules, the compass, and the tier
+masks with panning (right-drag, left-drag keeps yaw/pitch). Lane 1 (`rebaseCamera`) is pure and
+tested, with no production consumer yet by design. After those: the deferred visual pass and the
+root `LICENSE`/product name.
 
 Two new environment notes landed with this commit, both traps this session paid for:
 `docs/notes/powershell-writes-cp1252.md` and `docs/notes/git-reset-hard-and-opencode-json.md`, plus
@@ -113,10 +112,10 @@ Two new environment notes landed with this commit, both traps this session paid 
    owner's answers: **A**, address-origin frames, rebasing on tier crossings only; a tier crossing
    is a **journey**; **time advances by `d / v(method)`** (ADR-0010); tiers + panning first, compass
    second. **Lane P passes** (§8), so the rebase is address-only. **Lane 1** (`src/frame/rebase.ts`)
-   and **placement** (`src/universe/placement.ts`) are done. Next: the picture draws by address,
-   then travel state/history, then the compass and tier masks. When the renderer starts calling
-   `placement`, re-run the security lens: that is where its attack surface actually arrives (today
-   only tests call it).
+   and **both halves of placement** are done, including the picture drawing by address. Next: travel
+   state/history, then the compass and tier masks. **Run the security lens now**: the renderer calls
+   `placement` for the first time, which is where the F2 attack surface actually arrives (until this
+   change only tests called it).
 2. The deferred visual pass: read `iterations/layer-3-iteration-2-deferred.md` before touching tone,
    grading, density balance or reference claims. Re-gate here when it returns.
 3. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon

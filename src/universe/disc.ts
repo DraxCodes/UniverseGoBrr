@@ -12,7 +12,7 @@
 
 import { fnv1a32 } from '../lib/hash';
 import { createRng, type Rng } from '../lib/random';
-import { formatAddress, type Address } from '../frame/address';
+import { formatAddress, ancestorAddress, type Address } from '../frame/address';
 import { GALAXY_RADIUS_M } from '../render/scale';
 
 export interface Vec3 {
@@ -28,21 +28,50 @@ export const LY_M = 9.460_730_472_580_8e15;
 export const LOCAL_RADIUS_M = 100 * LY_M;
 
 /**
- * The **population stream's** version, which is separate from `GALAXY_VERSION` on purpose.
+ * The **galaxy frame's** stream version, separate from `GALAXY_VERSION` on purpose.
  *
- * `GALAXY_VERSION` says "the output shape changed, a shared link must be re-pinned". The stream
- * version says "the *law* that draws the stars changed, so this address is a different galaxy".
- * They are not the same event. A rigid rotation of the whole disc — exactly what
- * `GALACTIC_PLANE_TILT_RAD` does — changes the output without changing a single drawn number: the
- * same address should still be the same galaxy, seen from a different angle. Folding both into one
- * number made the tilt *also* re-roll the population (measured: arm modulation moved 0.173 → 0.430
- * on the same seed), which silently replaced the arms the layer-3 calibration was tuned against and
- * made the tilt impossible to measure on its own.
+ * `GALAXY_VERSION` says "the output shape changed, a shared link must be re-pinned". This constant
+ * says "the *layout law* changed, so this address is a different galaxy". They are not the same
+ * event. A rigid rotation of the whole disc — exactly what `GALACTIC_PLANE_TILT_RAD` does —
+ * changes the output without changing a single drawn number: the same address should still be the
+ * same galaxy, seen from a different angle. Folding both into one number made the tilt *also*
+ * re-roll the population (measured: arm modulation moved 0.173 → 0.430 on the same seed), which
+ * silently replaced the arms the layer-3 calibration was tuned against and made the tilt
+ * impossible to measure on its own.
  *
- * Bump this when a sampling law, a constant or an ordering changes. Do not bump it for a
- * reorientation, a relabelling or a renderer change.
+ * It now governs **only** the frame draws: the home angle (where the centre sits) and the arm
+ * phase. The population stopped being a stream and became one address per star (ADR-0011), but
+ * that is a `GALAXY_VERSION` event, not this one — the frame law did not change, so this stays 3.
+ * Bumping it here would re-roll the arm phase for every galaxy and make the arm-acceptance
+ * measurement incomparable to the layer-3 captures for no reason. Bump it only when the frame
+ * draw itself changes.
  */
 export const GALAXY_STREAM_VERSION = 3;
+
+/**
+ * The level at which a galaxy is identified: the address's outermost level.
+ *
+ * **A shortcut, and it says so.** ADR-0008 keeps a level's *kind* out of the address — it comes
+ * from the generator at that depth, not from the string — so in principle "which galaxy am I in"
+ * is a walk up the levels until one answers "galaxy". That walk needs the per-depth kinds the
+ * address HUD is going to introduce. Until it exists, one fixed depth is the honest stand-in:
+ * it is the only depth the app currently names (`v1/0` in the capture manifest), and it is the
+ * depth Sol sits one level below (`v1/0.0.0`).
+ *
+ * The day levels carry kinds, this constant becomes the walk and nothing else changes: callers
+ * ask `galaxyAddressOf`, not the depth.
+ */
+export const GALAXY_DEPTH = 1;
+
+/**
+ * The address a galaxy is keyed by: the ancestor of `address` at `GALAXY_DEPTH`.
+ *
+ * Two addresses inside one galaxy return the same value, which is the whole point — see the
+ * module comment. An address that is already that shallow is returned unchanged.
+ */
+export function galaxyAddressOf(address: Address): Address {
+  return ancestorAddress(address, GALAXY_DEPTH);
+}
 
 /**
  * The galactic plane's inclination to the orrery's orbital plane (world `y = 0`), as a signed
@@ -273,6 +302,30 @@ export function sampleDiscStar(rng: Rng, frame: GalaxyFrame): DiscSample {
   }
 
   return { x: homeX, y: homeY, z: homeZ, inBulge, fromCentre, armMix };
+}
+
+/**
+ * Draw one star from the local-field law: a uniform 3D density inside `LOCAL_RADIUS_M` of the
+ * home star.
+ *
+ * This is the *near* kind of address (see `starKind` in `placement.ts`). It used to be a separate
+ * population drawn from its own stream; it is now the same law reached by address, so the stars
+ * the camera parallaxes against at system scale are places you can travel to rather than a
+ * backdrop. The draw order is the population's original order — radius, polar angle, azimuth —
+ * because the law, not the stream, is what has to stay stable.
+ */
+export function sampleLocalStar(rng: Rng): Vec3 {
+  // r ∝ u^(1/3) is the radial law of a uniform 3D density; it keeps the nearest-neighbour
+  // scale honest for the budget instead of painting a shell.
+  const r = LOCAL_RADIUS_M * Math.cbrt(rng.next());
+  const cosPolar = rng.range(-1, 1);
+  const sinPolar = Math.sqrt(1 - cosPolar * cosPolar);
+  const azimuth = rng.range(0, Math.PI * 2);
+  return {
+    x: r * sinPolar * Math.cos(azimuth),
+    y: r * cosPolar,
+    z: r * sinPolar * Math.sin(azimuth),
+  };
 }
 
 /** A log-spiral arm's density at `r`, in 0..1, as the max over the two arms. */

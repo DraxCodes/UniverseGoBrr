@@ -73,11 +73,18 @@ the test this decision has to pass.
   address only.
 - **Placement is built** (`src/universe/placement.ts`), and the disc law it needs moved into
   `src/universe/disc.ts` so the generator and placement call **one** function rather than two
-  drifting copies. The extraction was proved bit-identical before and after. It has no renderer
-  consumer yet: the picture still draws its own stream sample, so placement and the population
-  agree on the *law*, not on the *list*, and a drawn light does not carry an address. Closing that
-  is a re-roll of the population (and a capture re-shoot), recorded in
-  `docs/notes/placement-uses-a-second-stream.md` rather than pretended to be a refactor.
+  drifting copies. The extraction was proved bit-identical before and after.
+- **The picture draws by address** (shipped as `GALAXY_VERSION` 5 → 6). `generateGalaxy` walks the
+  galaxy's child addresses, asks `placedStarIn` for each one, and stores that address on every
+  `GalaxyStar`. So placement and the population now agree on the **list**, not only on the law: the
+  light you see is exactly the light `placement(seed, star.address)` returns. The home star is the
+  one exception — its address is the galaxy itself, because its position is the frame origin.
+  Changing the draw from a sequential stream to an address walk is a real re-roll, not a refactor;
+  the mechanism and its versioning are recorded in `docs/notes/population-draws-by-address.md`.
+- **One child in nine is a local-field star** (`starKind` / `LOCAL_STAR_EVERY`). Which law places a
+  child is a property of the address, not of an iterator, so the population and placement cannot
+  disagree. This is a documented placeholder for per-level kinds (ADR-0008), and it is what makes
+  the neighbours the camera parallaxes against places you can travel to.
 - **Real galactic coordinates for Sol** stop being "a separate question" (cf. ADR-0009): Sol is in
   galaxy `v1/0`, and placement is what will eventually let it sit at its real 26,000 ly. Until
   then the address stays opaque identity on purpose.
@@ -88,6 +95,10 @@ the test this decision has to pass.
 - **`GALAXY_VERSION` 4 → 5.** Every link deeper than one level — including Sol at `v1/0.0.0` —
   now shows the galaxy it lives in rather than a private one. `v1/0` is unchanged, because it was
   already naming its galaxy.
+- **`GALAXY_VERSION` 5 → 6.** The population moved from a sequential stream to one address per
+  star, so every galaxy is a different sky. `GALAXY_STREAM_VERSION` stays 3: it now governs only
+  the frame (centre and arm phase), and the frame law did not change, so the arm phase the layer-3
+  captures were tuned against is preserved.
 - **The frame origin is still the galaxy's home star for every address in it.** Placement is what
   gives a visiting star its own place in the disc; until it exists, the picture is correctly *one
   galaxy*, from the home star's viewpoint, rather than a different galaxy from each.

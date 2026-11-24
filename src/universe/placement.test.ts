@@ -1,17 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { parseAddress, childAddress } from '../frame/address';
+import { parseAddress, childAddress, formatAddress } from '../frame/address';
 import { createRng } from '../lib/random';
 import { fnv1a32 } from '../lib/hash';
 import { GALAXY_RADIUS_M } from '../render/scale';
-import {
-  GALAXY_TIER_STARS,
-  LOCAL_RADIUS_M,
-  galaxyAddressOf,
-  generateGalaxy,
-  toDiscFrame,
-} from './galaxy';
-import { galaxyFrame, galaxyKey, sampleDiscStar } from './disc';
-import { PLACEMENT_VERSION, placement, placementKey } from './placement';
+import { LOCAL_RADIUS_M, galaxyAddressOf, generateGalaxy, toDiscFrame } from './galaxy';
+import { galaxyFrame, sampleDiscStar } from './disc';
+import { LOCAL_STAR_EVERY, PLACEMENT_VERSION, placement, placementKey } from './placement';
 
 const SEED = 'ugb-0000';
 
@@ -36,7 +30,7 @@ describe('placement is a pure function of (seed, address)', () => {
 
   it('is versioned', () => {
     // A position is content: a shared link re-pins when it changes, like `SYSTEM_VERSION`.
-    expect(PLACEMENT_VERSION).toBe(1);
+    expect(PLACEMENT_VERSION).toBe(2);
     expect(placementKey(SEED, address('v1/4.3'))).toContain(`|placement|v${PLACEMENT_VERSION}`);
   });
 });
@@ -46,14 +40,7 @@ describe('a placed star belongs to its galaxy', () => {
     // One galaxy, read once: placement must agree with the generator's centre and orientation,
     // or a compass built on it would point at a different disc from the one drawn.
     const galaxy = generateGalaxy(SEED, address('v1/4'), 'low');
-    for (const text of [
-      'v1/4.1',
-      'v1/4.2',
-      'v1/4.-7',
-      'v1/4.1.2',
-      'v1/4.999.0.0',
-      'v1/4.-2147483647',
-    ]) {
+    for (const text of ['v1/4.1', 'v1/4.2', 'v1/4.-7', 'v1/4.1.2', 'v1/4.998.1.0']) {
       const point = placement(SEED, address(text))!;
       const disc = toDiscFrame(galaxy, point);
       const radius = Math.hypot(disc.x, disc.z);
@@ -64,6 +51,20 @@ describe('a placed star belongs to its galaxy', () => {
         LOCAL_RADIUS_M * 1.2 * (1 - 1e-9),
       );
     }
+  });
+
+  it('places local-field addresses inside the ball, off a shell', () => {
+    // One child in nine is a local-field star (`starKind`), and its kind is a property of the
+    // address rather than of an iterator, so these addresses answer the local law however they
+    // are reached. This is what makes the neighbours the camera parallaxes against addressable.
+    const points = Array.from({ length: 60 }, (_, index) =>
+      placement(SEED, childAddress(address('v1/4'), index * LOCAL_STAR_EVERY))!,
+    );
+    const distances = points.map((point) => Math.hypot(point.x, point.y, point.z));
+    expect(Math.max(...distances)).toBeLessThanOrEqual(LOCAL_RADIUS_M * (1 + 1e-9));
+    const mean = distances.reduce((sum, value) => sum + value, 0) / distances.length;
+    expect(mean).toBeGreaterThan(0.6 * LOCAL_RADIUS_M);
+    expect(mean).toBeLessThan(0.85 * LOCAL_RADIUS_M);
   });
 
   it('gives distinct addresses distinct places', () => {
@@ -97,26 +98,34 @@ describe('a placed star belongs to its galaxy', () => {
 });
 
 describe('placement and the picture share one law', () => {
-  it('replays the generator’s disc stream exactly', () => {
-    // This is the ADR-0011 guarantee in executable form: the generator is not a second, drifting
-    // copy of the disc law. Replaying its own `|disc` stream through `sampleDiscStar` must land on
-    // the same stars it produced.
-    const galaxyAddress = galaxyAddressOf(address('v1/4'));
-    const frame = galaxyFrame(SEED, galaxyAddress);
-    const rng = createRng(fnv1a32(`${galaxyKey(SEED, galaxyAddress)}|disc`));
+  it('draws exactly what placement places, for every star in the population', () => {
+    // This is the ADR-0011 guarantee in executable form, and it is now the *whole* population
+    // rather than a replay of a stream that no longer exists: every drawn light carries the
+    // address that produced it, and asking placement for that address must return the same
+    // point. A mismatch would mean the picture shows a light you cannot travel to.
     const galaxy = generateGalaxy(SEED, address('v1/4'), 'low');
-    const firstDiscStar = 1 + GALAXY_TIER_STARS.low.local;
+    for (const star of galaxy.stars) {
+      expect(placement(SEED, star.address), formatAddress(star.address)).toEqual({
+        x: star.x,
+        y: star.y,
+        z: star.z,
+      });
+    }
+  });
 
-    for (let index = 0; index < 25; index += 1) {
-      const sample = sampleDiscStar(rng, frame);
-      // The generator draws brightness and colour from this same stream after the position, so a
-      // faithful replay consumes those two draws before asking for the next star.
-      rng.next();
-      rng.next();
-      const star = galaxy.stars[firstDiscStar + index]!;
-      expect(star.x).toBe(sample.x);
-      expect(star.y).toBe(sample.y);
-      expect(star.z).toBe(sample.z);
+  it('gives every drawn star a distinct address, and the home star the galaxy’s own', () => {
+    const galaxyAddress = address('v1/4');
+    const galaxy = generateGalaxy(SEED, galaxyAddress, 'low');
+    const home = galaxy.stars[0]!;
+    // The home star is the frame origin, so its address is the galaxy node itself, not a child.
+    expect(home.home).toBe(true);
+    expect(home.address).toEqual(galaxyAddress);
+
+    const drawn = galaxy.stars.slice(1).map((star) => formatAddress(star.address));
+    expect(new Set(drawn).size).toBe(drawn.length);
+    // And every drawn star is a child of the galaxy, one level deep.
+    for (const star of galaxy.stars.slice(1)) {
+      expect(star.address.levels.length).toBe(galaxyAddress.levels.length + 1);
     }
   });
 

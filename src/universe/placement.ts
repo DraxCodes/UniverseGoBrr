@@ -6,39 +6,125 @@
  * drop or a nebula's extent would have to be reconciled against a list whose size changes. Here the
  * address is the identity (ADR-0005) and this function only says where it sits.
  *
- * It uses the *same* disc law as `generateGalaxy` (`disc.ts`), not a copy of it: a placed star lands
- * in the same bulge, the same exponential disc and on the same two arms the picture draws. Without
- * that, the compass would point at empty space and `d` in `Δt = d/v` (ADR-0010) would be a number
- * about nothing.
+ * It is the *same* function the picture calls. `generateGalaxy` walks the galaxy's children and
+ * asks `placedStarIn` for each one, so a drawn light carries the address that produced it and
+ * arriving there shows the same position. Nothing is mapped back from a drawn star.
  *
- * What this does **not** yet do, stated plainly:
+ * ## Which law a child gets
  *
- * - the renderer still draws its own stream sample, so a drawn light does not carry an address
- *   until the picture is switched to draw placement results. Placement and the population agree on
- *   the *law* today; agreeing on the *list* is the next step;
- * - the local field (the ~100 ly neighbourhood) is a separate sample and is not addressable yet;
- * - an authored node's placement is procedural like any other. Sol's real 26,000 ly is a later
- *   data change, not a different mechanism (ADR-0011).
+ * The galaxy has two populations: the **local field** (a uniform ball inside 100 ly of home) and
+ * the **disc** (bulge + exponential disc + two arms). Which one an address belongs to has to be a
+ * property of the address, not of the iterator, or placement and the picture could disagree.
+ *
+ * Until levels carry kinds (ADR-0008), one integer in nine is local: `level % 9 === 0`. That is a
+ * documented placeholder with two useful properties — it makes the scan bounded and exact (one in
+ * nine is the rich/medium budget ratio), and it keeps a tier's lists prefixes of the richer
+ * tier's. The day a level answers "local field" for itself, this rule becomes that answer and
+ * nothing else changes.
+ *
+ * What this does **not** do: an authored node's placement is procedural like any other. Sol's real
+ * 26,000 ly is a later data change, not a different mechanism. And a node deeper than a star is
+ * still placed in the galaxy frame rather than its parent star's frame, because levels do not carry
+ * a scale yet; the picture only draws depth-2 children, so no drawn light depends on that.
  */
 
 import { fnv1a32 } from '../lib/hash';
 import { createRng } from '../lib/random';
 import { formatAddress, type Address } from '../frame/address';
-import { GALAXY_DEPTH, galaxyAddressOf, type Vec3 } from './galaxy';
-import { galaxyFrame, sampleDiscStar } from './disc';
+import {
+  GALAXY_DEPTH,
+  galaxyAddressOf,
+  galaxyFrame,
+  sampleDiscStar,
+  sampleLocalStar,
+  type GalaxyFrame,
+  type Vec3,
+} from './disc';
 
 /**
  * Bumped when a placed position changes for the same `(seed, address)`.
  *
  * Same rule as `SYSTEM_VERSION` and `GALAXY_VERSION`: a shared link must re-pin, and a position is
- * content. Tuning the disc law bumps `GALAXY_STREAM_VERSION` as well; this constant exists so a
- * placement-only change cannot silently move the picture too.
+ * content. Changing the disc *law* moves every placed star, so it bumps this; changing only the
+ * frame (centre and arm phase) bumps `GALAXY_STREAM_VERSION`, because that moves the frame the
+ * positions are measured in without changing the placement rule itself.
+ *
+ * 1 → 2: one child in nine is now a local-field star rather than a disc star, so those addresses
+ * are different places. The key change re-rolls all of them, which is the honest version signal.
  */
-export const PLACEMENT_VERSION = 1;
+export const PLACEMENT_VERSION = 2;
 
-/** The RNG key for one address's placement. Exported so a test can replay it. */
+/** One galaxy child in this many is a local-field star. Kept in step with the rich tier's ratio. */
+export const LOCAL_STAR_EVERY = 9;
+
+export type StarKind = 'local' | 'disc';
+
+/**
+ * Which population the child at `address` belongs to.
+ *
+ * The child index is the first level below the galaxy (`levels[GALAXY_DEPTH]`); deeper levels are
+ * sub-objects of the same star and do not change its kind. Callers must pass an address deeper than
+ * a galaxy — the root and the galaxy node are not stars.
+ */
+export function starKind(address: Address): StarKind {
+  const level = address.levels[GALAXY_DEPTH] ?? 0;
+  return Math.abs(level) % LOCAL_STAR_EVERY === 0 ? 'local' : 'disc';
+}
+
+/** One placed star: its position plus the sample metadata the appearance law needs. */
+export interface PlacedStar {
+  readonly position: Vec3;
+  readonly kind: StarKind;
+  /** Disc-only; false for local stars. */
+  readonly inBulge: boolean;
+  /** Disc-only, metres from the galactic centre; 0 for local stars (their nucleus falloff is 1). */
+  readonly fromCentre: number;
+  /** Disc-only, 0..1; 0 for local stars. */
+  readonly armMix: number;
+}
+
+/** The RNG key for one address's position. Exported so a test can replay it. */
 export function placementKey(seed: string, address: Address): string {
   return `${seed}|${formatAddress(address)}|placement|v${PLACEMENT_VERSION}`;
+}
+
+/**
+ * Place `address` in the galaxy described by `frame`.
+ *
+ * The hot path: the generator already has the frame, so it must not recompute it per star. The
+ * address must be a child of that frame's galaxy (deeper than `GALAXY_DEPTH`).
+ */
+export function placedStarIn(frame: GalaxyFrame, seed: string, address: Address): PlacedStar {
+  const kind = starKind(address);
+  const rng = createRng(fnv1a32(placementKey(seed, address)));
+
+  if (kind === 'local') {
+    return {
+      position: sampleLocalStar(rng),
+      kind,
+      inBulge: false,
+      fromCentre: 0,
+      armMix: 0,
+    };
+  }
+
+  const sample = sampleDiscStar(rng, frame);
+  return {
+    position: { x: sample.x, y: sample.y, z: sample.z },
+    kind,
+    inBulge: sample.inBulge,
+    fromCentre: sample.fromCentre,
+    armMix: sample.armMix,
+  };
+}
+
+/**
+ * Place `address`, computing its galaxy frame first. Returns `null` for the root and for a galaxy
+ * node — those are not stars; use `placement` if you want the galaxy node's origin.
+ */
+export function placedStar(seed: string, address: Address): PlacedStar | null {
+  if (address.levels.length <= GALAXY_DEPTH) return null;
+  return placedStarIn(galaxyFrame(seed, galaxyAddressOf(address)), seed, address);
 }
 
 /**
@@ -52,22 +138,15 @@ export function placementKey(seed: string, address: Address): string {
  * - **a galaxy** (its own level, `v1/4`) is that frame's origin: its home star *is* where the
  *   camera orbits, so `{0,0,0}` is the honest position **within the galaxy's own frame**. Its
  *   position in the root is not modelled yet; no root layout exists.
- * - **anything deeper** is a star placed by the disc law, relative to the galaxy's home star —
- *   the same coordinate space `GalaxyStar` uses, so the renderer can subtract the camera exactly as
- *   Layer 2 already does (ADR-0008).
+ * - **anything deeper** is a star placed by the local or disc law, relative to the galaxy's home
+ *   star — the same coordinate space `GalaxyStar` uses, so the renderer can subtract the camera
+ *   exactly as Layer 2 already does (ADR-0008).
  */
 export function placement(seed: string, address: Address): Vec3 | null {
   const depth = address.levels.length;
 
   if (depth === 0) return null;
-
-  // The galaxy's own node is the frame origin. Deeper levels are stars in that same galaxy: the
-  // normalisation is why two neighbours share one sky (ADR-0011), and why this function's answer
-  // for `v1/4.9` and `v1/4.9.9` is in the same disc.
   if (depth <= GALAXY_DEPTH) return { x: 0, y: 0, z: 0 };
 
-  const frame = galaxyFrame(seed, galaxyAddressOf(address));
-  const rng = createRng(fnv1a32(placementKey(seed, address)));
-  const sample = sampleDiscStar(rng, frame);
-  return { x: sample.x, y: sample.y, z: sample.z };
+  return placedStar(seed, address)!.position;
 }

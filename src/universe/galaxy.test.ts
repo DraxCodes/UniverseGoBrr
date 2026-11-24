@@ -36,18 +36,29 @@ describe('the galaxy is a pure function of (seed, address)', () => {
     expect(a.centre).not.toEqual(b.centre);
   });
 
-  it('keeps a tier as a prefix of the richer stream, field by field', () => {
+  it('keeps a tier as a prefix of the address order, field by field', () => {
     const rich = generateGalaxy(SEED, HOME, 'rich');
     const low = generateGalaxy(SEED, HOME, 'low');
     const richLocal = 1 + GALAXY_TIER_STARS.rich.local;
     const lowLocal = 1 + GALAXY_TIER_STARS.low.local;
     expect(low.stars.length).toBeLessThan(rich.stars.length);
-    // Each field draws its own stream, so the local prefix and the disc prefix both survive a
-    // count cut even though the two fields are interleaved in the array.
+    // The walk is ordered by child level, so a lower tier keeps the first N addresses of each
+    // field verbatim — the same star, the same place, the same light — not a re-draw.
     expect(low.stars.slice(1, lowLocal)).toEqual(rich.stars.slice(1, lowLocal));
     expect(low.stars.slice(lowLocal)).toEqual(
       rich.stars.slice(richLocal, richLocal + GALAXY_TIER_STARS.low.disc),
     );
+  });
+
+  it('gives every star the address that produced it', () => {
+    // The half of ADR-0011 that was missing: a drawn light carries an address, so "that star
+    // there" can be linked to and travelled to rather than only seen.
+    const galaxy = generateGalaxy(SEED, HOME, 'low');
+    const galaxyAddress = galaxyAddressOf(HOME);
+    for (const star of galaxy.stars.slice(1)) {
+      expect(galaxyAddressOf(star.address), JSON.stringify(star.address)).toEqual(galaxyAddress);
+      expect(star.address.levels.length).toBe(galaxyAddress.levels.length + 1);
+    }
   });
 
   it('uses compile-time counts independent of the address', () => {

@@ -18,7 +18,7 @@ The model is vision-capable; text, JSON and tool calling all pass.
 ## Cause
 
 The probe's `image` case sends a **1×1 PNG** (`RED_PIXEL` in
-`tools/lib/probe.mjs`). The Surplus endpoint accepts it and returns 200, but the
+`.opencode/tools/lib/probe.mjs`). The Surplus endpoint accepts it and returns 200, but the
 image contributes no usable tokens — the probe run reports `input: 49` tokens
 for the image case, and the model's `reasoning_content` shows it never read a
 pixel ("Without being able to actually process the pixel values… It appears to

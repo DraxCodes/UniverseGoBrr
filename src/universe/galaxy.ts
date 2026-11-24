@@ -25,8 +25,48 @@ import { createRng, type Rng } from '../lib/random';
 import { formatAddress, type Address } from '../frame/address';
 import { GALAXY_RADIUS_M } from '../render/scale';
 
+/**
+ * The **population stream's** version, which is separate from `GALAXY_VERSION` on purpose.
+ *
+ * `GALAXY_VERSION` says "the output shape changed, a shared link must be re-pinned". The stream
+ * version says "the *law* that draws the stars changed, so this address is a different galaxy".
+ * They are not the same event. A rigid rotation of the whole disc — exactly what
+ * `GALACTIC_PLANE_TILT_RAD` does — changes the output without changing a single drawn number: the
+ * same address should still be the same galaxy, seen from a different angle. Folding both into one
+ * number made the tilt *also* re-roll the population (measured: arm modulation moved 0.173 → 0.430
+ * on the same seed), which silently replaced the arms the layer-3 calibration was tuned against and
+ * made the tilt impossible to measure on its own.
+ *
+ * Bump this when a sampling law, a constant or an ordering changes. Do not bump it for a
+ * reorientation, a relabelling or a renderer change.
+ */
+export const GALAXY_STREAM_VERSION = 3;
+
 /** Bumped whenever the generator's output would change; old links break loudly (ADR-0005). */
-export const GALAXY_VERSION = 2;
+export const GALAXY_VERSION = 4;
+
+/**
+ * The galactic plane's inclination to the orrery's orbital plane (world `y = 0`), as a signed
+ * rotation about world `x`.
+ *
+ * This is not decoration: it is the difference between the thesis's boot frame and a plain
+ * sprinkle. The home system sits *inside* the disc, so the disc projects to a band across the sky
+ * — but only if the camera looks along the plane. The boot camera looks ~36.6° down at the orrery,
+ * and with the two planes coplanar that meant it looked *away* from the disc, whose band landed
+ * above the top edge (gate iteration 1, flaw 4: "no dust band on the boot frame"). Inclining the
+ * disc lifts its near side across the frame: measured band axis ratio 1.25 → 4.17, ~52 000 lit
+ * pixels, all of it the disc population and none of it painted.
+ *
+ * The real ecliptic–galactic inclination is ~60°. It is not used here because the world frame is
+ * the *orrery's*, not the Sun's, and at 60° the band drops to row ~995 of 1080 — below the system
+ * rather than behind it. 30° is the measured value that crosses the frame centre (band at row
+ * ~455, the nucleus at ~450) while keeping the disc in view rather than edge-on.
+ *
+ * The sign tips the disc's `+z` side *up*, which is the side the boot camera faces. The tilt is a
+ * real rotation of the star field, so the band moves against the orrery as the camera drifts; that
+ * is the thesis's proof that it is an object rather than paint.
+ */
+export const GALACTIC_PLANE_TILT_RAD = (-30 * Math.PI) / 180;
 
 /** One light-year, metres (IAU). */
 export const LY_M = 9.460_730_472_580_8e15;
@@ -48,6 +88,50 @@ export interface Vec3 {
   readonly x: number;
   readonly y: number;
   readonly z: number;
+}
+
+/**
+ * The disc's axis in world space: world `+y` carried through the same rotation as the population.
+ *
+ * Consumers must measure the disc against *this*, not against world `+y`. Once the plane is
+ * inclined those are different axes, and the difference is not cosmetic: the arm legibility gate
+ * reads "is the disc face-on enough to see two arms", and using `forward.y` after the tilt would
+ * call the layer-3 gallery camera edge-on when it is looking straight at the disc.
+ */
+export const GALACTIC_PLANE_NORMAL: Vec3 = Object.freeze({
+  x: 0,
+  y: Math.cos(GALACTIC_PLANE_TILT_RAD),
+  z: Math.sin(GALACTIC_PLANE_TILT_RAD),
+});
+
+/** Rotate a vector about world `x` (right-handed). The generator's single orientation transform. */
+function rotateAboutX(point: Vec3, angle: number): Vec3 {
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  return {
+    x: point.x,
+    y: point.y * cosine - point.z * sine,
+    z: point.y * sine + point.z * cosine,
+  };
+}
+
+/**
+ * A world position expressed in the disc's own frame, measured from the galactic centre: `x`/`z`
+ * span the plane and `y` is height above it.
+ *
+ * The disc is inclined relative to the orrery's orbital plane, so its *shape* — radius, azimuth,
+ * arm winding — only exists in this frame. Measuring it in world `x`/`z` would read the tilted
+ * disc as an ellipse and smear the m=2 arm signal the renderer's crossfade depends on.
+ */
+export function toDiscFrame(galaxy: Galaxy, point: Vec3): Vec3 {
+  return rotateAboutX(
+    {
+      x: point.x - galaxy.centre.x,
+      y: point.y - galaxy.centre.y,
+      z: point.z - galaxy.centre.z,
+    },
+    -GALACTIC_PLANE_TILT_RAD,
+  );
 }
 
 export interface GalaxyStar {
@@ -82,24 +166,60 @@ const ARM_WINDING = 2.4;
 /** Fraction of the disc budget in the bulge. */
 const BULGE_FRACTION = 0.06;
 /** Bulge radius, as a fraction of the radius: a compact nucleus, not a wash over the inner arms. */
-const BULGE_RADIUS_FRACTION = 0.11;
+const BULGE_RADIUS_FRACTION = 0.13;
 /**
  * Bulge stars are drawn dimmer than disc stars. They are a dense 3D cluster, so the same
  * brightness stacks into an additive white blob that swallows the inner arms; the nucleus still
  * reads as the brightest part of the galaxy, but as a core rather than a clipped hole.
  */
-const BULGE_BRIGHTNESS = 0.55;
+const BULGE_BRIGHTNESS = 0.20;
+/**
+ * How much a star's brightness is scaled by its distance from the galactic centre, so the
+ * nucleus has a gradient instead of a plateau. 1 at and beyond `NUCLEUS_FALLOFF_RADIUS`, and
+ * `NUCLEUS_FLOOR` at the centre; the inner disc and bulge overlap hardest, so that is where the
+ * compression has to live. The floor is not zero: an empty core would read as a hole.
+ *
+ * Calibrated against the capture, not by taste: at 0.58/0.30 the frame still carried 11 859 px at
+ * exactly 1.00 with a 514x216 flat bounding box. Additive accumulation has no shoulder, so the
+ * only lever is per-star intensity, and it has to be steep where the overlap is.
+ *
+ * These two only *work* because `galaxy-scene.ts` now folds each star's brightness into its
+ * packed colour, so brightness is real emission amplitude. Before that, the renderer ignored
+ * brightness at full legibility and these constants changed nothing (the nucleus stayed a
+ * 109 px white plateau at 289 impostors/px).
+ */
+const NUCLEUS_FLOOR = 0.22;
+const NUCLEUS_FALLOFF_RADIUS = 0.26;
 /** Disc thickness, as a fraction of the radius. */
 const DISC_THICKNESS_FRACTION = 0.025;
-/** Fraction of the disc that is always inter-arm, so the gaps do not close. */
+/**
+ * Fraction of the disc that is always inter-arm, so the gaps do not close. Kept at 0.08: the
+ * lane is emptied visually by narrowing the arm profile and by cutting the impostor halo, not by
+ * starving the population — below ~8% uniform the disc reads as two drawn ribbons (the test's
+ * "gaps do not close" floor exists for exactly that).
+ */
 const INTER_ARM_FRACTION = 0.08;
+/**
+ * The arm's angular profile, as `cos^ARM_PROFILE_EXPONENT`. Left at 2: the gate measured m=2 at
+ * 0.334 and said plainly that the number was not the problem, so sharpening the profile was
+ * tried and reverted — at 3 and above the uniform lane floor falls under the "gaps do not close"
+ * guard and the disc starts reading as two ribbons. Arm legibility is bought in the shader (the
+ * halo veiled the lane) and in the per-point hue split, not by starving the population.
+ */
+const ARM_PROFILE_EXPONENT = 2;
 /**
  * The arm's minimum acceptance. A rejected draw is re-aimed (not kept), so this is the
  * acceptance floor at the arm's edge; it keeps the arm soft rather than a drawn filament. It is
  * deliberately low: the *density* ratio is what makes the arm read at 45k impostors, and a high
  * floor fills the gap with haze until the wave measures flat (the oval failure).
  */
-const ARM_FLOOR = 0.05;
+const ARM_FLOOR = 0.03;
+/**
+ * How far the arm/lane hue split goes. Arm stars are pushed cool and lane stars warm at no pixel
+ * cost — the hue is uploaded per impostor already. This is the reference's third claim
+ * (hue separates arm from inter-arm) taken as a principle, not as its magenta/blue palette.
+ */
+const ARM_HUE_SHIFT = 0.16;
 /**
  * Bound on the rejection loop. Re-aiming a rejected star uniformly (the first implementation)
  * deposited ~60% of the disc as haze, which flattened the m=2 wave into an oval and made the
@@ -112,7 +232,7 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
   const counts = GALAXY_TIER_STARS[tier];
   // The tier is deliberately not in the keys: each field draws its own stream and keeps a
   // prefix when the count falls, so a quality drop does not re-roll the galaxy.
-  const key = `${seed}|${formatAddress(address)}|galaxy|v${GALAXY_VERSION}`;
+  const key = `${seed}|${formatAddress(address)}|galaxy|v${GALAXY_STREAM_VERSION}`;
   const frameRng = createRng(fnv1a32(`${key}|frame`));
   const localRng = createRng(fnv1a32(`${key}|local`));
   const discRng = createRng(fnv1a32(`${key}|disc`));
@@ -124,11 +244,14 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
   const firstArm = frameRng.range(0, Math.PI * 2);
   const armOffsets: readonly number[] = [firstArm, firstArm + Math.PI];
 
-  const centre: Vec3 = {
-    x: -Math.cos(homeAngle) * homeRadius,
-    y: -homeHeight,
-    z: -Math.sin(homeAngle) * homeRadius,
-  };
+  const centre: Vec3 = rotateAboutX(
+    {
+      x: -Math.cos(homeAngle) * homeRadius,
+      y: -homeHeight,
+      z: -Math.sin(homeAngle) * homeRadius,
+    },
+    GALACTIC_PLANE_TILT_RAD,
+  );
 
   const stars: GalaxyStar[] = [
     // The home star is a real member of the population and is marked so it can keep identity
@@ -164,6 +287,10 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
     let x: number;
     let y: number;
     let z: number;
+    // Distance from the disc centre, for the nucleus gradient.
+    let fromCentre = 0;
+    // 0 in the lane, 1 on an arm; drives the arm/lane hue split.
+    let armMix = 0;
 
     if (inBulge) {
       // A flattened spheroid: radius ∝ u^(1/3) keeps it solid, not a shell.
@@ -174,6 +301,7 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
       x = r * sinPolar * Math.cos(azimuth);
       y = r * cosPolar * 0.62;
       z = r * sinPolar * Math.sin(azimuth);
+      fromCentre = r;
     } else {
       // Truncated exponential disc: r = -scale·ln(1-u), rejected beyond the radius.
       const scale = DISC_SCALE_LENGTH_FRACTION * radius;
@@ -199,14 +327,24 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
       x = r * Math.cos(finalAngle);
       z = r * Math.sin(finalAngle);
       y = gaussian(discRng) * DISC_THICKNESS_FRACTION * radius;
+      fromCentre = r;
+      // How much of an arm this star actually sits on, for the hue split. Measured at the final
+      // angle, so a star that exhausted the rejection loop and landed in the lane is not tinted
+      // as an arm star.
+      armMix = armStrength(r, finalAngle, scale, armOffsets);
     }
 
     // Keep the disc field out of the local field's sphere, or the same neighbourhood is drawn
     // twice with different statistics. Relative to the **home star**, not the galactic centre:
     // pushing the centre-relative vector would move the star toward the bulge instead.
-    let homeX = x + centre.x;
-    let homeY = y + centre.y;
-    let homeZ = z + centre.z;
+    //
+    // The disc is generated flat (`y = 0`) and then inclined by one rotation about the home star,
+    // so every offset — the axial height included — is carried into world space here. The local
+    // field is left alone: it is a ball, and a rotation cannot change a ball.
+    const worldOffset = rotateAboutX({ x, y, z }, GALACTIC_PLANE_TILT_RAD);
+    let homeX = worldOffset.x + centre.x;
+    let homeY = worldOffset.y + centre.y;
+    let homeZ = worldOffset.z + centre.z;
     const homeDistance = Math.hypot(homeX, homeY, homeZ);
     const exclusion = LOCAL_RADIUS_M * 1.2;
     if (homeDistance < exclusion) {
@@ -216,15 +354,15 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
       homeZ *= factor;
     }
 
-    const brightness = inBulge
-      ? starBrightness(discRng) * BULGE_BRIGHTNESS
-      : starBrightness(discRng);
+    const brightness =
+      (inBulge ? starBrightness(discRng) * BULGE_BRIGHTNESS : starBrightness(discRng)) *
+      nucleusFalloff(fromCentre / radius);
     stars.push({
       x: homeX,
       y: homeY,
       z: homeZ,
       brightness,
-      color: starColor(brightness, discRng),
+      color: starColor(brightness, discRng, armMix),
       size: 0.55 + brightness * 1.10,
       home: false,
     });
@@ -238,11 +376,18 @@ function armStrength(r: number, azimuth: number, scale: number, offsets: readonl
   const winding = (r / scale) * ARM_WINDING;
   let best = 0;
   for (const offset of offsets) {
-    // cos² gives a positive, smooth arm width and a genuine inter-arm gap.
-    const delta = Math.cos(azimuth - offset - winding);
-    best = Math.max(best, delta * delta);
+    // cos² gives a positive, smooth arm width and a genuine inter-arm gap; the exponent narrows
+    // that band without moving the arm's ridge, so the lane widens as the arm sharpens.
+    const squared = Math.cos(azimuth - offset - winding) ** 2;
+    best = Math.max(best, squared ** (ARM_PROFILE_EXPONENT / 2));
   }
   return best;
+}
+
+/** Brightness scale for the nucleus gradient: 1 outside the falloff radius, `NUCLEUS_FLOOR` at the centre. */
+function nucleusFalloff(fraction: number): number {
+  const t = Math.min(1, Math.max(0, fraction / NUCLEUS_FALLOFF_RADIUS));
+  return NUCLEUS_FLOOR + (1 - NUCLEUS_FLOOR) * t * t * (3 - 2 * t);
 }
 
 /** Heavy-tailed: most stars dim, a few bright. Never zero, or the field disappears. */
@@ -251,15 +396,24 @@ function starBrightness(rng: Rng): number {
   return 0.10 + 0.90 * u * u * u;
 }
 
-/** Brightness → tint: dim stars orange, mid white, bright blue-white. */
-function starColor(brightness: number, rng: Rng): readonly [number, number, number] {
+/**
+ * Brightness → tint: dim stars orange, mid white, bright blue-white. `armMix` pushes arm stars
+ * cool and lane stars warm at no pixel cost — the reference's third claim, taken as a principle.
+ */
+function starColor(
+  brightness: number,
+  rng: Rng,
+  armMix = 0,
+): readonly [number, number, number] {
   const jitter = rng.range(-0.04, 0.04);
   // A small hue jitter keeps the field from looking like three flat classes.
   const t = Math.min(1, Math.max(0, brightness));
+  const cool = ARM_HUE_SHIFT * armMix;
+  const clamp = (value: number): number => Math.min(1, Math.max(0, value));
   return [
-    Math.min(1, 1.0 + jitter),
-    0.62 + 0.34 * t + jitter,
-    0.38 + 0.58 * t + jitter,
+    clamp(1.0 + jitter),
+    clamp(0.62 + 0.34 * t + jitter + cool * 0.5),
+    clamp(0.38 + 0.58 * t + jitter + cool),
   ] as const;
 }
 

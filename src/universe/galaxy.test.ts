@@ -5,6 +5,7 @@ import {
   GALAXY_VERSION,
   LOCAL_RADIUS_M,
   generateGalaxy,
+  toDiscFrame,
 } from './galaxy';
 import { GALAXY_RADIUS_M } from '../render/scale';
 
@@ -131,8 +132,9 @@ describe('the population has the right shape', () => {
     const sine = new Float64Array(bins);
     const counts = new Float64Array(bins);
     for (const star of disc) {
-      const x = star.x - galaxy.centre.x;
-      const z = star.z - galaxy.centre.z;
+      // Measured in the disc's own frame: the plane is inclined to the orrery's, so world `x`/`z`
+      // would see an ellipse and smear the wave.
+      const { x, z } = toDiscFrame(galaxy, star);
       const radius = Math.hypot(x, z);
       if (radius < inner || radius > outer) continue;
       const bin = Math.min(bins - 1, Math.floor(((radius - inner) / (outer - inner)) * bins));
@@ -158,12 +160,14 @@ describe('the population has the right shape', () => {
     // thick annulus averages the spiral's own phase change back into a uniform ring.
     const binsAzimuth = 36;
     const slice = disc.filter((star) => {
-      const radius = Math.hypot(star.x - galaxy.centre.x, star.z - galaxy.centre.z);
+      const { x, z } = toDiscFrame(galaxy, star);
+      const radius = Math.hypot(x, z);
       return radius > 0.47 * GALAXY_RADIUS_M && radius < 0.53 * GALAXY_RADIUS_M;
     });
     const cells = new Float64Array(binsAzimuth);
     for (const star of slice) {
-      const azimuth = Math.atan2(star.z - galaxy.centre.z, star.x - galaxy.centre.x);
+      const { x, z } = toDiscFrame(galaxy, star);
+      const azimuth = Math.atan2(z, x);
       cells[Math.floor(((azimuth + Math.PI) / (2 * Math.PI)) * binsAzimuth)]! += 1;
     }
     const sorted = [...cells].sort((a, b) => a - b);

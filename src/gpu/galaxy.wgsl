@@ -61,11 +61,12 @@ fn fs_star(in: StarOut) -> @location(0) vec4f {
 
   // A compact core with a wide, soft tail. Both terms reach zero at the quad's edge, so the
   // impostor has no square and neighbouring stars can overlap without a visible tile. The tail
-  // carries most of the area: at the render budget a field of hard dots reads as stipple, while
-  // overlapping soft sprites merge into the arm bands the density actually describes.
+  // used to carry most of the area (0.7 core + 0.3 halo), which merged sprites into bands but
+  // also veiled the inter-arm lane shut: gate iteration 1 read a mottled oval because a 4–5 px
+  // halo fills a 40 px lane. The lane is the signal, so the tail gives ground to the core.
   let core = pow(max(0.0, 1.0 - d), 2.2);
-  let halo = pow(max(0.0, 1.0 - d), 1.0) * 0.3;
-  let shape = core * 0.7 + halo;
+  let halo = pow(max(0.0, 1.0 - d), 1.0) * 0.14;
+  let shape = core * 0.86 + halo;
 
   // Additive: alpha is the reveal, not opacity. `frame_info.y` is the population gain.
   let intensity = in.color.a * galaxy.frame_info.y;

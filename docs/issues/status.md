@@ -27,27 +27,38 @@ For exact commit ids, read `git log --oneline -5`; this file deliberately does n
 - Public repo pushed: `https://github.com/DraxCodes/UniverseGoBrr`, default branch `main`, README
   now carries two captures from `main`'s own build (`docs/media/`, commit `1066994`).
 - **Gate iteration 1: 6/10, KEEP and iterate.** Scorecard: `gates/gate-layer-3-iteration-1.md`.
+- **Iteration 2 deferred** with the four flaws fixed and measured: nucleus plateau 109 px → 12 px;
+  home star peak 0.887 at frame centre with its `HOME_GAP_PX` ring; arms 10.67 ridge/trough at
+  1080p vs 9.65 at 4K; a real dust band on the boot frame (axis ratio 1.25 → 4.17). `GALAXY_VERSION 4`,
+  `GALAXY_STREAM_VERSION 3`, `GALACTIC_PLANE_TILT_RAD -30°`. Remaining debt and the brief for the
+  visual pass: `iterations/layer-3-iteration-2-deferred.md`.
 
 ## Doing
 
-Nothing in flight in the code. The tree is pinned so the user can run an assessment phase; Layer 3
-iteration 2 has not started.
+Nothing in flight in the code. **Layer 3 iteration 2 is deferred, not abandoned**: the four gate
+flaws are fixed and measured, and the remaining gap is polish a stronger visual model is better
+placed to judge. Brief, measurements and the remaining debt: `iterations/layer-3-iteration-2-deferred.md`.
+The `perception` gate is not deferred as a mechanism and is never handed to Neon; gate scoring stays
+in this workflow.
 
 Two new environment notes landed with this commit, both traps this session paid for:
-`docs/notes/powershell-writes-cp1252.md` and `docs/notes/git-reset-hard-and-opencode-json.md`.
+`docs/notes/powershell-writes-cp1252.md` and `docs/notes/git-reset-hard-and-opencode-json.md`, plus
+`docs/notes/inverted-smoothstep-erases-field.md` for the two regressions fixed while wrapping up.
 
 ## Next
 
-1. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon
+1. **Layer 4 (travel tiers)** is the next skeleton piece. Nothing in it depends on the galaxy
+   scoring 8/10.
+2. The deferred visual pass: read `iterations/layer-3-iteration-2-deferred.md` before touching tone,
+   grading, density balance or reference claims. Re-gate here when it returns.
+3. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon
    handoffs*, working detail in `docs/notes/two-agent-workflow.md`. The chair asks before any
    handoff; gate scoring never leaves this workflow.
-2. Read `gates/gate-layer-3-iteration-1.md`, then work the four flaws in its order: home-star identity
-   (0.56 → above the field's 0.99, distinct hue, 2–3 px clear gap), grade the nucleus, make the
-   arms read at 1080p, then the boot-frame dust band.
-3. Fix the false "at native size" label in the crop manifests (`.scratch/visual-review/layer3/manifest.json`).
-4. Re-capture, re-run `probe:live` and `probe:watchdog`, re-run the blindspot pass at
-   `--max-tokens 6000`, re-gate.
-5. On a score ≥ 8: `/code-review` scoped to the Layer 3 diff, then one commit on `main`.
+4. Open owner question: when to add left-click X/Y camera panning (with zoom, pitch and yaw
+   relative to the new centre). It couples to `src/input/orbit-controls.ts`'s "position is derived
+   from angles and distance" invariant and to ADR-0003's framing-vs-travel split, so it belongs
+   with Layer 4's camera work rather than as a standalone change.
+
 
 ## Blocked
 
@@ -88,9 +99,11 @@ The decision record is tracked, so a clone on another machine is enough to resum
 
 - `src/render/galaxy-scene.ts` (new) — packing, legibility, watchdog, convergence fade.
 - `src/gpu/galaxy.wgsl` (new) — instanced camera-facing quad, softened profile, `frame_info`.
-- `src/universe/galaxy.ts` — arms, bulge, `GALAXY_VERSION 2`.
+- `src/universe/galaxy.ts` — arms, bulge, `GALAXY_VERSION 4`, `GALAXY_STREAM_VERSION 3`, the -30°
+  galactic-plane tilt (`GALACTIC_PLANE_NORMAL`, `toDiscFrame`).
 - `src/gpu/scene.wgsl` — `lod_meta`, ring/planet/core fades, corona handoff.
 - `src/gpu/renderer.ts` — galaxy pipeline, tier watchdog, `galaxyFrame()`, `forceSlowFrames`.
+- `src/main.ts` — HUD scene row keys off `GalaxyFrame.identity` (`fit × resolved`), not `lod`.
 - `tools/capture.mjs`, `tools/live-probe.mjs`, `tools/watchdog-probe.mjs`, `capture/shots.json`.
 - `docs/notes/blindspot-reviewer-image-size.md` — rewritten: the empty response is the token
   budget, not image size; pass `--max-tokens 6000`.
@@ -101,9 +114,9 @@ The decision record is tracked, so a clone on another machine is enough to resum
 
 ## Verification
 
-- `npm test` — pass, 16 files, 141 tests, on the merged `wip/layer-3` (the gatekeeper also ran them
-  on the unmerged `566a303`).
-- `npm run build` — pass, `tsc --noEmit && vite build`, clean; 76.98 kB JS / 27.55 kB gzip.
+- `npm test` — pass, 16 files, **146 tests** (the three new regression tests guard the inverted
+  `smoothstep` and the HUD identity split).
+- `npm run build` — pass, `tsc --noEmit && vite build`, clean; **78.62 kB JS / 28.34 kB gzip**.
 - `base doctor` — no errors; `docs.issues: docs/issues`, 45 markdown files under `docs/` on `main`
   (46 on `wip/layer-3`, which adds `galaxy-local-field-collapse.md`), 8 ADRs.
 - Doc path check — backticked refs that look like paths (one or more slashes plus a file extension),
@@ -113,14 +126,15 @@ The decision record is tracked, so a clone on another machine is enough to resum
   skill references rather than repo paths, 2 are version strings in a ticket that the pattern mistakes
   for paths. On `wip/layer-3`: 181 refs across 47 files, and the same 4 remain — the two skill
   references and the two version strings.
-- `npm run capture` — 19/19 shots pass (on `566a303`; not re-run after the docs-only merge).
-- `npm run probe:live` — `{steps:81, decreases:0, handoffSteps:2, maxCount:45000}` (on `566a303`).
+- `npm run capture` — **19/19 shots pass**, after the tightened native-size crops.
+- `npm run probe:live` — `{steps:81, decreases:0, firstRampAt:"step-64", firstFullAt:"step-69",
+  handoffSteps:5, maxCount:45000, sceneRows:8}`; the far clamp reads `one galaxy · ×1 real`.
+  The handoff leg now starts on the inclined camera (the edge-on boot yaw keeps `lod` at 0 by design).
 - `npm run probe:watchdog` — rich 45000 → medium 22500, status `ready` (on `566a303`).
-- `perception` gate — 6/10 (below target 8).
+- `perception` gate — 6/10 (below target 8); iteration 2 deferred, see above.
 - **Not run:** the 1650-class proxy; any mobile or 2560/3840 live loop.
-- **Not re-run since the docs reorg:** the captures and probes. The merge touched no source file
-  (`git diff --stat 566a303 HEAD -- src tools capture package.json` is empty), so their evidence
-  still describes this tree.
+- All of the above were re-run after the iteration-2 fixes on `wip/layer-3`; the earlier
+  "not re-run since the docs reorg" caveat no longer applies.
 
 ## Open questions
 

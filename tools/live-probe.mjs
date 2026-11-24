@@ -42,6 +42,24 @@ target.search = new URLSearchParams({
   cam: ORRERY_CAMERA,
 }).toString();
 
+// The disc is inclined 30° about world x, so an outward run that keeps the orrery pitch looks
+// along the plane: `lod` correctly never resolves (an edge-on disc has no arms to read) and the
+// crossfade this leg exists to measure never happens. Incline the handoff camera by the tilt at
+// the same distance, which is the camera `galaxy-scene.test.ts` calls GALLERY_PITCH.
+const ORRERY_PITCH = -0.6390168339184684;
+const GALACTIC_TILT = (-30 * Math.PI) / 180;
+const ORRERY_DISTANCE = Math.hypot(4039008706713.87, 5435959086479.569);
+const HANDOFF_PITCH = ORRERY_PITCH + GALACTIC_TILT;
+const HANDOFF_CAMERA = [
+  0,
+  -Math.sin(HANDOFF_PITCH) * ORRERY_DISTANCE,
+  Math.cos(HANDOFF_PITCH) * ORRERY_DISTANCE,
+  0,
+  HANDOFF_PITCH,
+].join(',');
+const handoffTarget = new URL(target.href);
+handoffTarget.searchParams.set('cam', HANDOFF_CAMERA);
+
 const browser = await chromium.launch({
   channel: 'chrome',
   headless: true,
@@ -158,9 +176,10 @@ for (let index = 1; index <= 20; index += 1) {
 // --- The handoff leg: one continuous outward run, orrery → galaxy → far clamp. --------------
 // 80 notches at 120 px: the void boost crosses the eight decades in roughly 45, the legibility
 // ramp starts near 4.7e20 m and completes near 7.5e20 m, and the tail pins the far clamp
-// (6e21 m = 12 R) so the run has a definite end. The reset re-frames the orrery so this leg
-// starts where the scored still does.
-await page.goto(target.href, { waitUntil: 'domcontentloaded' });
+// (6e21 m = 12 R) so the run has a definite end. This leg starts at the orrery *distance* but
+// on the inclined handoff camera, so the crossfade it measures is the one a viewer who has
+// orbited to see the disc gets - not the edge-on pass that keeps `lod` at zero by design.
+await page.goto(handoffTarget.href, { waitUntil: 'domcontentloaded' });
 await page.waitForFunction(() => window.__ugb?.frame >= 3, null, { timeout: 20_000 });
 await page.mouse.move(960, 700);
 
@@ -174,6 +193,7 @@ const report = {
   generatedAt: new Date().toISOString(),
   baseUrl,
   camera: ORRERY_CAMERA,
+  handoffCamera: HANDOFF_CAMERA,
   inward: { steps: inward, summary: summarise(inward) },
   outward: { steps: outward, summary: summarise(outward) },
   handoff: { steps: handoff, summary: summariseHandoff(handoff) },

@@ -85,6 +85,9 @@ window.__ugb = {
     return frame
       ? {
           lod: frame.lod,
+          // The HUD's scene row keys off `identity` (scale, not orientation), so the probe can
+          // see both numbers and tell the two apart.
+          identity: frame.identity,
           contrast: frame.contrast,
           count: frame.count,
           tier: renderer?.galaxyTier ?? 'rich',
@@ -189,10 +192,14 @@ async function init(): Promise<AppHandle> {
       // disclaimer and no new panel. Positions are never scaled, so the galaxy reads `×1 real`;
       // the only distortion is traversal, and it is printed where it is active.
       if (system) {
-        const lod = created.galaxyFrame()?.lod ?? 0;
+        // The scene row states *where you are*, so it keys off `identity` (are we at galaxy
+        // scale?) rather than `lod`. `lod` also folds in the disc's inclination; a straight
+        // zoom-out from the default view is edge-on, and it would leave the row reading
+        // "K-type · 9 planets" at 45 000 ly while the whole galaxy fills the frame.
+        const identity = created.galaxyFrame()?.identity ?? 0;
         const distance = Math.hypot(state.camera.x, state.camera.y, state.camera.z);
         const boost = notchFactor(distance, WHEEL_BASE) / WHEEL_BASE;
-        if (lod > 0.5) {
+        if (identity > 0.5) {
           hud.setScene('one galaxy · ×1 real');
         } else if (boost > 1.02) {
           hud.setScene(`${describeSystem(system)} · void ×${boost.toFixed(1)}`);

@@ -28,8 +28,10 @@ import {
 import type { Camera } from '../state/url-state';
 import { GALAXY_RADIUS_M } from './scale';
 import {
+  GALACTIC_PLANE_NORMAL,
   GALAXY_TIER_STARS,
   LOCAL_RADIUS_M,
+  toDiscFrame,
   type Galaxy,
   type GalaxyStar,
   type GalaxyTier,
@@ -66,6 +68,28 @@ export const GALAXY_GAIN = 0.3;
 export const LOCAL_CONVERGENCE_MIN_PX = 1.5;
 export const LOCAL_CONVERGENCE_FULL_PX = 8;
 
+/**
+ * A clear gap in the disc population around the home star, in pixels at 1080p, measured *out
+ * from the star's glare*, not from its centre. `STAR_MIN_PX` gives the corona a 3.4 px radius, so
+ * a 3 px gap sits inside the glare and clears nothing; the empty ring has to start outside it.
+ * The disc's own 100 ly exclusion sphere projects to under a pixel at galaxy distance, which is
+ * why the field otherwise touches the star and its 0.99 luminance ties with it.
+ */
+export const HOME_GAP_PX = 8.0;
+/**
+ * The gap is fully clear inside this fraction of the gap's **current** outer edge, closing to
+ * nothing at that edge.
+ *
+ * Both edges must scale together, from `homeGapPx`. An earlier version derived the inner edge from
+ * the constant `HOME_GAP_PX` while the outer edge was `HOME_GAP_PX * lod`, so once `lod` fell below
+ * this fraction the inner edge was *larger* than the outer one. `smoothstep(edge0 > edge1, …)`
+ * inverts rather than saturating: it keeps what is inside the ring and culls everything outside,
+ * so the entire galaxy was erased at every intermediate legibility — the pitch sweep and the zoom
+ * toward the system both lost the field from ~lod 0.68 down, and it returned only when the block
+ * was skipped at lod 0 or the disc left the frustum. Keep them proportional and it cannot invert.
+ */
+const HOME_GAP_INNER = 0.7;
+
 /** Per instance: camera-relative position (3), world-space quad radius (1), rgb+alpha (4). */
 export const GALAXY_INSTANCE_FLOATS = 8;
 /** The rich tier's local + disc stars; the home star is drawn by the orrery, not this pass. */
@@ -79,8 +103,13 @@ const NEAR_UNITS = 0.002;
  * The measured arm modulation that counts as a *strong* two-arm field. The generator's rejection
  * sampling leaves a real but seed-dependent m=2 amplitude; this constant normalises it for the
  * reported contrast, so a weak field reads weaker without ever failing to resolve.
+ *
+ * Measured on the v4 population after the arm narrowing and per-star hue split: 0.427 for the
+ * shipped seed, 0.422-0.441 across 12 seeds. The previous 0.16 was calibrated to the pre-narrowing
+ * field (m=2 ~0.17) and, left in place, saturated every seed to 1.0 — the score stopped
+ * discriminating. This is a HUD diagnostic only; it never reaches the shader.
  */
-const ARM_CONTRAST_FULL = 0.16;
+const ARM_CONTRAST_FULL = 0.42;
 
 /** An arm band narrower than this many pixels cannot be read; wider than the second is full. */
 const ARM_RESOLVED_MIN_PX = 5;
@@ -123,6 +152,16 @@ export interface GalaxyFrame {
   readonly count: number;
   readonly lod: number;
   readonly contrast: number;
+  /**
+   * How much of the frame the galaxy owns, ignoring which way the disc is turned: `fit × resolved`.
+   *
+   * `lod` folds in `inclination`, which is right for the arms - an edge-on disc has no arms to
+   * read - but wrong for *identity*. The tilted disc makes a straight zoom-out from the default
+   * view edge-on, and `lod` then sits at ~0.02 while the whole galaxy fills the frame. The HUD's
+   * scene row has to say "one galaxy" there without claiming the arms resolved, so it reads this
+   * instead of `lod`.
+   */
+  readonly identity: number;
   /** The same reverse-Z projection the orrery uses, so the two passes share one camera. */
   readonly viewProjection: Float32Array;
   readonly cameraRight: Vec3;
@@ -155,14 +194,14 @@ export function armModulation(galaxy: Galaxy): number {
     // hot cell in the middle of the annulus and measure nothing useful.
     if (Math.hypot(star.x, star.y, star.z) < LOCAL_RADIUS_M * 1.5) continue;
 
-    const x = star.x - galaxy.centre.x;
-    const y = star.y - galaxy.centre.y;
-    const z = star.z - galaxy.centre.z;
-    const radius = Math.hypot(x, y, z);
+    // The disc's own frame: radius and azimuth are defined in the plane, which the layer-3
+    // orientation has inclined away from world `x`/`z`.
+    const relative = toDiscFrame(galaxy, star);
+    const radius = Math.hypot(relative.x, relative.y, relative.z);
     if (radius < inner || radius > outer) continue;
 
     const bin = Math.min(bins - 1, Math.floor(((radius - inner) / (outer - inner)) * bins));
-    const azimuth = Math.atan2(z, x);
+    const azimuth = Math.atan2(relative.z, relative.x);
     cosine[bin]! += Math.cos(2 * azimuth);
     sine[bin]! += Math.sin(2 * azimuth);
     counts[bin]! += 1;
@@ -194,8 +233,15 @@ export function galaxyLegibility(
   const basis = cameraBasis(camera.yaw, camera.pitch);
   const focalPx = viewportHeightPx / (2 * Math.tan(FOV_Y_RAD / 2));
 
-  // Face-on is legible; edge-on collapses the arms into a line and must not count.
-  const inclination = smoothstep(0.1, 0.3, Math.abs(basis.forward.y));
+  // Face-on is legible; edge-on collapses the arms into a line and must not count. Measured
+  // against the disc's own axis: after the galactic plane is inclined, world `+y` is no longer
+  // the disc's normal and `forward.y` would score an identical view differently.
+  const facing = Math.abs(
+    basis.forward.x * GALACTIC_PLANE_NORMAL.x +
+      basis.forward.y * GALACTIC_PLANE_NORMAL.y +
+      basis.forward.z * GALACTIC_PLANE_NORMAL.z,
+  );
+  const inclination = smoothstep(0.1, 0.3, facing);
 
   // Distance from the eye to the **disc centre**, in doubles: the home star is not the centre.
   const toCentre = {
@@ -263,8 +309,18 @@ export function writeGalaxyFrame(
   // threshold moves smoothly with `lod`, so there is no brightness class that appears at once —
   // and its window closes to zero at full legibility, or the dimmest third of the disc would stay
   // suppressed in the finished galaxy and the field would read as stipple.
-  const threshold = 0.55 * (1 - legibility.lod);
-  const revealWidth = Math.max(0.02, 0.35 * (1 - legibility.lod));
+  //
+  // `0.06` is calibrated against the population, not picked: disc brightness is
+  // `0.10 + 0.90·u³`, so the *median* disc star is ≈0.21. At 0.34 (gate iteration 1's value) more
+  // than half the in-frame boot stars were withheld — and since only ≈750 of 40 000 disc
+  // impostors fall in the orrery's 50°×80° FOV, that withheld majority was the whole band. With
+  // the threshold down at 0.06 the plane's faint stripe is drawn instead of culled.
+  const threshold = 0.06 * (1 - legibility.lod);
+  // No floor: the window has to close to exactly zero at lod 1, or the dimmest stars stay partly
+  // suppressed in the finished galaxy. With a `max(0.02, …)` floor a nucleus star at 0.004
+  // brightness (dim bulge times the nucleus gradient) sat inside a 0.02-wide window and never
+  // reached full reveal — 1650 of 40 000 disc stars were held back at lod 1.
+  const revealWidth = 0.24 * (1 - legibility.lod);
 
   // How many pixels the whole local field spans around home. Its stars all project inside this
   // radius, so once it is a couple of pixels they are one saturated dot on top of the star.
@@ -277,6 +333,14 @@ export function writeGalaxyFrame(
   );
 
   let write = 0;
+  // Home is the frame origin, so its camera-relative position is the negated camera. Hoisted:
+  // every star measures its angular separation from this one point.
+  const homeRel = { x: -camera.x / scaleM, y: -camera.y / scaleM, z: -camera.z / scaleM };
+  const homeDistance = Math.hypot(homeRel.x, homeRel.y, homeRel.z);
+  // The gap only exists once the fields share a frame; at lod 0 the galaxy is a band behind the
+  // orrery and carving a hole in it would be a change to Layer 2's frame for no reason.
+  const homeGapPx = HOME_GAP_PX * legibility.lod;
+
   const pack = (star: GalaxyStar, fieldReveal = 1): void => {
     // The system's own star is the identity impostor: the orrery's glare quad keeps a minimum
     // pixel footprint and stays on screen through the handoff. Drawing it here as well would
@@ -297,16 +361,48 @@ export function writeGalaxyFrame(
     // A world-space radius that projects to the footprint. Never zero: the quad would vanish.
     const radius = Math.max((footprintPx * distance) / focalPx, 1e-12);
 
-    const reveal = smoothstep(threshold, threshold + revealWidth, star.brightness) * fieldReveal;
+    let reveal = smoothstep(threshold, threshold + revealWidth, star.brightness) * fieldReveal;
 
+    // Clear a ring around the home star. At galaxy distance the disc's own 100 ly exclusion
+    // sphere projects to under a pixel, so without this the nearest impostors sit directly on
+    // the star and the field's 0.99 luminance ties with its 0.56. The cue the gate asked for is
+    // empty space: one point with a gap the eye can find.
+    if (homeGapPx > 0 && homeDistance > 0) {
+      const separation = {
+        x: homeRel.x - x,
+        y: homeRel.y - y,
+        z: homeRel.z - z,
+      };
+      const along =
+        separation.x * basis.forward.x +
+        separation.y * basis.forward.y +
+        separation.z * basis.forward.z;
+      const perpendicular = Math.hypot(
+        separation.x - along * basis.forward.x,
+        separation.y - along * basis.forward.y,
+        separation.z - along * basis.forward.z,
+      );
+      const gapPx = (perpendicular * focalPx) / Math.max(homeDistance, 1e-12);
+      reveal *= smoothstep(homeGapPx * HOME_GAP_INNER, homeGapPx, gapPx);
+    }
+
+    // The star's *emission amplitude* is its brightness, folded into the RGB and uploaded here.
+    // This is the fix for the clipped nucleus: `fs_star` multiplies the colour by
+    // `color.a * gain`, and `color.a` is the reveal, which is 1.0 for every star once the
+    // crossfade completes. So before this, a brightness-0.02 nucleus star and a brightness-1 arm
+    // star emitted the *same* light: 289 impostors stacking at the disc centre summed to 12.8 on
+    // an 8-bit target and clipped into a flat 109 px white plateau, and the disc read as a field
+    // of identical dots. Scaling the colour by brightness (a uniform scale, so the hue is exactly
+    // preserved) makes `brightness` the luminosity it was always meant to be.
+    const amplitude = clamp01(star.brightness);
     const base = write * GALAXY_INSTANCE_FLOATS;
     out[base + 0] = x;
     out[base + 1] = y;
     out[base + 2] = z;
     out[base + 3] = radius;
-    out[base + 4] = star.color[0];
-    out[base + 5] = star.color[1];
-    out[base + 6] = star.color[2];
+    out[base + 4] = star.color[0] * amplitude;
+    out[base + 5] = star.color[1] * amplitude;
+    out[base + 6] = star.color[2] * amplitude;
     // The global gain stays in the uniform; this is the per-star reveal times the field's own
     // convergence (the local field fades as it collapses into the home star).
     out[base + 7] = reveal;
@@ -332,6 +428,7 @@ export function writeGalaxyFrame(
     count: write,
     lod: legibility.lod,
     contrast: legibility.contrast,
+    identity: legibility.fit * legibility.resolved,
     viewProjection,
     cameraRight: basis.right,
     cameraUp: basis.up,

@@ -470,9 +470,18 @@ fn fs_star(in: StarOut) -> @location(0) vec4f {
   // Without it the star arrives as a small dim dot while brighter disc impostors surround it, and
   // the one point the viewer is supposed to find is lost in the field it belongs to. At orrery
   // scale this is exactly 1.0, so Layer 2's star is untouched.
+  //
+  // Gate iteration 1 measured the corona at peak 0.56 against a field reaching 0.99 in the same
+  // warm hue: the boost was too small, and `scene.star_color` is the same amber family as every
+  // disc impostor. Three levers, all gated on `handoff` so lod 0 is bit-identical:
+  //   - a larger peak, so the point clears the graded nucleus instead of tying with it;
+  //   - a cool tint outside the disc's warm palette, so the eye separates it by hue at no cost;
+  //   - the 2–3 px clear gap is the CPU pass's job (see `writeGalaxyFrame`).
   let handoff = smoothstep(0.45, 0.85, scene.lod_meta.x);
   let shade = star_shade(star_glow(in.uv), 0.0);
-  return vec4f(shade.rgb * mix(1.0, 1.9, handoff), 1.0);
+  let identity = vec3f(0.82, 0.93, 1.0);
+  let tinted = mix(shade.rgb, identity * (shade.r + shade.g + shade.b) / 3.0, 0.72 * handoff);
+  return vec4f(tinted * mix(1.0, 3.4, handoff), 1.0);
 }
 
 struct OrbitOut {

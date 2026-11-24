@@ -68,6 +68,16 @@ describe('the galaxy is a pure function of (seed, address)', () => {
     expect(a.stars.length).toBe(1 + counts.local + counts.disc);
     expect(b.stars.length).toBe(a.stars.length);
   });
+
+  it('treats the root as having no galaxy, and terminates', () => {
+    // Regression: the root is shallower than a galaxy, so its children have no kind to read.
+    // Before the guard every root child classified as local, the disc list never filled, and a
+    // crafted `?addr=v1/` (or an ordinary zoom-out to the top) hung the tab forever.
+    const galaxy = generateGalaxy(SEED, address('v1/'), 'low');
+    expect(galaxy.stars).toHaveLength(1);
+    expect(galaxy.stars[0]).toMatchObject({ home: true, x: 0, y: 0, z: 0 });
+    expect(galaxy.centre).toEqual({ x: 0, y: 0, z: 0 });
+  });
 });
 
 describe('a galaxy is identified by its own level, not by where you stand', () => {

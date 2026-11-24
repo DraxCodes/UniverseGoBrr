@@ -5,7 +5,7 @@ import { fnv1a32 } from '../lib/hash';
 import { GALAXY_RADIUS_M } from '../render/scale';
 import { LOCAL_RADIUS_M, galaxyAddressOf, generateGalaxy, toDiscFrame } from './galaxy';
 import { galaxyFrame, sampleDiscStar } from './disc';
-import { LOCAL_STAR_EVERY, PLACEMENT_VERSION, placement, placementKey } from './placement';
+import { LOCAL_STAR_EVERY, PLACEMENT_VERSION, placement, placementKey, starKind } from './placement';
 
 const SEED = 'ugb-0000';
 
@@ -51,6 +51,15 @@ describe('a placed star belongs to its galaxy', () => {
         LOCAL_RADIUS_M * 1.2 * (1 - 1e-9),
       );
     }
+  });
+
+  it('refuses to classify an address that is not a child of a galaxy', () => {
+    // The kind rule reads the first level below the galaxy. At the root or at a galaxy node that
+    // level does not exist; a silent fallback there is what used to hang the generator.
+    expect(() => starKind(address('v1/'))).toThrow(/deeper than a galaxy/);
+    expect(() => starKind(address('v1/4'))).toThrow(/deeper than a galaxy/);
+    expect(starKind(address('v1/4.3'))).toBe('disc');
+    expect(starKind(childAddress(address('v1/4'), LOCAL_STAR_EVERY))).toBe('local');
   });
 
   it('places local-field addresses inside the ball, off a shell', () => {

@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "kind": "security",
+  "status": "passed",
+  "startedAt": "2026-11-24T20:40:00.000Z",
+  "endedAt": "2026-11-24T21:05:00.000Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Security lens over the address-drawn population (3349cf0 vs d102712): can a crafted address inflate the child walk, allocate unboundedly or fail to terminate; is the address used only for RNG keys; is the status page still inert; did any line leak.",
+  "commit": "3349cf0 + root-guard follow-up (wip/layer-3)",
+  "models": [
+    "surplus/glm-5.3 (audit)"
+  ],
+  "verdict": "CONCERNS raised, then PASS after the blocking finding was fixed before the follow-up commit. One High: a crafted ?addr=v1/ hung the child walk forever. The root is shallower than GALAXY_DEPTH, so every root child read levels[1] as undefined, starKind fell back to 0 and classified them all local; the disc list never filled. Fixed twice over: generateGalaxy returns the home star alone for the root, starKind now throws on an address that is not deeper than a galaxy, and the loop is bounded at LOCAL_STAR_EVERY * (local + disc), with an assertion that the exact counts were produced. The hostile URL was then rendered end to end through the built app (capture root-url-regression, frame 42, 1/1), and normal addresses still emit 45,001 stars. Claims 1, 3, 4 and 5 confirmed; only the termination half of claim 2 was refuted, at the root.",
+  "notes": "F1 (low, prospective) re-quantified now that the picture draws by address: a rich galaxy hashes 45,000 sibling keys through 32-bit FNV-1a, so ~0.24 expected colliding pairs per galaxy (~one galaxy in four draws two coincident lights under different addresses). Identity remains the Address, so this is a visual duplicate, not an identity confusion; it becomes real at the next layer arrival checks. Recorded in ticket 05 and routed to plan-architect. No secrets, credentials, absolute paths or personal data in the diff; no new network, storage or DOM sink; status.html stays static under its CSP. Cost: cents, one seat, one pass.",
+  "evidence": [
+    {
+      "path": "src/universe/placement.ts",
+      "sha256": "sha256:9811ad2b51ddafc2f431fae5b70368d366cb8c4bed624d39d943777719bd2185",
+      "kind": "artifact"
+    },
+    {
+      "path": "src/universe/galaxy.ts",
+      "sha256": "sha256:e61a9ecd67648bb87e0c685c83143093d96d721435690c5306f52e7f0c6fef61",
+      "kind": "artifact"
+    },
+    {
+      "path": "src/universe/disc.ts",
+      "sha256": "sha256:eb9ae3cc5b67ad2dcdf46d3175b4af3a30b48bb570a55b90cd5eda140db7dc1c",
+      "kind": "artifact"
+    },
+    {
+      "path": "src/universe/placement.test.ts",
+      "sha256": "sha256:e7ac80db9cea4a378271c21b85a694e8eb9be600f41b163efc5f910e9a948a2c",
+      "kind": "artifact"
+    },
+    {
+      "path": "src/universe/galaxy.test.ts",
+      "sha256": "sha256:cc7c0a78173b1620f76844ad424a9d3cc0a77fe361d9d295611acc8cc3cbaef8",
+      "kind": "artifact"
+    },
+    {
+      "path": "docs/notes/population-draws-by-address.md",
+      "sha256": "sha256:a584c79e46211326f46fdb9be55574039a210ba8235e65ae42d0cba6349307b0",
+      "kind": "artifact"
+    }
+  ],
+  "id": "20261124T210500-7c4a1e21"
+}

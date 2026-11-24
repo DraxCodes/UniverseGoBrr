@@ -63,11 +63,21 @@ export type StarKind = 'local' | 'disc';
  * Which population the child at `address` belongs to.
  *
  * The child index is the first level below the galaxy (`levels[GALAXY_DEPTH]`); deeper levels are
- * sub-objects of the same star and do not change its kind. Callers must pass an address deeper than
- * a galaxy — the root and the galaxy node are not stars.
+ * sub-objects of the same star and do not change its kind.
+ *
+ * **The address must be deeper than a galaxy, and this throws if it is not.** It used to fall back
+ * to level 0, which classified every child of the *root* as a local-field star; the generator then
+ * never filled its disc list and spun forever on a crafted `?addr=v1/`. A contract violation must
+ * be loud, not a plausible-looking kind. `generateGalaxy` guards the root before calling this.
  */
 export function starKind(address: Address): StarKind {
-  const level = address.levels[GALAXY_DEPTH] ?? 0;
+  const level = address.levels[GALAXY_DEPTH];
+  if (level === undefined) {
+    throw new Error(
+      `starKind needs an address deeper than a galaxy; got ${formatAddress(address)} ` +
+        `(${address.levels.length} level${address.levels.length === 1 ? '' : 's'})`,
+    );
+  }
   return Math.abs(level) % LOCAL_STAR_EVERY === 0 ? 'local' : 'disc';
 }
 

@@ -87,7 +87,11 @@ structure is checked by `src/status-page.test.ts`; its content is the owner's to
   star, `starKind`). `GALAXY_STREAM_VERSION` stays 3 because it now governs only the frame (centre
   and arm phase), which did not change; the arm-acceptance measurement therefore stays comparable.
   Captures re-shot 20/20; arm m=2 **0.428** (bar 0.25) and rendered pixel m2 **0.395**. Mechanism
-  and versioning: `docs/notes/population-draws-by-address.md`.
+  and versioning: `docs/notes/population-draws-by-address.md`. **Security lens:** one High, fixed
+  before push — a crafted `?addr=v1/` hung the child walk forever; the root is not a galaxy, so it
+  is now guarded (home star only), `starKind` throws on a shallow address, and the loop has a bound
+  derived from the counts. F1's collision exposure is now *drawn*: a rich galaxy hashes 45,000
+  sibling keys, so ~1 galaxy in 4 has a coincident pair — widen the hash before any arrival check.
 
 ## Doing
 

@@ -150,7 +150,16 @@ the generator in `src/universe/disc.ts`.
   FNV-1a (the hash module calls itself "good enough for placeholder work"). Two addresses can collide
   and receive the same position; harmless while a position is only drawn, but if anything treats a
   position as identity — a pinned place, an arrival check — widen the key hash to at least 64 bits
-  behind a `PLACEMENT_VERSION` bump. Do not rely on a position as a primary key before then.
+  behind a `PLACEMENT_VERSION` bump. Do not rely on a position as a primary key before then. **The
+  exposure grew when the picture started drawing by address:** a rich galaxy now hashes 45,000
+  sibling keys, so the birthday bound gives roughly 0.24 expected colliding pairs per galaxy —
+  about one galaxy in four draws two lights at the same position under different addresses. That is
+  a visual duplicate, not an identity confusion (identity is the `Address`), but the next layer's
+  travel state and compass are exactly the features that would turn a position into a key. Widen
+  the hash before designing an arrival check.
+- **The root is not a galaxy.** `generateGalaxy` guards the root and returns the home star alone;
+  `starKind` throws rather than classifying a shallow address. Before those guards, `?addr=v1/`
+  hung the tab in an unbounded child walk.
 - **Right-drag panning fights the browser.** A context menu opens on right-button release unless the
   canvas suppresses it while a right-drag is active. Suppress only during the drag, not globally,
   or the rest of the page loses its menu.

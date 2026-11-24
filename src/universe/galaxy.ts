@@ -33,12 +33,13 @@ import { createRng, type Rng } from '../lib/random';
 import { childAddress, formatAddress, type Address } from '../frame/address';
 import {
   GALACTIC_PLANE_TILT_RAD,
+  GALAXY_DEPTH,
   galaxyAddressOf,
   galaxyFrame,
   rotateAboutX,
   type Vec3,
 } from './disc';
-import { placedStarIn, starKind } from './placement';
+import { LOCAL_STAR_EVERY, placedStarIn, starKind } from './placement';
 
 // The disc law and the galaxy-identity rule live in `disc.ts` (ADR-0011): the generator and
 // `placement(seed, address)` must lay stars out with the *same* function, or the picture and the
@@ -180,12 +181,7 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
   // The address is normalised to its galaxy's own level here, not at the call sites: two stars in
   // one galaxy must return the same array from this function, and a caller that passes a deeply
   // nested address must not be able to get a private galaxy out of it (ADR-0011).
-  //
-  // The frame and the disc law come from `disc.ts`, shared with `placement(seed, address)`. This
-  // function owns the *population*: which children are drawn, how bright they are, what colour.
   const galaxyAddress = galaxyAddressOf(address);
-  const frame = galaxyFrame(seed, galaxyAddress);
-  const { centre, radius } = frame;
 
   // The home star is a real member of the population and is marked so it can keep identity
   // through the crossfade (issue 04 D5). It is what the camera orbits at system scale, and its
@@ -201,10 +197,35 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
     home: true,
   };
 
+  // **The root is not a galaxy.** It sits above the level a galaxy is identified at, so it has no
+  // children whose kind could be read: `starKind` would see a missing level. Before this guard
+  // every root child fell back to "local", the disc list never filled, and a crafted `?addr=v1/`
+  // (or an ordinary zoom-out to the top) hung the tab. At the root there is no galaxy population to
+  // draw — return the home star alone, which the renderer already handles as an empty field.
+  if (galaxyAddress.levels.length < GALAXY_DEPTH) {
+    return { version: GALAXY_VERSION, tier, centre: { x: 0, y: 0, z: 0 }, stars: [home] };
+  }
+
+  // The frame and the disc law come from `disc.ts`, shared with `placement(seed, address)`. This
+  // function owns the *population*: which children are drawn, how bright they are, what colour.
+  const frame = galaxyFrame(seed, galaxyAddress);
+  const { centre, radius } = frame;
+
   const locals: GalaxyStar[] = [];
   const discs: GalaxyStar[] = [];
 
-  for (let level = 0; locals.length < counts.local || discs.length < counts.disc; level += 1) {
+  // One child in `LOCAL_STAR_EVERY` is local, so any block of that many levels contains at least
+  // one local and `LOCAL_STAR_EVERY - 1` disc children. Filling both lists therefore cannot need
+  // more than `LOCAL_STAR_EVERY * (local + disc)` levels, and that constant is a provable bound on
+  // the loop — not a magic number, and not a function of the address. The assertion after the walk
+  // turns a broken kind rule into a clear error instead of an infinite loop.
+  const maxLevels = LOCAL_STAR_EVERY * (counts.local + counts.disc);
+
+  for (
+    let level = 0;
+    level < maxLevels && (locals.length < counts.local || discs.length < counts.disc);
+    level += 1
+  ) {
     const child = childAddress(galaxyAddress, level);
     const kind = starKind(child);
 
@@ -247,6 +268,13 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
         home: false,
       });
     }
+  }
+
+  if (locals.length !== counts.local || discs.length !== counts.disc) {
+    throw new Error(
+      `galaxy walk at ${formatAddress(galaxyAddress)} produced ` +
+        `${locals.length}/${counts.local} local and ${discs.length}/${counts.disc} disc children`,
+    );
   }
 
   return { version: GALAXY_VERSION, tier, centre, stars: [home, ...locals, ...discs] };

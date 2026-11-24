@@ -37,6 +37,15 @@ the iterator, or the generator's idea of "which law places this child" and place
 The day a level answers "local field" for itself, `starKind` becomes that answer and nothing else in
 this walk changes.
 
+**The root is not a galaxy.** A galaxy is identified at `GALAXY_DEPTH` (currently 1), so the root
+(`v1/`) is *shallower* than that and its children have no level at `levels[GALAXY_DEPTH]`. `starKind`
+used to fall back to 0 there, which classified every root child as local; the disc list never filled
+and `?addr=v1/` spun the main thread forever. Two guards now prevent it: `starKind` throws when the
+address is not deeper than a galaxy, and `generateGalaxy` returns the home star alone for the root
+(there is no galaxy population to draw). The walk also has a bound derived from the counts —
+`LOCAL_STAR_EVERY * (local + disc)` — so a broken kind rule fails with an error instead of hanging.
+Regression test: `generateGalaxy` on `v1/` terminates with one star.
+
 **When this re-rolls.** Switching from a sequential stream to an address walk changes every star, so
 it is a real re-roll: bump `GALAXY_VERSION` and re-shoot the capture set. It does **not** bump
 `GALAXY_STREAM_VERSION`, because that constant now governs only the frame (centre and arm phase),

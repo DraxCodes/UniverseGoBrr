@@ -90,7 +90,7 @@
   <body>
     <main>
       <h1>UniverseGoBrr <span>build status</span></h1>
-      <p class="meta">Updated 2026-11-24 · update 6 · branch <code>wip/layer-3</code> · edited in the same commit as <code>docs/issues/status.md</code></p>
+      <p class="meta">Updated 2026-11-24 · update 7 · branch <code>wip/layer-3</code> · edited in the same commit as <code>docs/issues/status.md</code></p>
       <p class="lede">
         <strong>V1 is:</strong> fly from a galaxy arm down to a lit planet, cross the distance between
         systems with a real travel time, and send a friend the view. No gameplay. Layer 6 (walking on
@@ -99,11 +99,12 @@
 
       <h2>Right now</h2>
       <p class="lede">
-        Layer 4, travel. The frame rebase, the approach probe and galaxy identity are done, every
-        address has a real position inside its galaxy, and the picture now draws those addresses —
-        so every light you can see carries one. The two open calls are settled: travel speeds are
-        confirmed as proposed, and panning is right-drag while left keeps orbit. Next is travel
-        state and URL history, then the compass and tier masks.
+        Layer 4, travel. The frame rebase, the approach probe, galaxy identity and placement are done,
+        and the picture now draws the addresses it names — every light you can see carries one. A jump
+        is now one committed state change: the address becomes the destination, the clock advances by
+        distance over speed, and the view lands on the destination. Back and Forward walk between the
+        places you have been. Next are the compass with clickable address lines, then the tier masks
+        with right-drag panning.
       </p>
 
       <h2>Remaining to V1</h2>
@@ -112,11 +113,6 @@
           <tr><th>Layer</th><th>Task</th><th>Status</th></tr>
         </thead>
         <tbody>
-          <tr>
-            <td>L4</td>
-            <td class="task">Travel state and URL history<em>A crossing is a journey, not a cut. Back must not replay a warp.</em></td>
-            <td class="status s-next">Next</td>
-          </tr>
           <tr>
             <td>L4</td>
             <td class="task">Compass and address HUD<em>Bearing and distance to anchors; address lines clickable to zoom out.</em></td>
@@ -203,6 +199,11 @@
             <td class="task">Picture draws by address<em>Every visible light carries the address that made it, so “that star” is a place you can link to and travel to.</em></td>
             <td class="status s-done">Done</td>
           </tr>
+        <tr>
+            <td>L4</td>
+            <td class="task">Travel state and URL history<em>A jump is one state change: destination view, clock by distance over speed, one history entry. Back walks places, not mouse moves.</em></td>
+            <td class="status s-done">Done</td>
+          </tr>
         </tbody>
       </table>
 
@@ -232,9 +233,10 @@
         <li><strong>Name:</strong> is UniverseGoBrr the product name?</li>
       </ul>
       <p class="note">
-        Both Layer 4 questions are answered: the travel speeds are confirmed as proposed, and panning
-        is right-drag with left keeping orbit. Placement is complete, including the picture drawing
-        from those addresses, so a light you can see is one you can link to and travel to.
+        Your call on the arrival view is in: a jump lands on the destination's opening view, and a
+        live clock keeps running instead of freezing. That was the last Layer 4 design question.
+        Placement is complete — a light you can see is one you can link to and travel to — and the
+        only thing still waiting is the name.
       </p>
 
       <h2>After V1</h2>

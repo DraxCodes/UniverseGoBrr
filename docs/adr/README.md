@@ -13,6 +13,7 @@
 | 0009 | accepted | Authored nodes reserve a new address and ignore the seed; the registry is data checked before the generator, versioned per node. Sol reserves `v1/0.0.0`. |
 | 0010 | accepted | Travel advances `t` by distance over speed (`Δt = d / v(method)`), measured in the parent frame; camera gestures never advance `t`. Entails a versioned `placement(seed, address)` per node. |
 | 0011 | accepted | The address grid is the world and the picture is a view of its occupied cells; placement is `placement(seed, address)`, never the inverse; occupancy is one shared rule; a tier change loses detail, not inhabitants. A galaxy is keyed on its own level. |
+| 0012 | accepted | A committed travel is one atomic state change: the address becomes the destination, the clock advances by `d/v(method)` without changing mode, and the camera lands on the destination's opening view. A travel is exactly "write the arrival link and enter it". |
 
 Status is one of `proposed`, `accepted`, `superseded` (name the successor),
 `deprecated` or `rejected`. The numbered filename is `NNNN-slug.md`.

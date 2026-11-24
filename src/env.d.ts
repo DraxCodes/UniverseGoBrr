@@ -25,6 +25,14 @@ interface UniversePrecisionReport {
   paths: { fixed: UniversePrecisionPath; naive: UniversePrecisionPath };
 }
 
+interface UniverseTravelResult {
+  ok: boolean;
+  reason: string | null;
+  method: 'impulse' | 'warp' | 'transwarp' | 'subspace' | null;
+  distanceM: number | null;
+  elapsedS: number | null;
+}
+
 interface UniverseDebug {
   readonly ready: boolean;
   readonly error: string | null;
@@ -51,6 +59,10 @@ interface UniverseDebug {
   sampleCanvas(): Promise<{ mean: number; stdev: number; samples: number }>;
   /** Debug only: stall the next N frames so the tier watchdog can be observed. */
   forceSlowFrames(frames: number): void;
+  /** Commit a travel to `to`; the user-facing trigger arrives with the compass. */
+  travel(to: string): UniverseTravelResult;
+  /** Browser history depth, so a capture can prove a framing write did not grow it. */
+  readonly historyLength: number;
 }
 
 interface Window {

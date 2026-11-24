@@ -2,20 +2,24 @@ import './styles.css';
 import { initDevice, type GpuContext } from './gpu/device';
 import { createRenderer, type RendererHandle } from './gpu/renderer';
 import { createPrecisionProbe } from './frame/precision-probe';
-import { formatAddress } from './frame/address';
+import { formatAddress, parseAddress } from './frame/address';
 import { mountHud, showFatal } from './ui/hud';
 import { attachOrbitControls } from './input/orbit-controls';
 import { defaultSystemCamera, displayScaleM } from './render/system-scene';
 import { GALAXY_MAX_DISTANCE_M } from './render/galaxy-scene';
 import { notchFactor } from './render/scale';
-import { describeSystem } from './universe/system';
+import { AU_M, describeSystem } from './universe/system';
 import { resolveSystem } from './universe/authored';
 import { generateGalaxy, type Galaxy, type GalaxyTier } from './universe/galaxy';
+import { LY_M } from './universe/disc';
+import { planTravel, type TravelPlan } from './universe/travel';
 import {
   DEFAULT_CAMERA,
+  advanceClock,
   cameraSnapshot,
   clockSeconds,
   defaultState,
+  historyWrite,
   parseUrlState,
   urlForState,
   type UrlState,
@@ -35,6 +39,12 @@ let failure: string | null = null;
 let disposed = false;
 /** The live galaxy, so the debug surface can report its centre for capture framing. */
 let currentGalaxy: Galaxy | null = null;
+/** Bumped by every (re)start; an older init must never install itself over a newer one. */
+let bootGeneration = 0;
+/** The address of the history entry the page is currently on (see `historyWrite`). */
+let currentEntryAddress = '';
+/** The HUD's notice sink, set by `init`, so module-level travel can report without the HUD. */
+let notice: (text: string) => void = () => {};
 
 /**
  * The impostor budget this build opens with. "Rich" is the desktop default; the renderer's
@@ -103,6 +113,13 @@ window.__ugb = {
   forceSlowFrames(frames: number) {
     renderer?.forceSlowFrames(frames);
   },
+  travel(to: string) {
+    return commitTravel(to);
+  },
+  /** The browser history depth, so a capture can prove a framing write did not grow it. */
+  get historyLength() {
+    return history.length;
+  },
   get state() {
     return {
       seed: state.seed,
@@ -122,7 +139,116 @@ window.__ugb = {
   },
 };
 
-async function init(): Promise<AppHandle> {
+/**
+ * Write a coordinate to the URL under the history contract in `url-state.ts`.
+ *
+ * `framing` (a camera gesture, the boot camera, a key that only moves the eye) replaces the
+ * current entry; `arrival` (a committed travel) pushes, unless the page is already on that
+ * address. One entry per place is what makes Back retrace places instead of mouse movements.
+ */
+function writeUrl(next: UrlState, kind: 'arrival' | 'framing'): void {
+  const nextAddress = formatAddress(next.address);
+  const method = historyWrite(currentEntryAddress, nextAddress, kind);
+  const url = urlForState(next, location.pathname);
+
+  if (method === 'push') {
+    history.pushState(null, '', url);
+    currentEntryAddress = nextAddress;
+  } else {
+    history.replaceState(null, '', url);
+  }
+}
+
+function persist(): void {
+  writeUrl(state, 'framing');
+}
+
+/**
+ * Commit a travel: the one place the address changes (ADR-0003, ADR-0010, ADR-0012).
+ *
+ * The order matters. The arrival state is built first (new address, advanced clock, the
+ * destination's opening camera), then written as one `push`, then the scene is rebuilt from that
+ * URL. A travel is therefore *exactly* "write the arrival link and enter it", which is the
+ * round-trip invariant the evidence plan asks for: reloading the link and arriving by travel are
+ * the same state, not two code paths that have to agree.
+ */
+function commitTravel(toText: string): UniverseTravelResult {
+  if (!app) {
+    return {
+      ok: false,
+      reason: 'the app is not ready',
+      method: null,
+      distanceM: null,
+      elapsedS: null,
+    };
+  }
+
+  const parsed = parseAddress(toText);
+  if (!parsed.address) {
+    const reason = parsed.issue ?? `"${toText}" is not an address`;
+    notice(`travel: ${reason}`);
+    return { ok: false, reason, method: null, distanceM: null, elapsedS: null };
+  }
+
+  const plan: TravelPlan = planTravel(state.seed, state.address, parsed.address);
+  if (plan.distanceM === null || plan.elapsedS === null) {
+    const reason = plan.reason ?? 'no distance is modelled between those places';
+    notice(`travel: ${reason}`);
+    return { ok: false, reason, method: plan.method, distanceM: null, elapsedS: null };
+  }
+
+  const clock = advanceClock(state, plan.elapsedS);
+  if (!clock.ok) {
+    notice(`travel: ${clock.reason}`);
+    return {
+      ok: false,
+      reason: clock.reason,
+      method: plan.method,
+      distanceM: plan.distanceM,
+      elapsedS: plan.elapsedS,
+    };
+  }
+
+  const next: UrlState = {
+    ...state,
+    address: parsed.address,
+    t: clock.t,
+    epochMs: clock.epochMs,
+    // "See the destination" (owner, 2026-11-24): the arrival camera is exactly the opening
+    // framing a fresh shared link to that place would choose, so a link taken mid-jump and the
+    // jump's own arrival are the same state.
+    camera: defaultSystemCamera(resolveSystem(state.seed, parsed.address)),
+    cameraExplicit: true,
+  };
+
+  writeUrl(next, 'arrival');
+  notice(
+    `${plan.method} · ${describeDistanceM(plan.distanceM)} · ${describeDurationS(plan.elapsedS)}`,
+  );
+  // A different address is a different scene: the renderer is built from one address.
+  void start();
+
+  return {
+    ok: true,
+    reason: null,
+    method: plan.method,
+    distanceM: plan.distanceM,
+    elapsedS: plan.elapsedS,
+  };
+}
+
+function describeDistanceM(metres: number): string {
+  const ly = metres / LY_M;
+  return ly >= 0.1 ? `${ly.toFixed(1)} ly` : `${(metres / AU_M).toFixed(1)} AU`;
+}
+
+function describeDurationS(seconds: number): string {
+  if (seconds >= 86_400) return `${(seconds / 86_400).toFixed(1)} days`;
+  if (seconds >= 3_600) return `${(seconds / 3_600).toFixed(1)} h`;
+  return `${seconds.toFixed(0)} s`;
+}
+
+async function init(attempt: number): Promise<AppHandle> {
   ready = false;
   failure = null;
 
@@ -131,8 +257,12 @@ async function init(): Promise<AppHandle> {
 
   const parsed = parseUrlState(location.search);
   state = parsed.state;
+  // The page is on this entry now. A travel from here compares against this address, which is
+  // what turns "consecutive same-address pushes" into a replace.
+  currentEntryAddress = formatAddress(state.address);
 
   const hud = mountHud(state, parsed.issues);
+  notice = (text) => hud.notice(text);
   hud.setStatus('acquiring GPU device');
 
   // The probe is a debug scene, so it is built once at boot: its marker offsets never change.
@@ -155,7 +285,9 @@ async function init(): Promise<AppHandle> {
   }
 
   gpu = await initDevice();
-  if (disposed) throw new Error('App disposed while acquiring the GPU device.');
+  if (disposed || attempt !== bootGeneration) {
+    throw new Error('App was superseded while acquiring the GPU device.');
+  }
   hud.setGpu(gpu);
   hud.setStatus('creating pipeline');
 
@@ -214,15 +346,12 @@ async function init(): Promise<AppHandle> {
     onTierDrop: (tier) => hud.notice(`quality: ${tier} · long frames`),
   });
 
-  if (disposed) {
+  if (disposed || attempt !== bootGeneration) {
     created.dispose();
-    throw new Error('App disposed while creating the renderer.');
+    throw new Error('App was superseded while creating the renderer.');
   }
   renderer = created;
 
-  const persist = (): void => {
-    history.replaceState(null, '', urlForState(state, location.pathname));
-  };
   persist();
 
   hud.setCamera(state.camera);
@@ -270,13 +399,22 @@ async function init(): Promise<AppHandle> {
     created.dispose();
   };
 
+  // Back and Forward are real navigation: the URL is the coordinate, so the page has to enter
+  // the coordinate it now names. Rebuilding is honest rather than clever — the renderer is built
+  // from one address (see `docs/notes/reentering-a-coordinate.md`).
+  const onPopState = (): void => {
+    void start();
+  };
+
   window.addEventListener('keydown', onKey);
   window.addEventListener('ugb:device-lost', onDeviceLost);
+  window.addEventListener('popstate', onPopState);
 
   return {
     dispose() {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('ugb:device-lost', onDeviceLost);
+      window.removeEventListener('popstate', onPopState);
       controls?.dispose();
       created.dispose();
       if (renderer === created) renderer = null;
@@ -285,12 +423,25 @@ async function init(): Promise<AppHandle> {
   };
 }
 
-async function boot(): Promise<void> {
+/**
+ * Build the app for the coordinate `location.search` names, retiring whatever was there.
+ *
+ * Every entry point goes through here — boot, Back/Forward, a committed travel — because all
+ * three are "the URL changed, enter it". The generation counter makes the latest call win: an
+ * older init that finishes late throws at its next checkpoint instead of installing a stale scene.
+ */
+async function start(): Promise<void> {
+  const attempt = ++bootGeneration;
+  const previous = app;
+  app = null;
+  ready = false;
+  previous?.dispose();
+
   try {
-    app = await init();
+    app = await init(attempt);
   } catch (error) {
-    // A superseded module must not paint a fatal panel over the new one.
-    if (disposed) return;
+    // A superseded attempt must not paint a fatal panel over the newer one.
+    if (disposed || attempt !== bootGeneration) return;
     failure = error instanceof Error ? error.message : String(error);
     ready = false;
     console.error('[ugb] init failed:', error);
@@ -309,7 +460,7 @@ if (import.meta.hot) {
   });
 }
 
-void boot();
+void start();
 
 function toggleFullscreen(): void {
   const change = document.fullscreenElement

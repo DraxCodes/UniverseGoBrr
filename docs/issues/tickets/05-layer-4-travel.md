@@ -7,8 +7,9 @@ one frame (worst 5.3×10⁻⁵ px), so the rebase is **address-only** and the fo
 world and the picture is a view of it. **Both halves of placement are built**
 (`src/universe/placement.ts`, with the shared disc law in `src/universe/disc.ts`): every address has
 a position **and** the picture draws by address, so every drawn light carries one
-(`GALAXY_VERSION` 5 → 6). Speed constants are confirmed (see the end of this brief). Still ahead:
-travel state/history, the compass, and the tier masks with panning.
+(`GALAXY_VERSION` 5 → 6). Speed constants are confirmed (see the end of this brief). **Lane 2 is
+built** (`src/universe/travel.ts`, the history rule, Back/Forward re-entry; ADR-0012). Still ahead:
+the compass, and the tier masks with panning.
 
 ## Deliverable (spec §7, row 4)
 
@@ -103,6 +104,42 @@ and possibly `t` all change. The contract must say:
 - that a rebase never changes the address unless a tier boundary was crossed - otherwise a link
   taken before and after a rebase would disagree about where the traveller is.
 
+**Landed (2026-11-24, ADR-0012).** A committed travel is one atomic state change — destination
+address, advanced clock, destination's opening camera — and a travel is *exactly* "write the arrival
+link and enter it". So a mid-travel link is the arrival link: it is legal, it pins the arrival `t`
+when the clock was pinned, and there is no stored `jour` parameter for a crafted link to mismatch.
+History discipline (`historyWrite` in `src/state/url-state.ts`):
+
+- a camera gesture is a `replace`; only a committed arrival `push`es;
+- a repeated address on the current entry collapses to `replace`;
+- no write without a user arrival can push, so a scripted boundary oscillation cannot grow history;
+- Back/Forward re-enter the coordinate, because `popstate` rebuilds the scene from the URL.
+
+Two honest limits: a **live** clock can only be advanced by moving its epoch (the alternative
+freezes the orrery), so a live arrival link drifts with the wall clock exactly like every live link
+already does; a **pinned** arrival link is exact. And `rebaseCamera` still has no production
+consumer — under ADR-0012 an arrival is re-framed, not translated, so its first consumer is the
+address HUD's zoom-out in lane 3.
+
+### Lane 2 mechanics, as built
+
+- **`planTravel(seed, from, to)`** (`src/universe/travel.ts`) returns the method, the distance in
+  the shared galaxy frame, `Δt = d / v(method)`, or a plain `reason` the jump is refused. It never
+  invents a number: a galaxy-to-galaxy jump is refused because no root layout exists.
+- **The method uses the address, not a threshold.** A trip that touches the disc population is a
+  transwarp; a local-field-only trip is a warp (ADR-0011's two populations). The rule is symmetric,
+  so a round trip cannot pick two speeds. `impulse` is free flight and is never a travel action;
+  `subspace` is selected for a galaxy crossing and then refused for lack of distance.
+- **`advanceClock`** (`src/state/url-state.ts`) preserves the clock's mode: pinned `t` moves, live
+  epoch shifts back. Travel never freezes a live world (ADR-0012).
+- **The trigger is the debug surface for now.** `window.__ugb.travel('v1/0.9')` commits a jump;
+  the compass and the clickable address HUD bring the user-facing control in lane 3. No placeholder
+  key was invented, so nothing ships that lane 3 has to remove.
+- **Evidence:** `npm test` covers the plan, the history rule and the clock's two boundary refusals;
+  `npm run probe:travel` (`tools/travel-probe.mjs`) drives the built app (travel → arrival link
+  reload → Back → Forward → framing write) and is the check to re-run after any `start()`/`init()`
+  change, including that the arrival link reproduces the address, camera and epoch exactly.
+
 ## D8 - No new content
 
 Layer 4 generates nothing new. It moves through what Layers 2 and 3 already produce, plus the
@@ -156,10 +193,23 @@ the generator in `src/universe/disc.ts`.
   about one galaxy in four draws two lights at the same position under different addresses. That is
   a visual duplicate, not an identity confusion (identity is the `Address`), but the next layer's
   travel state and compass are exactly the features that would turn a position into a key. Widen
-  the hash before designing an arrival check.
+  the hash before designing an arrival check. **Lane 2 keeps identity in the address:** `planTravel`
+  uses positions only to compute a distance, and an arrival is still an address, so a collided pair
+  reads as a zero-distance trip rather than an identity confusion. The trigger is still unmet; the
+  compass's nearest-anchor search is the next candidate to meet it.
 - **The root is not a galaxy.** `generateGalaxy` guards the root and returns the home star alone;
   `starKind` throws rather than classifying a shallow address. Before those guards, `?addr=v1/`
   hung the tab in an unbounded child walk.
+- **A live clock cannot be made byte-exact by travel.** Time advances by moving the epoch, so a
+  live arrival link drifts with the wall clock exactly like every live link already does. Only a
+  pinned arrival link reproduces an instant; do not claim otherwise in copy or evidence.
+- **A travel that the URL cannot represent is refused, not written.** The reader caps `t` at `±1e20`
+  and accepts only four-digit ISO years, so an arrival past either bound would reload as a different
+  state (pin dropped, epoch reset). `advanceClock` returns a reason instead, and `commitTravel`
+  shows it. Crafted edge values reach this first; a live clock reaches it after ~7 maximum jumps.
+- **Changing the address rebuilds the app.** The renderer captures `system` and `galaxy` once, so
+  a coordinate change is `start()` (dispose + `init`), not a state patch. A second "update the
+  scene" path would duplicate `init` and drift: `docs/notes/reentering-a-coordinate.md`.
 - **Right-drag panning fights the browser.** A context menu opens on right-button release unless the
   canvas suppresses it while a right-drag is active. Suppress only during the drag, not globally,
   or the rest of the page loses its menu.

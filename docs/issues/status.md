@@ -95,16 +95,25 @@ structure is checked by `src/status-page.test.ts`; its content is the owner's to
 
 ## Doing
 
-**The picture draws by address; travel state, the compass and tier masks are next.** The last half
-of ADR-0011 landed: `generateGalaxy` walks child addresses and every drawn star carries one, with
-appearance on its own address-keyed stream so a tier cut is still a prefix. Placement reached a
-renderer consumer for the first time, which is the moment the ticket said to re-run the security
-lens — that is due before the next layer starts.
+**Lane 2 (travel state + URL history) is built; the compass and the tier masks are next.** A
+committed travel is now one atomic state change (ADR-0012): `planTravel` in `src/universe/travel.ts`
+returns the method, the distance in the shared galaxy frame and `Δt = d / v(method)` — or a plain
+reason it refuses, never an invented number. The arrival camera is the destination's opening view,
+the clock's mode is preserved (pinned `t` moves; a live epoch shifts back, so the orrery does not
+freeze), and the URL is written once as one history entry. `popstate` now re-enters the coordinate,
+so Back and Forward change the picture instead of only the address bar; a framing write never grows
+history.
 
-Still not built in Layer 4: lane 2's travel history and journey rules, the compass, and the tier
-masks with panning (right-drag, left-drag keeps yaw/pitch). Lane 1 (`rebaseCamera`) is pure and
-tested, with no production consumer yet by design. After those: the deferred visual pass and the
-root `LICENSE`/product name.
+The user-facing trigger is deliberately still the debug surface (`window.__ugb.travel('v1/0.9')`);
+the compass and the clickable address HUD bring the real control in lane 3. The jump is a hard cut
+until the tier masks land. Evidence: `npm run probe:travel` (`tools/travel-probe.mjs`) drives the
+built app (travel → arrival-link reload → Back → Forward → framing write), including that the arrival
+link reproduces the address, camera and epoch exactly. Mechanism note:
+`docs/notes/reentering-a-coordinate.md`.
+
+Still not built in Layer 4: the compass and address HUD, and the tier masks with panning (right-drag,
+left-drag keeps yaw/pitch). After those: the deferred visual pass and the root `LICENSE`/product
+name.
 
 Two new environment notes landed with this commit, both traps this session paid for:
 `docs/notes/powershell-writes-cp1252.md` and `docs/notes/git-reset-hard-and-opencode-json.md`, plus
@@ -115,11 +124,14 @@ Two new environment notes landed with this commit, both traps this session paid 
 1. **Layer 4 (travel tiers) is decided and has started.** `council-layer-4.md` §10 records the
    owner's answers: **A**, address-origin frames, rebasing on tier crossings only; a tier crossing
    is a **journey**; **time advances by `d / v(method)`** (ADR-0010); tiers + panning first, compass
-   second. **Lane P passes** (§8), so the rebase is address-only. **Lane 1** (`src/frame/rebase.ts`)
-   and **both halves of placement** are done, including the picture drawing by address. Next: travel
-   state/history, then the compass and tier masks. **Run the security lens now**: the renderer calls
-   `placement` for the first time, which is where the F2 attack surface actually arrives (until this
-   change only tests called it).
+   second. **Lane P passes** (§8), so the rebase is address-only. **Lane 1** (`src/frame/rebase.ts`),
+   **both halves of placement**, and **lane 2** (travel state + URL history, ADR-0012) are done.
+   Next: the compass and clickable address HUD (lane 3), then the tier masks with right-drag panning
+   (lane 4). The security lens has now run on the placement consumer, the root-guard fix and lane 2
+   (`.scratch/runs/layer4-travel-state-audit.json`); it raised two low findings — a crafted `?t=` or
+   `?epoch=` at the edge of the reader's range could make an arrival link reload as a *different*
+   state — both fixed in the same commit by making `advanceClock` refuse an unrepresentable arrival.
+   Run it again at the next commit boundary: the compass and the travel trigger are what come next.
 2. The deferred visual pass: read `iterations/layer-3-iteration-2-deferred.md` before touching tone,
    grading, density balance or reference claims. Re-gate here when it returns.
 3. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon
@@ -127,16 +139,16 @@ Two new environment notes landed with this commit, both traps this session paid 
    handoff; gate scoring never leaves this workflow.
 4. **Panning binding is settled** (owner, 2026-11-24): left-drag keeps yaw/pitch as today,
    **right-drag pans**, and the context menu is suppressed only while a right-drag is active. It is
-   still **unimplemented**: it arrives with the tier work (D5) and touches
+   still **unimplemented**: it arrives with the tier work (lane 4) and touches
    `src/input/orbit-controls.ts`'s "position is derived from angles and distance" invariant plus
    ADR-0003's framing-vs-travel split.
 
 
 ## Blocked
 
-- **Nothing wanted from the owner to start.** The two Layer 4 questions are answered: the speed
-  table and the panning binding. What remains is V1-level — the product name and the root
-  `LICENSE`.
+- **Nothing wanted from the owner to start.** The Layer 4 questions are answered: the speed table,
+  the panning binding, and the arrival view. What remains is V1-level — the product name and the
+  root `LICENSE`.
 - Nothing technical. The 1650-class proxy is unavailable, so floor performance stays an argument,
   never a measurement.
 
@@ -150,6 +162,13 @@ Two new environment notes landed with this commit, both traps this session paid 
   serves the compass. **The speed table is confirmed as proposed** (owner, 2026-11-24): impulse
   0.01 c, warp 1 ly/day, transwarp 100 ly/day, wormhole 10,000 ly/day. `d` is real within one galaxy
   today; between galaxies it waits for a root layout.
+- **A travel is one committed state change, landing on the destination** (ADR-0012, owner
+  2026-11-24). The arrival camera is the destination's opening view ("see the destination"), not the
+  rebased departure offset. The clock's mode is preserved: a pinned `t` moves forward, a live epoch
+  shifts back, so a live orrery never freezes. The URL is written once, as one history entry, so a
+  travel is exactly "write the arrival link and enter it" and a mid-travel link is the arrival link.
+  Consequence: `rebaseCamera` still has no production consumer; the address HUD's zoom-out is its
+  first.
 - **Panning is right-drag; left-drag keeps yaw/pitch** (owner, 2026-11-24). The canvas suppresses
   the context menu while a right-drag is active. `orbit-controls.ts` ignores every button except 0
   today, so this adds a `button === 2` path rather than remapping the existing one. Touch/pen

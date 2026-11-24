@@ -3,9 +3,11 @@ import { DEFAULT_ADDRESS, formatAddress } from '../frame/address';
 import {
   DEFAULT_EPOCH_ISO,
   DEFAULT_SEED,
+  advanceClock,
   clockSeconds,
   defaultState,
   formatNumber,
+  historyWrite,
   parseUrlState,
   urlForState,
   type UrlState,
@@ -160,6 +162,95 @@ describe('clockSeconds', () => {
     const state = defaultState();
     state.epochMs = 1000;
     expect(clockSeconds(state, 3500)).toBe(2.5);
+  });
+});
+
+describe('advanceClock', () => {
+  it('moves a pinned t forward and keeps it pinned', () => {
+    const state = defaultState();
+    state.t = 1200;
+    expect(advanceClock(state, 86_400)).toEqual({ ok: true, t: 87_600, epochMs: state.epochMs });
+  });
+
+  it('moves a live epoch back and keeps the clock live', () => {
+    const state = defaultState();
+    const next = advanceClock(state, 86_400);
+    expect(next.ok).toBe(true);
+    if (!next.ok) return;
+    expect(next.t).toBeNull();
+    expect(next.epochMs).toBe(state.epochMs - 86_400_000);
+    // The universe time at a fixed wall instant is one day later than before the travel.
+    expect(clockSeconds({ ...state, ...next }, state.epochMs)).toBeCloseTo(86_400, 6);
+  });
+
+  it('refuses to rewind or accept a non-number', () => {
+    expect(() => advanceClock(defaultState(), -1)).toThrow(/non-negative/);
+    expect(() => advanceClock(defaultState(), Number.NaN)).toThrow(/finite/);
+    expect(() => advanceClock(defaultState(), Number.POSITIVE_INFINITY)).toThrow(/finite/);
+  });
+
+  // The audit found that a crafted departure clock at the edge of the reader's range could be
+  // pushed past it by one jump, so the arrival link silently lost its pin (or reset its epoch) on
+  // reload. These pin the refusal at both edges, and the round trip that must survive mid-range.
+  it('refuses a pinned arrival past the reader cap instead of writing a link that drops it', () => {
+    const state = defaultState();
+    state.t = 1e20;
+    const next = advanceClock(state, 9.2e9);
+    expect(next.ok).toBe(false);
+    if (next.ok) return;
+    expect(next.reason).toMatch(/range a shared link can carry/);
+  });
+
+  it('refuses a live arrival below the epoch the ISO pattern can write', () => {
+    const state = defaultState();
+    state.epochMs = Date.parse('0001-01-01T00:00:00.000Z');
+    const next = advanceClock(state, 9.2e9);
+    expect(next.ok).toBe(false);
+    if (next.ok) return;
+    expect(next.reason).toMatch(/dates a shared link can carry/);
+  });
+
+  it('round-trips an accepted pinned and live arrival through the URL', () => {
+    const pinned = defaultState();
+    pinned.t = 1e19;
+    const pinnedNext = advanceClock(pinned, 9.2e9);
+    expect(pinnedNext.ok).toBe(true);
+    if (!pinnedNext.ok) return;
+    const pinnedUrl = urlForState({ ...pinned, ...pinnedNext }, '/');
+    const pinnedBack = parseUrlState(pinnedUrl.slice(1));
+    expect(pinnedBack.issues).toEqual([]);
+    expect(pinnedBack.state.t).toBe(pinnedNext.t);
+
+    const live = defaultState(); // default epoch, comfortably inside 0000-9999
+    const liveNext = advanceClock(live, 9.2e9);
+    expect(liveNext.ok).toBe(true);
+    if (!liveNext.ok) return;
+    const liveUrl = urlForState({ ...live, ...liveNext }, '/');
+    const liveBack = parseUrlState(liveUrl.slice(1));
+    expect(liveBack.issues).toEqual([]);
+    expect(liveBack.state.epochMs).toBe(liveNext.epochMs);
+    expect(liveBack.state.t).toBeNull();
+  });
+});
+
+describe('historyWrite', () => {
+  it('replaces on framing and pushes only on a new arrival', () => {
+    expect(historyWrite('v1/0.1', 'v1/0.2', 'framing')).toBe('replace');
+    expect(historyWrite('v1/0.1', 'v1/0.2', 'arrival')).toBe('push');
+  });
+
+  it('collapses a repeated address to a replace', () => {
+    expect(historyWrite('v1/0.2', 'v1/0.2', 'arrival')).toBe('replace');
+  });
+
+  it('never pushes without a user arrival, so an oscillation cannot grow history', () => {
+    // A scripted boundary bounce is a sequence of framing writes at alternating addresses.
+    const addresses = ['v1/0.1', 'v1/0.2', 'v1/0.1', 'v1/0.2'];
+    const writes = addresses.map((next, i) => {
+      const current = addresses[i - 1] ?? next;
+      return historyWrite(current, next, 'framing');
+    });
+    expect(writes.every((write) => write === 'replace')).toBe(true);
   });
 });
 

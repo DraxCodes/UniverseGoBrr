@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "kind": "security",
+  "status": "passed",
+  "startedAt": "2026-11-24T20:45:00.000Z",
+  "endedAt": "2026-11-24T21:15:00.000Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Security lens over lane 2 (uncommitted working tree vs 8c62720): travel state, clock advance, URL history. Is the only new address input the debug travel call; does a travel string reach anything but RNG keys and textContent; can advanceClock write a URL that parseUrlState then rejects; can start()/init(attempt) leave two renderers or leak listeners; any new fetch/storage/secret; is status.html still inert; can a crafted link alone grow resources.",
+  "commit": "8c62720..working tree (wip/layer-3)",
+  "models": [
+    "surplus/glm-5.3 (audit)"
+  ],
+  "verdict": "CONCERNS (low, nothing blocking, no exposure), then two LOW findings fixed in the same commit before it landed. Claims 1, 2, 4, 5 and 6 confirmed by reading the full flow plus a grep over all of src/. Claim 3 split: the advanceClock guard (negative/non-finite) holds, but its 'the arrival can always be written' half was REFUTED at both boundaries. Pinned: a crafted ?t=1e20 plus one maximum in-galaxy warp (d <= 1e21 m, dt <= 9.13e9 s) produces t ~= 1.0000000000913e20, which formatNumber writes and parseUrlState rejects on reload, silently dropping the pin. Live: a crafted ?epoch=0001-01-01 plus one maximum jump writes a negative-year ISO string that fails the four-digit pattern, resetting the epoch to 2000 (a multi-millennium jump); at ~600 accumulated jumps toISOString throws inside urlForState, before pushState. Neither is reachable from a link alone, but both break ADR-0012's round-trip claim.",
+  "notes": "Fix: advanceClock now returns a result union (ok:true with the clock, or ok:false with a plain reason), and refuses an arrival whose clock is outside what the reader accepts, so the writer cannot produce a state the reader rejects; commitTravel surfaces the reason through the HUD instead of writing the link. Bounds are exported (MIN_EPOCH_MS/MAX_EPOCH_MS) and derived from the reader's own four-digit ISO years rather than re-guessed. Two new tests pin the refusals at both edges, and a third round-trips an in-range pinned and live arrival through urlForState -> parseUrlState with zero issues. F3 (informational) was the missing boundary round-trip test, which would have caught this; now present. F4 (informational) was a note citing .scratch/travel-e2e.mjs as evidence when .scratch is gitignored, so a fresh session could not run it; the probe moved to the tracked tools/ tree as tools/travel-probe.mjs with npm run probe:travel, matching the existing probe convention, and every citation was updated. start()/init cannot leave two live renderers: the generation check at main.ts:277 throws before context.configure and the one at 338-341 disposes the loser; a second start() while an init is in flight sees previous=null but that init attaches listeners only after its final checkpoint. Resource growth from a crafted link alone is impossible: one boot, popstate needs same-document entries that only a committed travel creates, the GPUDevice is a singleton promise, pipelines are GC-reclaimed, and mountHud reuses fixed DOM ids; the only unbounded counter is history.length, one entry per deliberate arrival to a different address, which is the designed behaviour. No secret, credential, absolute path or personal data in any added line; no new network, storage or DOM sink; status.html stays static under its CSP. Cost: cents, one seat, one pass.",
+  "evidence": [
+    {
+      "path": "src/universe/travel.ts",
+      "sha256": "sha256:c61d509b5f8660995d3fd0c01f9916e24f0f668864a6e723427b58e28a96194f",
+      "kind": "artifact"
+    },
+    {
+      "path": "src/universe/travel.test.ts",
+      "sha256": "sha256:79b923753c5ff817ce68d8c5785f4f017c9b869339b6a847c17b528490fd9862",
+      "kind": "artifact"
+    },
+    {
+      "path": "src/state/url-state.ts",
+      "sha256": "sha256:1bd081d9dbd2def4e083cbb1b5fb273504d6beae71dc31b8e7b89d8ae5103e7a",
+      "kind": "artifact"
+    },
+    {
+      "path": "src/state/url-state.test.ts",
+      "sha256": "sha256:bfcc1d9a4edd0fa9793a96d25a74619c71c4b87405bcd49bf51a768742e653fb",
+      "kind": "artifact"
+    },
+    {
+      "path": "src/main.ts",
+      "sha256": "sha256:cd189ff446e7f224be112749dd372bba34791937ccf19d924066d4b7657f6252",
+      "kind": "artifact"
+    },
+    {
+      "path": "src/env.d.ts",
+      "sha256": "sha256:539c3432fd811f533b5a248e7b3fdd2a553a1e824cafcb702f7c0923303d5353",
+      "kind": "artifact"
+    },
+    {
+      "path": "tools/travel-probe.mjs",
+      "sha256": "sha256:f9cd2b566e892b0746f5191bc54569d66caa84ed57bf637f73ba7a22d612c772",
+      "kind": "artifact"
+    },
+    {
+      "path": "docs/notes/reentering-a-coordinate.md",
+      "sha256": "sha256:790df295ad55da718fdbbde0dbb2baa7818291af37742e9a3024c5d668d1bc31",
+      "kind": "artifact"
+    }
+  ],
+  "id": "20261124T211843-1ee46679"
+}

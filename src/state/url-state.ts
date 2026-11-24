@@ -76,6 +76,15 @@ const MAX_POSITION_M = 1e30;
 const MAX_ANGLE_RAD = 1e6;
 const MAX_TIME_S = 1e20;
 
+/**
+ * The epoch range the *reader* accepts. `ISO_PATTERN` starts with `\d{4}`, so a negative or
+ * five-digit year is rejected and the epoch silently resets to the default — which is a jump of
+ * millennia. These are the same bounds as clock advance must respect, expressed as the timestamps
+ * themselves rather than re-derived from the pattern, so the writer cannot drift from the reader.
+ */
+export const MIN_EPOCH_MS = Date.parse('0000-01-01T00:00:00.000Z');
+export const MAX_EPOCH_MS = Date.parse('9999-12-31T23:59:59.999Z');
+
 export function defaultState(): UrlState {
   return {
     seed: DEFAULT_SEED,
@@ -238,6 +247,95 @@ export function formatNumber(value: number): string {
 /** Seconds since the state's epoch: pinned when `t` is set, otherwise the wall clock. */
 export function clockSeconds(state: UrlState, nowMs: number): number {
   return state.t ?? (nowMs - state.epochMs) / 1000;
+}
+
+/**
+ * The result of advancing the clock: either the new clock, or the reason the arrival instant
+ * cannot be written to a URL.
+ *
+ * A refusal is not pedantry. ADR-0012's whole claim is that *reloading the arrival link and
+ * arriving by travel are the same state*. If the arrival clock is outside what `parseUrlState`
+ * accepts, the reload would silently drop the pin or reset the epoch — so the honest answer is to
+ * refuse the travel rather than write a link that does not mean what the jump did.
+ */
+export type ClockAdvance =
+  | { ok: true; t: number | null; epochMs: number }
+  | { ok: false; reason: string };
+
+/**
+ * Move the universe clock forward by `elapsedS` **without changing whether it is live**.
+ *
+ * The clock has two modes and travel must not silently switch them:
+ *
+ * - **Pinned** (`t` set): move `t` by `elapsedS`. The arrival link reproduces the arrival instant
+ *   exactly, which is what a shared coordinate owes the person who opens it.
+ * - **Live** (`t` null): move the **epoch** back by `elapsedS`, so the elapsed wall time since the
+ *   epoch grows by the same amount and the orrery keeps running. The alternative — pinning `t` on
+ *   every arrival — would freeze the planets after every jump, which is a worse lie than an epoch
+ *   that is a few days earlier than the wall clock.
+ *
+ * The council's "a mid-travel link pins the arrival `t`" is satisfied in the case it was written
+ * for (a pinned, reproducible coordinate) without forcing a live world to stop.
+ *
+ * A negative or non-finite input is a caller bug, not a user input: throw rather than rewind. An
+ * arrival that a URL cannot carry is a *refusal* (`ok: false`), because a crafted `?t=` or
+ * `?epoch=` can put the departure clock at the edge of the range through no fault of the caller.
+ */
+export function advanceClock(state: UrlState, elapsedS: number): ClockAdvance {
+  if (!Number.isFinite(elapsedS) || elapsedS < 0) {
+    throw new Error(
+      `advanceClock needs a finite, non-negative number of seconds; got ${String(elapsedS)}`,
+    );
+  }
+
+  if (state.t !== null) {
+    const t = state.t + elapsedS;
+    // The reader accepts |t| <= MAX_TIME_S; a value past that would be dropped on reload.
+    if (!Number.isFinite(t) || Math.abs(t) > MAX_TIME_S) {
+      return {
+        ok: false,
+        reason:
+          'the arrival clock would be outside the range a shared link can carry, ' +
+          'so the link would not reproduce this jump',
+      };
+    }
+    return { ok: true, t, epochMs: state.epochMs };
+  }
+
+  const epochMs = state.epochMs - elapsedS * 1000;
+  // The reader's ISO pattern has a four-digit year, so the epoch must stay inside 0000-9999.
+  if (!Number.isFinite(epochMs) || epochMs < MIN_EPOCH_MS || epochMs > MAX_EPOCH_MS) {
+    return {
+      ok: false,
+      reason:
+        'the arrival epoch would be outside the dates a shared link can carry, ' +
+        'so the link would not reproduce this jump',
+    };
+  }
+  return { ok: true, t: null, epochMs };
+}
+
+/** Whether a URL write should add a history entry or replace the current one. */
+export type HistoryWrite = 'push' | 'replace';
+
+/**
+ * The history contract for the URL that is the single source of truth (council §9, lane 2).
+ *
+ * A camera gesture is `framing`: it replaces the current entry, because one drag is not a place.
+ * A committed arrival is the only thing that gets a new entry, so Back retraces places rather than
+ * every nudge of the mouse. A repeat of the address the page is already on collapses to a replace,
+ * so an automatic bounce (if one is ever added) cannot fill history with duplicates.
+ *
+ * The property the risk seat asked for is therefore structural: **a write with no user arrival
+ * never pushes**, so a scripted boundary oscillation cannot change `history.length`.
+ */
+export function historyWrite(
+  currentEntryAddress: string,
+  nextAddress: string,
+  kind: 'arrival' | 'framing',
+): HistoryWrite {
+  if (kind === 'framing') return 'replace';
+  return nextAddress === currentEntryAddress ? 'replace' : 'push';
 }
 
 export function formatEpoch(epochMs: number): string {

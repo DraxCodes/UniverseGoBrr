@@ -1,8 +1,8 @@
 # Status — Layer 3: star field and galaxy
 
 Updated: 2026-11-24
-Branch: `wip/layer-3`, which is the Layer 3 WIP commit `566a303` with `main`'s docs reorg merged in.
-`main` carries the reorg. Tag `pin/layer-3-assessment` marks `566a303`, the code state the gate
+Branch: `wip/layer-3` — the Layer 3 line, now including Sol. `main` carries the docs reorg and is
+still Layer 2. Tag `pin/layer-3-assessment` marks `566a303`, the code state the gate
 scored 6/10, and stays there; the merge changed no source file.
 Working tree: clean except `opencode.json` (user work — do not commit, do not revert).
 Pushed: `origin/main` matches `main`, so the record is public. `wip/layer-3` and the tag stay local.
@@ -74,6 +74,9 @@ Two new environment notes landed with this commit, both traps this session paid 
 
 ## Blocked
 
+- **Layer 4 needs the owner before any code**: D0 (convene the council?), then D1 (rebase
+  strategy) and D2 (cut with a mask vs journey). Proposal: `council-layer-4.md`; brief:
+  `tickets/05-layer-4-travel.md`. Five of six council triggers hold, so the default is a council.
 - Nothing technical. The 1650-class proxy is unavailable, so floor performance stays an argument,
   never a measurement.
 

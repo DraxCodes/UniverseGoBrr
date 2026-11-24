@@ -1,0 +1,150 @@
+# 05 - Layer 4: travel tiers
+
+**Status: proposed, not decided.** This brief exists so the owner can decide *whether and how* to
+build Layer 4. It deliberately contains no chosen strategy; the decisions are listed in
+`council-layer-4.md` §7. Do not implement from this file until that decision is recorded.
+
+## Deliverable (spec §7, row 4)
+
+> **Travel tiers** - frame rebases, warp effects, navigation compass. *The core loop.*
+
+ADR-0003 says travel tiers **are** frame rebases and the effect is the mask for the swap.
+ADR-0008 deferred int64 cells, the `cellSize >= frameDiameter / 2^52` rule and automatic rebasing
+to exactly here. Layer 4 is where that deferral is either spent or retired.
+
+## What exists today
+
+- `Position` (`src/frame/position.ts`) is already an opaque frame origin plus a double local
+  vector; the only route to the GPU is `toCameraRelativeF32`, and the naive path exists as a
+  negative control. That interface was built so the internals could change without touching a
+  caller.
+- The address is unbounded, has a root (`v1/`), and is opaque identity (`describeAddress` is
+  display only). `childAddress` / `parentAddress` are the only navigation primitives.
+- The camera is `target + yaw/pitch/distance` (`src/state/url-state.ts`,
+  `src/input/orbit-controls.ts`); "position is derived from angles and distance" is an invariant
+  several tests rely on.
+- Every scene normalises to its own scale: `buildSceneFrame` uploads `(object - camera) / scale`,
+  so the float32 window is per scene, not per universe.
+- One galaxy and one system render from `(seed, address)`; nothing is cached or persisted.
+
+## D1 - What a frame is, and where its origin lives
+
+The question the whole layer turns on: **when the camera moves, what moves with it?**
+
+- If the origin is the current **address node**, then crossing a tier is the rebase, and the
+  address is the only navigation state.
+- If the origin is a **cell** on an int64 lattice, rebasing is a threshold event independent of
+  the address, and the address changes only when a tier boundary is actually crossed.
+
+These are compatible (an address node can own a cell), but the choice decides how many coordinate
+representations exist and what a "rebase" is allowed to change.
+
+## D2 - The rebase trigger and its threshold
+
+ADR-0008 recorded `cellSize >= frameDiameter / 2^52`. If cells land, the trigger is the camera's
+offset within its cell crossing a fraction of `cellSize`; if they do not, the trigger is the
+address changing tier. Either way the rule must be a named constant with a test, not a magic
+number in a frame loop.
+
+**A rebase must be pixel-invisible.** The evidence is a capture pair straddling the trigger that
+is identical to the eye, plus a precision readout that does not move.
+
+## D3 - The tiers and their masks
+
+Spec §3.2 names four tiers and four effects: impulse (none), warp (star streaks, sector to
+system), transwarp (tunnel, system to another quadrant), subspace (aperture, galaxy to galaxy).
+Open questions the council must answer, because they define the feel:
+
+- Is a tier crossing **a cut with a mask** (instant, effect plays over the swap) or **a journey**
+  (the camera actually traverses, and the effect is what traversal looks like)?
+- Does the effect scale with distance, or is it one animation per tier?
+- What happens on a **failed** or **interrupted** crossing - is an interrupted warp a state the
+  app can be in?
+
+## D4 - The compass
+
+Spec §3.2: warping to an arbitrary empty point requires a **navigation compass** - bearing and
+distance to the nearest anchors, a pin on where you came from, a return breadcrumb. The cosmic
+address HUD (moved here from Layer 3) is half of it: the postal address of where you are, each
+line clickable to zoom out. The breadcrumb is the other half.
+
+Open: are anchors **content** (nearest generated nodes, which cost a search) or **navigation state**
+(the trail you actually travelled)? The former is honest and expensive; the latter is cheap and
+lies about the neighbourhood.
+
+## D5 - Panning
+
+Deferred here from Layer 3 (status.md, open question 4). Left-click X/Y panning changes the
+camera `target`, which is the same generalisation as travel: `target + yaw/pitch/distance`. It must
+not break the "position is derived" invariant or the precision window; it belongs with the rebase
+work, not before it.
+
+## D6 - Time during travel
+
+`t` is an input (ADR-0004), and a journey has a duration. Three positions, one of which the
+council must take:
+
+- travel does not advance `t` (the universe freezes while you move);
+- travel advances `t` by the traversal time (arrive later, orbits have moved);
+- travel advances `t` by a stated rate (a warp is hours, a transwarp is years).
+
+This is an experience decision, not a physics one: it decides whether arriving somewhere feels
+like *going there* or *cutting there*.
+
+## D7 - The URL and sharing contract
+
+A link already carries `seed`, `addr`, `cam`, `t`, `epoch`. During travel the address, the camera
+and possibly `t` all change. The contract must say:
+
+- when the URL is rewritten (per frame is wasteful and makes history unusable);
+- whether a mid-travel link is legal (it probably must be, or a reload loses the journey);
+- that a rebase never changes the address unless a tier boundary was crossed - otherwise a link
+  taken before and after a rebase would disagree about where the traveller is.
+
+## D8 - No new content
+
+Layer 4 generates nothing new. It moves through what Layers 2 and 3 already produce, plus the
+authored registry. If a deliverable needs new generation (nebulae, actors, belts), it belongs to
+Layer 5 or later.
+
+## Evidence plan (to be finalised by the council)
+
+- A probe that crosses each tier and prints the address, the camera in double metres, the offset
+  from the frame origin, and the float32 step at that offset - before and after the rebase.
+- A capture pair straddling the rebase trigger, compared at 1:1 (`docs/notes/check-captures-at-1-to-1.md`).
+- A link round-trip during travel: reload from a mid-travel URL and land in the same state.
+- The compass read against known anchors: bearing and distance are checked arithmetic, not vibes.
+- The precision negative control must still fail (it is the guard that the harness detects the bug).
+
+## Non-goals
+
+- Nebulae, volumetric anything (Layer 5).
+- Surfaces, landing, terrain (Layer 6, possibly never).
+- Actors, traffic, civilisations (ADR-0006 needs its own council).
+- Any new content population.
+- Mobile layout (spec §1).
+
+## Risks, stated plainly
+
+- **An invisible rebase is easy to believe and hard to prove.** Without the capture pair and the
+  offset readout, a rebase bug looks like "the planet is slightly in the wrong place" and survives
+  review.
+- **Two coordinate representations drift.** If cells arrive beside `Position`, exactly one module
+  may own the conversion, and it must be the same module that owns `toCameraRelative`.
+- **Address flapping.** If the address is derived from position rather than from a chosen frame,
+  a camera hovering on a boundary will oscillate between two addresses and rewrite the URL.
+- **The compass can lie cheaply.** A breadcrumb that shows "home" at a stale coordinate is worse
+  than no compass, because it is trusted.
+- **Time couples to feel.** Choosing "travel advances `t`" without deciding the rate makes the
+  arrival state unpredictable and unshareable.
+
+## Decisions this brief does not make
+
+1. Whether to convene the Layer 4 council at all (the triggers are in `council-layer-4.md` §6).
+2. The frame/rebase strategy: address-origin vs cell lattice vs a frame stack.
+3. Cut-with-mask vs journey, and the effect per tier.
+4. Whether travel advances `t`, and at what rate.
+5. Whether panning, the compass and the breadcrumb ship together or in separate commits.
+6. Whether the address HUD's first version is read-only or clickable-to-zoom-out.
+
+Owner: none of the above is assumed anywhere in the code. Layer 4 starts when these are answered.

@@ -89,10 +89,11 @@
 
       <h2>Right now</h2>
       <p class="lede">
-        Layer 4, travel. The frame rebase and the approach probe are finished; the probe proved the
-        camera can reach a planet without the frame ever moving its origin, so travel is simpler than
-        the council feared. Next task is <code>placement</code> — without it nothing has a distance,
-        and travel time and the compass both need one.
+        Layer 4, travel. The frame rebase and the approach probe are finished, and the galaxy now
+        keeps its identity when you move: a star next door shows you the same sky. The placement
+        direction is decided — the address grid is the world, and the picture is a view of it — so
+        every light you can see is somewhere you can go. Next task is <code>placement</code> itself:
+        without it nothing has a distance, and travel time and the compass both need one.
       </p>
 
       <h2>Remaining to V1</h2>
@@ -104,7 +105,7 @@
           <tr>
             <td>L4</td>
             <td class="task">Placement: address → position in its parent<em>Every node needs a position or no distance exists. Also feeds the compass.</em></td>
-            <td class="status s-now">Next · needs your call</td>
+            <td class="status s-next">Next</td>
           </tr>
           <tr>
             <td>L4</td>
@@ -182,6 +183,11 @@
             <td class="task">Rebase module<em>Translation only, shift never absolute. Picture moves &lt; 0.001 px across 10 ly.</em></td>
             <td class="status s-done">Done</td>
           </tr>
+          <tr>
+            <td>L4</td>
+            <td class="task">Galaxy identity<em>One sky per galaxy. Walking to a neighbouring star no longer redraws the stars.</em></td>
+            <td class="status s-done">Done</td>
+          </tr>
         </tbody>
       </table>
 
@@ -208,11 +214,14 @@
 
       <h2>Waiting on you</h2>
       <ul>
-        <li><strong>Placement:</strong> hash a position, or pick a deterministic star from the galaxy's own population? The star keeps the compass agreeing with what you can see.</li>
         <li><strong>Travel speeds:</strong> ADR-0010 proposes impulse 0.01c, warp 1 ly/day, transwarp 100 ly/day, wormhole 10,000 ly/day. Confirm or move any row; the model does not depend on the numbers.</li>
         <li><strong>Panning:</strong> drag, or a modifier-click?</li>
         <li><strong>Name:</strong> is UniverseGoBrr the product name?</li>
       </ul>
+      <p class="note">
+        Placement is no longer on this list: the direction is decided, and the remaining numbers
+        (how many cells are occupied, how dense a neighbourhood is) are ours to pick.
+      </p>
 
       <h2>After V1</h2>
       <p class="lede">

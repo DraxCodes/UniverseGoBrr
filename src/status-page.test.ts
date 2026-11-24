@@ -54,6 +54,20 @@ describe('the status page the HUD links to', () => {
     expect(status).toContain('<meta name="color-scheme" content="dark" />');
   });
 
+  it('stays inert: no script, and nothing it can load from elsewhere', () => {
+    // The page ships in `dist/` and is reachable from the app. Its safety comes from being static,
+    // which is easy to break by adding one convenient line. A script or an external resource turns
+    // a hand-edited status page into something the browser executes.
+    expect(status).not.toMatch(/<script/i);
+    expect(status).not.toMatch(/\son[a-z]+\s*=/i);
+    expect(status).not.toMatch(/<(img|iframe|object|embed)\b/i);
+    // `href`/`src` to anything but a same-document anchor would make the page depend on a network.
+    const external = [...status.matchAll(/(?:href|src)\s*=\s*"([^"]*)"/gi)]
+      .map((match) => match[1] ?? '')
+      .filter((value) => !value.startsWith('#') && value !== '/status.html');
+    expect(external).toEqual([]);
+  });
+
   it('names the record it is a summary of', () => {
     // The page is disposable; the docs are the record. If the page ever stops saying so, the next
     // session will edit it as though it were authoritative.

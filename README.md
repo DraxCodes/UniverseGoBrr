@@ -1,7 +1,7 @@
 # UniverseGoBrr
 
 A procedural universe explorer for the web: TypeScript, WebGPU, no assets, no server.
-This repository is at **Layer 2** of the roadmap in `.scratch/procedural-universe/spec.md` — one
+This repository is at **Layer 2** of the roadmap in `docs/issues/spec.md` — one
 procedural star system. Layer 1 (frames and precision) is complete; there is no travel and no
 gameplay yet.
 

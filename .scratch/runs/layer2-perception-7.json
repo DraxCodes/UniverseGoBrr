@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "kind": "hillclimb",
+  "status": "passed",
+  "startedAt": "2026-11-23T11:26:46.000Z",
+  "endedAt": "2026-11-23T14:20:00.000Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Layer 2 perception gate, iterations 3-4: HUD copy, ring fade radius, gas giant surface + close-up camera, ocean cap/shelf/glint",
+  "commit": "74ec750",
+  "models": [
+    "surplus/deepseek-v4.1-flash-1017#high (gate)",
+    "surplus/glm-5.3-flash (blindspot, skipped - capability limit)"
+  ],
+  "rubric": "perception",
+  "verdict": "7/10 (target 8) — three changes fixed outright, gas partly. Remaining level-setter: population (9 claimed, 8 separable at 1:1). Nits: ice speck at ~(996,437), storm has no internal structure at 6x.",
+  "notes": "Delta +1 vs the 6/10 baseline. HUD: header now 'layer 2 - star system', camera split into camera/view so pitch is complete at 1920/2560/3840, footer 'P pause' fits one line. Rings: the star-crossing fade was over-broad (glare quad, ~150 px) and swallowed four orbits; narrowed to the opaque disc (~46 px), gate counted 9/9 traceable at 1920, 2560 and 3840 and confirmed each body's ring vanishes at its limb. Gas: belt/zone contrast widened, darker poles, two storms 150 degrees apart, gas ambient 0.062, and the close-up camera moved from 17 degrees off the anti-sun (fully lit, no terminator possible) to ~62 degrees from the sun, pitched to show the lit storm - gate measured a real gibbous terminator (lit fraction ~65%) and a readable storm spot at 1:1, but at 6x the storm is a smooth ellipse with no eye or collar. Ocean: ice cap warped by 3D noise at frequency 5.2 and broken into sheets at 14, blue-grey instead of flat white; shelf width and colour wander; glint widened from power 48 to 26 - gate: cap reads as ice, coast no longer uniform neon, no new artifact, residual 5 px dark speck at (996,437). 2560 width probe passed (HUD 1.25x tier, 550/2560 = 21.5%, nothing clipped). Floor green: npm test 12 files / 102 tests; npm run build clean (61.18 kB JS, 22.37 kB gzip); capture 13/13, failures 0. Blindspot pass skipped and recorded: the bound reviewer returns an empty response for a single 1920 or 1280 image and only works at 960 px, where it misreads the HUD text ('nan - manual scale1' for 'normal scene'); the five-shot 1920 pass's 0 findings is therefore a non-result. Capability probe with a painted magenta block passed at 960. Not run in any iteration: keyboard pass, dead-end and state sweeps (empty/loading/address-error), live drag/zoom loop, close-ups at 2560/3840. Gate note: those unprobed state traits bound the score independently of the pixels.",
+  "scores": {
+    "perception": 7,
+    "baseline": 6
+  },
+  "evidence": [
+    ".scratch/captures/layer2-orrery.png",
+    ".scratch/captures/layer2-orrery-1440p.png",
+    ".scratch/captures/layer2-orrery-2160p.png",
+    ".scratch/captures/layer2-closeup-ocean.png",
+    ".scratch/captures/layer2-closeup-gas.png",
+    ".scratch/captures/summary.json",
+    ".scratch/visual-review/probe/findings.glm.json",
+    ".scratch/visual-review/findings.glm.json",
+    "docs/notes/focus-camera-reconstruction.md",
+    "docs/notes/blindspot-reviewer-image-size.md"
+  ]
+}

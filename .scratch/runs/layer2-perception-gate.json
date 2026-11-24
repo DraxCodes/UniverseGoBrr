@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "kind": "hillclimb",
+  "status": "passed",
+  "startedAt": "2026-11-23T10:18:45.756Z",
+  "endedAt": "2026-11-23T10:34:49.986Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Layer 2 perception gate, baseline: layer2-orrery + layer2-closeup-ocean + layer2-closeup-gas (1920x1080, dark)",
+  "commit": "74ec750",
+  "models": [
+    "surplus30/deepseek-v4.1-flash-1017",
+    "surplus/glm-5.3-flash (blindspot, bound but not run)"
+  ],
+  "rubric": "perception",
+  "verdict": "6/10 (target 8) — below target, not ship-ready. Recommendation: iterate, star glare first.",
+  "notes": "Baseline perception score for the three named Layer 2 shots, taken after two fixes: (1) the star now draws an opaque depth-writing core disc plus a separate additive corona, so planets behind the sun are occluded; verified by a low-pitch transit pair (behind = absent, in front = silhouettes). (2) rock/super-earth relief reduced from 1.15 to 0.15 with a compressed albedo range, chosen from recaptures (0.0 = billiard ball, 0.55/0.28 still blotchy, 0.15 reads as a world). Floor green: npm test 12 files / 102 tests; npm run build clean (54.95 kB JS, 20.15 kB gzip); npm run capture 12/12 shots, failures []. Gate confirmed five independent flaws on the main visual path: star glare is a hard-rimmed blown lamp with no corona/spill; ocean polar cap is a grey-white blob (documented open defect #3); uniform neon-cyan coast rims; orbit rings are uniform 1px hairlines (uniform at every distance, and 7 arcs read as scanlines in the ocean close-up); gas giant reads flat with no terminator or storm. HUD copy: 'layer 1' label on the Layer 2 surface, CAMERA pitch clipped at 1920, '[P] pin t' unparseable. Refuted: the suspected orbit line crossing the gas giant's face — at 4x it stops at the limb and resumes after, so depth order is correct. Population: 8 of 9 planets separable at 1:1; the innermost is not findable. No prior perception score exists, so no delta. Blindspot pass not run: it is due at the first final ship/stop verdict, and this iteration is below target; the seam binds surplus/glm-5.3-flash whose 1x1 image probe was a false negative but whose 64x64 probe passed (docs/notes/probe-image-case.md), so verify the pass can see a real PNG before any 8 verdict. Cost not metered by the provider.",
+  "evidence": [
+    ".scratch/captures/layer2-orrery.png",
+    ".scratch/captures/layer2-closeup-ocean.png",
+    ".scratch/captures/layer2-closeup-gas.png",
+    ".scratch/captures/summary.json",
+    ".scratch/transit-shots.json",
+    ".scratch/captures/_verify-occluded.png",
+    ".scratch/captures/_verify-infront.png",
+    "docs/notes/star-billboard-occlusion.md",
+    ".scratch/procedural-universe/issues/03-layer-2-star-system.md"
+  ]
+}

@@ -30,8 +30,12 @@ blob-report/
 *.pem
 *.key
 
-# Local specs, benchmark runs and workflow evidence
-.scratch/
+# Local evidence: capture sets, probe frames and scratch diagnostics stay on this
+# machine. The decision record is tracked under docs/ (spec, tickets, gates, audits,
+# notes, ADRs, reference images).
+.scratch/*
+# The run ledger is small text and records what was scored: keep it tracked.
+!.scratch/runs/
 
 # Workflow base backups (local only)
 .opencode/.workflow-backup/

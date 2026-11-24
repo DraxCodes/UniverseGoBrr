@@ -1,0 +1,230 @@
+<!doctype html>
+<!--
+  UniverseGoBrr build status — a one-screen view for the owner.
+
+  HOW TO UPDATE (this page is meant to be edited, not generated):
+    - finishing a task: change its status cell, do not delete the row
+    - new task: add a row in the right section
+    - bump the "updated" line below, and keep it in the same commit as docs/issues/status.md
+
+  This page is a dashboard. The record is docs/issues/status.md, spec.md and council-layer-4.md.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>UniverseGoBrr — build status</title>
+    <style>
+      :root {
+        --bg: #06080d;
+        --panel: #0d121c;
+        --line: #1e2839;
+        --ink: #e8eefb;
+        --dim: #a3b0c6;
+        --faint: #7d8ca4;
+        --done: #7ee2a8;
+        --now: #ffd479;
+        --next: #9cc2ff;
+        --later: #8a97ad;
+        --neon: #d8a6ff;
+        --warn: #ffb4a2;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 48px 24px 80px;
+        background: var(--bg);
+        color: var(--ink);
+        font: 15px/1.6 ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+        -webkit-font-smoothing: antialiased;
+      }
+      main { max-width: 880px; margin: 0 auto; }
+      h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: 0.06em; text-transform: uppercase; }
+      h1 span { color: var(--faint); text-transform: none; letter-spacing: 0; font-weight: 400; }
+      h2 {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--faint);
+        margin: 40px 0 12px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--line);
+      }
+      p { margin: 0 0 14px; }
+      .meta { color: var(--faint); font-size: 12px; margin-bottom: 18px; }
+      .lede { color: var(--dim); max-width: 66ch; }
+      .lede strong { color: var(--ink); }
+      code { color: var(--dim); background: var(--panel); padding: 1px 5px; border-radius: 3px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--faint); font-weight: 400; }
+      td:first-child { width: 44px; color: var(--faint); white-space: nowrap; }
+      td.task { color: var(--ink); }
+      td.task em { display: block; color: var(--faint); font-style: normal; font-size: 13px; }
+      .status { white-space: nowrap; font-size: 12px; width: 150px; }
+      .s-done { color: var(--done); }
+      .s-now { color: var(--now); }
+      .s-next { color: var(--next); }
+      .s-later { color: var(--later); }
+      .s-neon { color: var(--neon); }
+      .s-off { color: var(--warn); }
+      ul { margin: 0 0 14px; padding-left: 18px; color: var(--dim); }
+      li { margin-bottom: 8px; }
+      li strong { color: var(--ink); }
+      .note { color: var(--faint); font-size: 13px; border-left: 2px solid var(--line); padding-left: 14px; }
+      footer { margin-top: 44px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--faint); font-size: 12px; }
+      a { color: var(--next); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>UniverseGoBrr <span>build status</span></h1>
+      <p class="meta">Updated 2026-11-24 · branch <code>wip/layer-3</code> · edited in the same commit as <code>docs/issues/status.md</code></p>
+      <p class="lede">
+        <strong>V1 is:</strong> fly from a galaxy arm down to a lit planet, cross the distance between
+        systems with a real travel time, and send a friend the view. No gameplay. Layer 6 (walking on
+        a surface) is not in V1.
+      </p>
+
+      <h2>Right now</h2>
+      <p class="lede">
+        Layer 4, travel. The frame rebase and the approach probe are finished; the probe proved the
+        camera can reach a planet without the frame ever moving its origin, so travel is simpler than
+        the council feared. Next task is <code>placement</code> — without it nothing has a distance,
+        and travel time and the compass both need one.
+      </p>
+
+      <h2>Remaining to V1</h2>
+      <table>
+        <thead>
+          <tr><th>Layer</th><th>Task</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>L4</td>
+            <td class="task">Placement: address → position in its parent<em>Every node needs a position or no distance exists. Also feeds the compass.</em></td>
+            <td class="status s-now">Next · needs your call</td>
+          </tr>
+          <tr>
+            <td>L4</td>
+            <td class="task">Travel state and URL history<em>A crossing is a journey, not a cut. Back must not replay a warp.</em></td>
+            <td class="status s-next">Next</td>
+          </tr>
+          <tr>
+            <td>L4</td>
+            <td class="task">Compass and address HUD<em>Bearing and distance to anchors; address lines clickable to zoom out.</em></td>
+            <td class="status s-next">Next</td>
+          </tr>
+          <tr>
+            <td>L4</td>
+            <td class="task">Tier masks: warp, slipstream, wormhole<em>The effect that hides the frame swap. Shader work.</em></td>
+            <td class="status s-next">Next</td>
+          </tr>
+          <tr>
+            <td>L3</td>
+            <td class="task">Visual pass: tone, grading, arm density<em>The deferred gate. Scored 6/10; the four named flaws are fixed, the rest is taste.</em></td>
+            <td class="status s-neon">Neon candidate</td>
+          </tr>
+          <tr>
+            <td>L5</td>
+            <td class="task">Nebulae<em>Volumetric pass plus real and procedural populations. Where beauty earns its keep.</em></td>
+            <td class="status s-later">Later</td>
+          </tr>
+          <tr>
+            <td>V1</td>
+            <td class="task">Name and licence<em>"UniverseGoBrr" is still a working title; the repo has no licence.</em></td>
+            <td class="status s-later">Later</td>
+          </tr>
+          <tr>
+            <td>V1</td>
+            <td class="task">Performance on a mid-range GPU<em>No 1650-class hardware to measure on, so the envelope is an argument, not a number.</em></td>
+            <td class="status s-later">Later</td>
+          </tr>
+          <tr>
+            <td>L6</td>
+            <td class="task">Planet surfaces<em>Cube-sphere, terrain LOD, ground atmosphere. Flagged "possibly never" in the spec.</em></td>
+            <td class="status s-off">After V1</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Built so far</h2>
+      <table>
+        <tbody>
+          <tr>
+            <td>L0</td>
+            <td class="task">Dev loop and capture harness</td>
+            <td class="status s-done">Done</td>
+          </tr>
+          <tr>
+            <td>L1</td>
+            <td class="task">Camera-relative precision, versioned address</td>
+            <td class="status s-done">Done</td>
+          </tr>
+          <tr>
+            <td>L2</td>
+            <td class="task">One procedural star system — star, orbits, lit planets</td>
+            <td class="status s-done">Done</td>
+          </tr>
+          <tr>
+            <td>L3</td>
+            <td class="task">Star field and one galaxy, and Sol as the first real node</td>
+            <td class="status s-done">Done · 6/10</td>
+          </tr>
+          <tr>
+            <td>L4</td>
+            <td class="task">Approach probe<em>Worst body displacement 5×10⁻⁵ px. No focus rebase needed.</em></td>
+            <td class="status s-done">Done</td>
+          </tr>
+          <tr>
+            <td>L4</td>
+            <td class="task">Rebase module<em>Translation only, shift never absolute. Picture moves &lt; 0.001 px across 10 ly.</em></td>
+            <td class="status s-done">Done</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>What to send to Neon</h2>
+      <ul>
+        <li>
+          <strong>Layer 3 visual pass.</strong> The one real handoff. Tone-mapping, colour grading and
+          arm density at 1080p are taste calls a stronger visual model is better placed to make. We
+          score the result here against the rubric — the score never leaves this workflow.
+        </li>
+        <li>
+          <strong>Layer 5 nebulae.</strong> Volumetric light transport and procedural noise kernels are
+          squarely Neon's domain. Worth asking once Layer 4 lands.
+        </li>
+        <li>
+          <strong>Layer 4 tier masks — ask first.</strong> Warp streaks are WGSL, but they are effects
+          plumbing rather than procedural noise. Your call whether that is worth a branch.
+        </li>
+      </ul>
+      <p class="note">
+        Every handoff is a branch plus a written return brief, and you approve each one. Gate scoring
+        and seat configuration stay here.
+      </p>
+
+      <h2>Waiting on you</h2>
+      <ul>
+        <li><strong>Placement:</strong> hash a position, or pick a deterministic star from the galaxy's own population? The star keeps the compass agreeing with what you can see.</li>
+        <li><strong>Travel speeds:</strong> ADR-0010 proposes impulse 0.01c, warp 1 ly/day, transwarp 100 ly/day, wormhole 10,000 ly/day. Confirm or move any row; the model does not depend on the numbers.</li>
+        <li><strong>Panning:</strong> drag, or a modifier-click?</li>
+        <li><strong>Name:</strong> is UniverseGoBrr the product name?</li>
+      </ul>
+
+      <h2>After V1</h2>
+      <p class="lede">
+        Trail ribbons, gravitational lensing, procedural audio, tours, your own constellation, and going
+        from two galaxy arms to eight. All captured in spec §9; none of it forces a rewrite.
+      </p>
+
+      <footer>
+        One-screen view, not the record. Authoritative:
+        <code>docs/issues/status.md</code>, <code>spec.md</code>, <code>council-layer-4.md</code>.
+        Update this page in the same commit as the status change.
+      </footer>
+    </main>
+  </body>
+</html>

@@ -5,9 +5,13 @@ Branch: `wip/layer-3` — the Layer 3 line, now including Sol. `main` carries th
 still Layer 2. Tag `pin/layer-3-assessment` marks `566a303`, the code state the gate
 scored 6/10, and stays there; the merge changed no source file.
 Working tree: clean except `opencode.json` (user work — do not commit, do not revert).
-Pushed: `origin/main` matches `main`, so the record is public. `wip/layer-3` and the tag stay local.
-The record is tracked and present on both branches; there is no staged-index hazard any more.
+Pushed: both `main` and `wip/layer-3` are on `origin`. The tag `pin/layer-3-assessment` is local
+only — it is the gate's fixed point, not a release.
 For exact commit ids, read `git log --oneline -5`; this file deliberately does not pin them.
+
+**The owner's dashboard is `public/status.html`, linked from the HUD ("status ↗").** It is a
+one-screen summary, not the record: edit it in the same commit as this file, and keep it short. Its
+structure is checked by `src/status-page.test.ts`; its content is the owner's to read.
 
 ## Done
 

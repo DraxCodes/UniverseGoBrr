@@ -94,6 +94,31 @@ body {
   white-space: nowrap;
 }
 
+/* Layer label and the status link read as one right-aligned group. */
+.hud__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+/*
+ * The HUD is `pointer-events: none` so the canvas keeps every gesture. A link inside it has to opt
+ * back in, or it renders as a link that cannot be clicked - which looks like a bug and is worse
+ * than no link.
+ */
+.hud__status {
+  pointer-events: auto;
+  font-size: 10px;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.hud__status:hover,
+.hud__status:focus-visible {
+  text-decoration: underline;
+}
+
 .hud__rows {
   display: grid;
   gap: 2px;

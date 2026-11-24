@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "kind": "hillclimb",
+  "status": "passed",
+  "startedAt": "2026-11-23T17:55:00.000Z",
+  "endedAt": "2026-11-23T19:15:00.000Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Layer 2 perception gate, iteration 5: population legibility, ice-cap speck, storm structure, plus the state and live-loop evidence",
+  "commit": "74ec750",
+  "models": [
+    "surplus/deepseek-v4.1-flash-1017#high (gate)",
+    "surplus/glm-5.3-flash (blindspot, skipped - empty responses)"
+  ],
+  "rubric": "perception",
+  "verdict": "8/10 (target 8) - SHIP. 7 -> 8. All three level-7 flaws closed; the previously uncertifiable state and live-loop traits now have run evidence. Remaining nits: duplicated recovery copy in the fatal panel, faint footer contrast, silent max-zoom clamp.",
+  "notes": "Population was the level-setter: the HUD claims 9 planets and only 8 were separable at 1:1 because at the orrery's sun angle the inner 15-20 px discs showed a 4-6 px lit crescent. Fixed in the terminator, not the geometry - the day/night wrap widens as on-screen radius falls (wrap = 0.14 + 1.25*(1-detail)^2, plus 0.08*(1-detail)^2 ambient), so close-ups are untouched. A flat ambient floor was tried first and rejected: it made every small body evenly lit at the wrong light angle. Gate counted 9/9 separable at 1:1, with the innermost a 13 px aqua disc with a terminator. The ice speck at (996,437) was not ice tone but ocean relief shading on the cap (the cap is drawn over the land height field, so high terrain tilted the normal); gated by latitude now, deep sea lifted off near-black, cap edge widened - gate: continuous ice, no new artifact, no black ring. The gas storm gained internal structure: two-arm spiral wound on the storm's tangent frame, winding broken by noise so the arms are cloud rather than a drawn spiral, dark eye, collar raised - gate: reads as a vortex at 6x and still as a storm spot at 1:1. Added tools/state-probe.mjs (npm run probe:state) and tools/live-probe.mjs (npm run probe:live): booting, rejected URL, unpinned clock and no-WebGPU fatal panel all behave; 18 wheel steps in to 3.4 AU and 20 out to the 284 AU clamp, max mean-luminance step 7.3x median (inward) and 6.2x (outward), no pop. No focusable DOM controls exist, so hover/focus/disabled have no surface - stated, not inferred. Floor green: npm test 12 files / 102 tests; npm run build clean (62.97 kB JS, 23.10 kB gzip); capture 13/13, failures 0. Blindspot skipped and recorded: three single-shot 960 px attempts returned empty responses and wrote findings.glm.untrusted.json; the 960 capability probe with a painted magenta block passed earlier, so this is a reviewer failure. The earlier 960 finding ('PRECISION row nan') is rejected - the row reads 'normal scene' in three current shots. Contract: none declared; ADR-0007 holds. Not run: interactive first-run with a person; 2560/3840 close-ups (not in the manifest); keyboard pass beyond P (exercised by the state probe).",
+  "scores": {
+    "perception": 8,
+    "baseline": 6,
+    "previous": 7
+  },
+  "evidence": [
+    ".scratch/captures/layer2-orrery.png",
+    ".scratch/captures/layer2-orrery-1440p.png",
+    ".scratch/captures/layer2-orrery-2160p.png",
+    ".scratch/captures/layer2-closeup-ocean.png",
+    ".scratch/captures/layer2-closeup-gas.png",
+    ".scratch/captures/layer2-closeup-rock.png",
+    ".scratch/captures/layer2-closeup-superearth.png",
+    ".scratch/captures/summary.json",
+    ".scratch/state-probe/loading.png",
+    ".scratch/state-probe/error-url.png",
+    ".scratch/state-probe/paused-to-live.png",
+    ".scratch/state-probe/fatal-no-webgpu.png",
+    ".scratch/state-probe/summary.json",
+    ".scratch/live-probe/in/summary.json",
+    ".scratch/live-probe/summary.json",
+    ".scratch/visual-review/960-layer2-orrery/findings.glm.untrusted.json",
+    ".scratch/visual-review/probe/findings.glm.json",
+    "docs/notes/orrery-legibility-and-state-probes.md",
+    "docs/notes/blindspot-reviewer-image-size.md",
+    "docs/notes/focus-camera-reconstruction.md"
+  ]
+}

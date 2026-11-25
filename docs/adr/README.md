@@ -19,6 +19,8 @@
 | 0015 | accepted | The galaxy draws into its own `rgba16float` buffer and is composited after the sky and before the orrery. One soft-shoulder tone curve owns a per-pass ceiling (`ceil_lum` 0.79, below the home star) and an exposure floor (0.80). Density comes from population and near-uniform impostor overlap, not gain. Any appearance change bumps `GALAXY_VERSION`. |
 | 0016 | accepted | The product is **Cairn**: a marker a traveller leaves for the next one, which is the act of sending a coordinate. The space lexicon was searched first and is saturated, several times by direct competitors; the collision with a 2026 climbing game is accepted. A rename touches the live surfaces only — never the seeds, the `__ugb` hook or the version constants. |
 | 0017 | accepted | The repository is **MIT**-licensed. A fork may be closed and commercial; no patent grant. A successor would be AGPL-3.0, applying only to later versions. |
+| 0018 | accepted | **A galaxy has sectors, and a sector is an address level**: universe → galaxy → sector → system → body. Every address re-keys; accepted now because nothing has shipped. The authored-node rule is unchanged, Sol moves one level deeper. |
+| 0019 | accepted | **Travel method is an input, not a derived consequence.** The ladder is free flight → warp → transwarp → hyperspace → wormhole, and a **wormhole costs a fixed `Δt`** — the one carve-out to ADR-0010. Absolute speeds remain open. |
 
 Status is one of `proposed`, `accepted`, `superseded` (name the successor),
 `deprecated` or `rejected`. The numbered filename is `NNNN-slug.md`.

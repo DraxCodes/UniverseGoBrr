@@ -2,7 +2,7 @@
 
 **Status:** draft for review (2026-11-23)
 **Directory:** `docs/issues/` (tracked: spec, tickets, gates)
-**Decisions:** see `docs/adr/0001`–`0006`
+**Decisions:** see `docs/adr/0001`-`0019` (index: `docs/adr/README.md`)
 
 ## 1. What this is
 
@@ -95,16 +95,21 @@ Universe span ~10²⁶ m; human detail ~10⁰ m. No single float representation 
 
 ### 3.2 Travel (ADR-0003)
 
-Travel tiers are **frame rebases**, and the visual is the mask for the swap:
+Travel tiers are **frame rebases**, and the visual is the mask for the swap. A **tier** is the rung
+crossed; a **method** is what you ride across it, and it is **the traveller's choice** (ADR-0019) —
+a slower method is always allowed, it is simply slower:
 
-| Tier | Crosses | Effect |
-| --- | --- | --- |
-| Impulse / free flight | within a frame | continuous, no effect |
-| Warp | sector → system, within a quadrant | star streaks |
-| Transwarp / slipstream | system → different quadrant | tunnel / slipstream |
-| Subspace / wormhole | galaxy → different galaxy | aperture / wormhole |
+| Method | Natural rung | Effect | Time |
+| --- | --- | --- | --- |
+| Free flight | within a frame | continuous, no effect | real time; `t` follows the clock |
+| Warp | system → system | star streaks | `Δt = d / v` |
+| Transwarp / slipstream | sector → sector | tunnel / slipstream | `Δt = d / v` |
+| Hyperspace | galaxy → different galaxy | aperture / hyperspace tunnel | `Δt = d / v` |
+| Wormhole | any → any | a mouth, then arrival | **fixed `Δt`**, then instant |
 
-Vocabulary (and octree levels): **universe → quadrant → sector (~20 ly) → system → body.**
+Vocabulary (and octree levels): **universe → galaxy → sector → system → body.** *Quadrant* is a
+synonym for sector in copy, not a separate rung. A sector is an address level, so it is linkable
+(ADR-0018).
 Free flight is preserved inside every frame. Warping to an arbitrary empty point is
 supported, and requires a **navigation compass** (bearing + distance to nearest anchors, a
 pin on where you came from, a return breadcrumb) or the void is simply disorienting.
@@ -114,6 +119,11 @@ parent frame, divided by the method's speed. A 5 ly warp and a 500 ly transwarp 
 take five days. Camera gestures are not travel and never advance the clock; effect duration (screen
 time) and elapsed time (universe time) are different numbers. A distance requires every node to have
 a position in its parent frame, so this also fixes `placement(seed, address)` as content.
+
+**A wormhole is the one exception** (ADR-0019): it costs a fixed amount of universe time whatever the
+distance, because the cost is entering the mouth, not crossing the gap. Galaxy-to-galaxy is the first
+rung whose *distance* has no answer yet — galaxies are not placed in a root frame — so those trips are
+refused with a reason until the universe layer lands (`tickets/06-universe-scale.md`).
 
 ### 3.3 Generation (ADR-0005)
 
@@ -257,8 +267,19 @@ Layer 2) can pick a model by whether it names the flaws a human eye sees.
 | 2 | **One procedural star system** — star shader, orbits, lit planets, atmospheres, rotation | First screenshot; proves the foundation |
 | 3 | **Star field + one galaxy** - instanced impostors; a cell-keyed local field plus a disc/bulge/arm population; `displayRadiusM` compresses emptiness, not structure; the crossfade order is rings → point → arm → disc, with the home star findable at 1:1. Council: `council-layer-3.md`; brief: `tickets/04-layer-3-star-field-and-galaxy.md`. **Sol (§3.6) is built** as the first authored node, at `v1/0.0.0` (ADR-0009), captured as `layer3-sol-1080p`. The address HUD **moved to Layer 4** - it is half of the navigation compass. | Scale made real |
 | 4 | **Travel tiers** - frame rebases, warp effects, navigation compass. Council **convened and decided 2026-11-24** at `014c312`: **A, address-origin frames, rebasing on tier crossings only**; a tier crossing is a **journey**; **time advances by `d / v(method)`** (ADR-0010), which entails `placement(seed, address)`; the focus rebase is gated on the approach probe. **The address grid is the world and the picture is a view of its occupied cells** (ADR-0011), so every drawn star is visitable and a galaxy is keyed on its own level. Thesis and dissent: `council-layer-4.md`; brief: `tickets/05-layer-4-travel.md`. | The core loop |
-| 5 | **Nebulae** — volumetric beauty pass, real + procedural populations | Where `perception` earns its keep |
-| 6 | **Planet surfaces** — cube-sphere, terrain LOD, ground atmosphere | Hardest; possibly never |
+| **4b** | **Universe scale** - the missing rung. Sectors become an address level (ADR-0018), galaxies get a **root layout** so a galaxy-to-galaxy distance exists, a **galaxy variation law** (arms, pitch, bar, bulge, halo, dust, colour) so a field of galaxies does not read as one law ten times, galaxy naming, and a multi-galaxy render set **selected by apparent brightness** while addressable density stays full. Travel becomes a choice priced per method (ADR-0019). Brief: `tickets/06-universe-scale.md`. | **The expansive-universe step, and the owner's stated priority.** It was never owned - see the ticket's opening section |
+| 5 | **Nebulae** - volumetric beauty pass, real + procedural populations | Where `perception` earns its keep |
+| 6 | **Planet surfaces** - cube-sphere, terrain LOD, ground atmosphere | Hardest; possibly never |
+
+**Why `4b` and not a renumber.** The row is inserted rather than shifting nebulae to 5 and surfaces to
+6, because "Layer 5" means *the beauty pass* in ADR-0015, several gate documents and `status.md`.
+Renumbering would make every one of those references quietly wrong, which is the same silent-drift
+failure that lost the universe step in the first place.
+
+**`4b` is structural, not cosmetic.** Its sequencing reason is not taste: the tier masks (the last L4
+piece) hide a frame swap inside one galaxy, and the universe layer is what makes a swap *between*
+galaxies exist. Nebulae are beauty and can wait indefinitely; this cannot, because without it the
+product's own V1 statement ("a universe", not "a galaxy") is unmet.
 
 Nebulae get both treatments: **hand-placed real ones** (Orion, Carina, Eagle, Crab — real
 positions and distances, procedural volumetric shells) for recognition, plus a **procedural
@@ -274,7 +295,15 @@ population** by class (emission, reflection, planetary, dark) for abundance.
 3. **Time base** — wall clock is assumed. Confirm that shared `epoch` coordinates are
    acceptable as the stability mechanism, rather than a frozen universe.
 4. **Landing** — confirmed super-long-term. Revisit only after Layer 5.
-5. **Naming** — **Answered: "Cairn"** (ADR-0016). The working title `UniverseGoBrr` is retired.
+5. **Naming** - **Answered: "Cairn"** (ADR-0016). The working title `UniverseGoBrr` is retired.
+6. **Universe scale** - does V1 include many galaxies (roadmap row 4b), or stay "one galaxy, complete
+   loop"? The owner's stated priority is base structure first, which argues for including it. What a
+   *sector* is geometrically, and how many a galaxy has, is also still open (ADR-0018 fixed the rung,
+   not the shape). Brief: `tickets/06-universe-scale.md`.
+7. **Absolute travel speeds** - the owner's timescale anchors (warp: a quadrant in a week;
+   transwarp: the same in an hour; hyperspace: a galaxy in about an hour) do **not** fit the table
+   confirmed on 2026-11-24. Warp at 1 ly/day would take ~96 years to cross a quadrant, so the table
+   needs superseding, not extending. Derivation in `tickets/06-universe-scale.md`.
 
 ## 9. Idea backlog (captured, not committed)
 
@@ -296,7 +325,7 @@ rearchitecture. Sequenced, not simultaneous.
 | **Procedural audio** - hum driven by density and proximity | Web Audio, no assets | Layer 4 | 2-3 d |
 | **Cosmic address HUD** - postal address, each line clickable to zoom out | Reads the frame hierarchy; it is half the navigation compass, so it ships with travel | Layer 4 (moved from Layer 3) | 1 d |
 | **Breadcrumb + Home** — local trail, one-button return | Local storage only | Layer 3 | 1 d |
-| **Seed-varied arm count** — 2–4 arms instead of a fixed two | `armStrength` already takes an offsets list; only the legibility metric needs to measure the same `m` | Layer 3 | 0.5–1 d |
+| **Seed-varied arm count** - 2-4 arms instead of a fixed two | `armStrength` already takes an offsets list; only the legibility metric needs to measure the same `m` | **4b** (folded into the galaxy variation law) | 0.5-1 d |
 | **Scale silhouettes** — human-height reference objects | Presentation only | Layer 2 | 0.5 d |
 
 Priority when the choice arises: **gravitational lensing**, **procedural audio**, **trail

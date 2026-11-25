@@ -2,6 +2,9 @@
 
 Updated: 2026-11-25
 Name: **Cairn** (ADR-0016). Licence: MIT (ADR-0017). GitHub: `DraxCodes/cairn`.
+Update 12: the universe step is owned (`tickets/06-universe-scale.md`), a **sector is an address
+level** (ADR-0018) and **travel method is a choice** with a fixed-cost wormhole (ADR-0019). Roadmap
+row **4b** (many galaxies) sits before nebulae.
 Branch: `main` — the Layer 3 line, now including Sol, the shipped visual pass and the Layer 4 lanes
 so far. The `wip/layer-3` line, the two Neon handoff branches and the five review worktrees were
 merged and removed on 2026-11-25; `main` is the only branch on `origin`. Tag
@@ -139,13 +142,16 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
 
 ## Next
 
-1. **Layer 4's tier masks** are the last piece. `council-layer-4.md` §10 records the owner's
-   answers: **A**, address-origin frames, rebasing on tier crossings only; a tier crossing is a
+1. **Layer 4's tier masks** are the last piece of the base loop. `council-layer-4.md` §10 records the
+   owner's answers: **A**, address-origin frames, rebasing on tier crossings only; a tier crossing is a
    **journey**; **time advances by `d / v(method)`** (ADR-0010). **Lane P passes** (§8), so the
    rebase is address-only. **Lane 1** (`src/frame/rebase.ts`), **both halves of placement**,
    **lane 2** (travel state + URL history, ADR-0012), **lane 3** (compass + clickable address HUD,
    ADR-0013) and **panning** (camera target, ADR-0014) are done. Only `warp` and `transwarp` are
    reachable — `impulse` is no travel action and `subspace` is refused for lack of a root layout.
+   **ADR-0019 changes the words, not the reachability:** method becomes a choice, `subspace` is
+   renamed `hyperspace`, and a wormhole costs a fixed `Δt`. The mask work Neon holds is unchanged by
+   it, because a mask draws warp and transwarp only.
    The security lens has run on the placement consumer, the root-guard fix, lane 2
    (`.scratch/runs/layer4-travel-state-audit.json`), lane 3
    (`.scratch/runs/layer4-compass-navigation-audit.json`) and lane 4 panning
@@ -155,15 +161,19 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
    no production code changed. Lane 2's lens raised two low findings — a crafted `?t=` or `?epoch=`
    at the edge of the reader's range could make an arrival link reload as a *different* state — both
    fixed by making `advanceClock` refuse an unrepresentable arrival.
-2. The visual pass shipped: read `iterations/layer-3-iteration-2-deferred.md` and
+2. **Universe scale (row 4b) is the next structural step, and it is now owned** —
+   `tickets/06-universe-scale.md`. Sectors become an address level (ADR-0018), galaxies get a root
+   layout, a variation law and a render set selected by apparent brightness. It is **not** a beauty
+   pass and it does not wait behind nebulae. **Open for the owner:** whether it lands inside V1.
+3. The visual pass shipped: read `iterations/layer-3-iteration-2-deferred.md` and
    `gates/gate-layer-3-iteration-3.md` before touching tone, grading, density balance or reference
    claims. **ADR-0015** records the HDR buffer, the per-pass ceiling and the exposure floor; the
    level-9 rough edges (4K 1:1 footprint uniformity, boot-band texture, outer-edge mottle, the
    home-star ring caveat, "the arm containing this star") are routed there, not open defects.
-3. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon
+4. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon
    handoffs*, working detail in `docs/notes/two-agent-workflow.md`. The chair asks before any
    handoff; gate scoring never leaves this workflow.
-4. **Panning is done** (owner binding 2026-11-24: left-drag orbits, right-drag pans; the context
+5. **Panning is done** (owner binding 2026-11-24: left-drag orbits, right-drag pans; the context
    menu is suppressed on the canvas). What is *not* done is touch: a phone has no right button, so
    two-finger pan waits with the mobile layout (spec §1).
 
@@ -187,6 +197,21 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
   (`docs/notes/renaming-surface.md`). The GitHub repo was renamed to `DraxCodes/cairn` on
   2026-11-25; GitHub redirects the old `UniverseGoBrr` links.
 
+- **A galaxy has sectors, and a sector is an address level** (ADR-0018, owner 2026-11-25). The
+  ladder is **universe → galaxy → sector → system → body**; *quadrant* is a synonym in copy. A sector
+  is linkable, which is the feature: "send me the link to that sector". Every address re-keys and Sol
+  moves one level deeper — accepted because nothing has shipped, expensive the moment a public link
+  exists.
+- **Travel method is the traveller's choice, not a derived consequence** (ADR-0019, owner
+  2026-11-25). The ladder is free flight → warp → transwarp → hyperspace → wormhole; a coarser method
+  is always allowed and simply slower, and the UI prices one destination in every method.
+  `subspace` is retired as a method name in favour of **hyperspace**. **A wormhole costs a fixed `Δt`**
+  whatever the distance — the one carve-out to ADR-0010. Absolute speeds stay open (ticket 06).
+- **The universe step was never owned; it is now** (owner 2026-11-25, `tickets/06-universe-scale.md`).
+  Spec §3.2's vocabulary had no galaxy rung while `GALAXY_DEPTH = 1` invented one, so galaxy-to-galaxy
+  travel existed only as a refusal reason ("no root layout") and never as a deliverable. A refused
+  feature that reports a clean reason reads as a boundary, and nobody wrote the ticket. The step is
+  now roadmap row **4b**, before nebulae, because it is structural and nebulae are beauty.
 - **Layer 4 shape (owner, 2026-11-24):** A (address-origin frames), rebasing on tier crossings only;
   a tier crossing is a journey; tiers + panning first, compass second. The focus rebase is out of v1
   and gated on the approach probe. Council record: `council-layer-4.md` §10; dissent in §8.
@@ -224,6 +249,17 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
 - **Authored nodes reserve a new address and ignore the seed** (ADR-0009). Sol is `v1/0.0.0`; a
   hand-authored node that keeps varying with the seed cannot be an anchor, and overwriting a
   procedural address rewrites somebody's shared link.
+- **Clarity stays in the base; beauty defers to Layer 5** (staging rule, 2026-11-25). A ticket may not
+  be blocked on visual polish, and a routed rough edge is not a regression. *Clarity* — can you tell
+  where you are, what you can do, what just happened — is structural and belongs beside the feature
+  that creates the ambiguity (the address HUD and compass moved into Layer 4 for exactly this reason).
+  *Beauty* — tone, grading, density texture, glow, surface detail — is deferrable, and is safe to
+  defer because appearance sits behind versioned constants: a later pass is a deliberate re-roll
+  (bump the version, re-run the captures, re-gate), not a rewrite. ADR-0015's rough edges are routed
+  under this rule, not open defects.
+- **Not in V1, stated once so it stops being re-asked:** planet surfaces (L6, "possibly never"),
+  touch/two-finger pan (waits with the mobile layout), and — until the owner says otherwise — many
+  galaxies (4b).
 - **The star's presentation constants were left alone** after Sol's capture was judged on a 1:1
   crop: the glare quad's *bounding* radius is wider than Mercury's drawn orbit, but only
   `STAR_CORE_RADIUS` writes depth and occludes, and every body is visible. Do not "fix" a
@@ -362,6 +398,11 @@ The decision record is tracked, so a clone on another machine is enough to resum
 
 ## Open questions
 
+- **Does V1 include many galaxies (4b)?** The owner's stated priority is base structure first; the
+  V1 statement still describes one galaxy. Owner's call, not a technical one.
+- **Sector geometry and count** (ADR-0018 fixed the rung, not the shape).
+- **Absolute travel speeds** — the owner's timescale anchors do not fit the table confirmed on
+  2026-11-24; warp would need to be ~5,000× faster. Derivation in `tickets/06-universe-scale.md`.
 - Should the galaxy shot go into the README now (captioned "in progress") or wait for the Layer 3
-  commit?
-- Root `LICENSE`: the repo is public and unlicensed, so it is all-rights-reserved by default.
+  commit? **Answered: shipped**, the README carries the previews.
+- Root `LICENSE`: **Answered** - MIT, `LICENSE` at the root (ADR-0017).

@@ -47,15 +47,16 @@ export const GALAXY_MAX_DISTANCE_M = GALAXY_RADIUS_M * 12;
  * turns (issue 04 D6), and it is scaled by the viewport height in `writeGalaxyFrame` so 4K and
  * 1080p keep the same visual density instead of 4K becoming a sparser field.
  */
-export const GALAXY_STAR_MIN_PX = 3.0;
+export const GALAXY_STAR_MIN_PX = 4.65;
 /** The largest a dim impostor gets, before `size` spreads the brighter stars out further. */
-export const GALAXY_STAR_MAX_PX = 5.0;
+export const GALAXY_STAR_MAX_PX = 5.05;
 /**
  * Overall additive gain. The band is visible from the orrery (the thesis's "faint dust band")
- * but has to stay behind the orrery, not compete with it. The wide, soft impostor spreads the
- * same light over more pixels, so this is lower than the sub-pixel-dot version was.
+ * but has to stay behind the orrery, not compete with it. Re-calibrated for the 55,000-star rich
+ * disc and wider mid-body impostor overlap so arms stay continuous without blowing out mean
+ * luminance or filling the inter-arm lanes.
  */
-export const GALAXY_GAIN = 0.3;
+export const GALAXY_GAIN = 0.194;
 
 /**
  * The local field's collapse window, in projected pixels. Five thousand stars sit inside 100 ly
@@ -162,6 +163,8 @@ export interface GalaxyFrame {
    * instead of `lod`.
    */
   readonly identity: number;
+  /** Per-seed apparent-area exposure factor (`1.0` at `lod === 0` so Layer 2 is untouched). */
+  readonly exposure: number;
   /** The same reverse-Z projection the orrery uses, so the two passes share one camera. */
   readonly viewProjection: Float32Array;
   readonly cameraRight: Vec3;
@@ -341,7 +344,25 @@ export function writeGalaxyFrame(
   // orrery and carving a hole in it would be a change to Layer 2's frame for no reason.
   const homeGapPx = HOME_GAP_PX * legibility.lod;
 
-  const pack = (star: GalaxyStar, fieldReveal = 1): void => {
+  // Balance apparent surface brightness across seeds whose galactic centres sit at slightly
+  // different distances from the fixed camera (`centreDistance / 2.6 R` varies ~2.3..3.0 R).
+  // Blended in by `legibility.lod` so Layer 2 / boot-frame `exposure` stays exactly 1.0.
+  const centreDistance = Math.hypot(
+    galaxy.centre.x - camera.x,
+    galaxy.centre.y - camera.y,
+    galaxy.centre.z - camera.z,
+  );
+  const distRatio = centreDistance / (2.6 * GALAXY_RADIUS_M);
+  const rawExposure = Math.min(1.55, Math.max(0.80, Math.pow(Math.max(distRatio, 0.35), -0.40)));
+  const exposure = 1 + (rawExposure - 1) * legibility.lod;
+  const sizeBias = 0.15 * legibility.lod;
+
+  // At lod 0 (boot/orrery view), the disc forms the faint sky dust band behind the isotropic
+  // local field. Compensate for the denser 55k disc and wider impostor PSF at lod 0 so the dust
+  // band keeps its anisotropy behind the orrery (axisRatio >= 2.2), blending cleanly to 1.0 by lod 1.
+  const discBootLift = 1 - 0.12 * (1 - legibility.lod);
+
+  const pack = (star: GalaxyStar, fieldReveal = 1, emissionScale = 1): void => {
     // The system's own star is the identity impostor: the orrery's glare quad keeps a minimum
     // pixel footprint and stays on screen through the handoff. Drawing it here as well would
     // double-expose the one point the viewer is supposed to find.
@@ -355,8 +376,9 @@ export function writeGalaxyFrame(
     // `size` runs 0.55..1.65 in the generator; map it to a 1080p footprint, then scale with the
     // viewport so the same fraction of the frame is covered at any height.
     const sizeFraction = clamp01((star.size - 0.55) / 1.1);
+    const adjustedSize = clamp01(sizeFraction + sizeBias);
     const footprintPx =
-      (GALAXY_STAR_MIN_PX + (GALAXY_STAR_MAX_PX - GALAXY_STAR_MIN_PX) * sizeFraction) *
+      (GALAXY_STAR_MIN_PX + (GALAXY_STAR_MAX_PX - GALAXY_STAR_MIN_PX) * adjustedSize) *
       (viewportHeightPx / 1080);
     // A world-space radius that projects to the footprint. Never zero: the quad would vanish.
     const radius = Math.max((footprintPx * distance) / focalPx, 1e-12);
@@ -394,7 +416,7 @@ export function writeGalaxyFrame(
     // an 8-bit target and clipped into a flat 109 px white plateau, and the disc read as a field
     // of identical dots. Scaling the colour by brightness (a uniform scale, so the hue is exactly
     // preserved) makes `brightness` the luminosity it was always meant to be.
-    const amplitude = clamp01(star.brightness);
+    const amplitude = clamp01(star.brightness) * emissionScale;
     const base = write * GALAXY_INSTANCE_FLOATS;
     out[base + 0] = x;
     out[base + 1] = y;
@@ -420,7 +442,7 @@ export function writeGalaxyFrame(
     pack(galaxy.stars[index]!, localConvergence);
   }
   for (let index = discStart; index < discEnd && index < galaxy.stars.length; index += 1) {
-    pack(galaxy.stars[index]!);
+    pack(galaxy.stars[index]!, 1, discBootLift);
   }
 
   return {
@@ -429,6 +451,7 @@ export function writeGalaxyFrame(
     lod: legibility.lod,
     contrast: legibility.contrast,
     identity: legibility.fit * legibility.resolved,
+    exposure,
     viewProjection,
     cameraRight: basis.right,
     cameraUp: basis.up,

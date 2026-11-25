@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "capture": "node tools/capture.mjs",
+    "measure:layer3": "node tools/measure-layer3.mjs",
     "verify:dev": "node tools/check-dev-loop.mjs",
     "probe:state": "node tools/state-probe.mjs",
     "probe:live": "node tools/live-probe.mjs",

@@ -9,6 +9,7 @@ import {
   toDiscFrame,
 } from './galaxy';
 import { GALAXY_RADIUS_M } from '../render/scale';
+import { armStrength, galaxyFrame } from './disc';
 
 const SEED = 'ugb-0000';
 
@@ -233,5 +234,45 @@ describe('the population has the right shape', () => {
     // keeps the disc a disc rather than two drawn curves.
     expect(trough).toBeGreaterThan((slice.length / binsAzimuth) * 0.1);
     expect(crest / trough).toBeGreaterThan(2.5);
+  });
+
+  it('weights luminosity toward arms and keeps the core warm', () => {
+    const frame = galaxyFrame(SEED, galaxyAddressOf(HOME));
+    const scale = 0.36 * GALAXY_RADIUS_M;
+    let armSum = 0;
+    let armCount = 0;
+    let laneSum = 0;
+    let laneCount = 0;
+    let coreR = 0;
+    let coreG = 0;
+    let coreB = 0;
+    let coreCount = 0;
+
+    for (const star of disc) {
+      const { x, z } = toDiscFrame(galaxy, star);
+      const r = Math.hypot(x, z);
+      if (r < 0.12 * GALAXY_RADIUS_M) {
+        coreR += star.color[0];
+        coreG += star.color[1];
+        coreB += star.color[2];
+        coreCount += 1;
+      } else if (r > 0.25 * GALAXY_RADIUS_M) {
+        const strength = armStrength(r, Math.atan2(z, x), scale, frame.armOffsets);
+        if (strength > 0.8) {
+          armSum += star.brightness;
+          armCount += 1;
+        } else if (strength < 0.2) {
+          laneSum += star.brightness;
+          laneCount += 1;
+        }
+      }
+    }
+
+    expect(coreCount).toBeGreaterThan(0);
+    expect(coreR / coreCount).toBeGreaterThan(coreG / coreCount);
+    expect(coreG / coreCount).toBeGreaterThan(coreB / coreCount);
+    expect(armCount).toBeGreaterThan(0);
+    expect(laneCount).toBeGreaterThan(0);
+    expect(armSum / armCount).toBeGreaterThan((laneSum / laneCount) * 1.5);
   });
 });

@@ -69,15 +69,26 @@ export type { Vec3 } from './disc';
  * carries that `address`; its position comes from `placement`, not from a sequential stream. The
  * local field is addressable too, so the neighbours the camera parallaxes against are places you
  * can travel to. Every galaxy is a different sky, top to bottom.
+ *
+ * 6 → 7: re-authored the brightness curve and colour palette (Layer 3 iteration 2). The inner disc
+ * uses a `r / (r + r₀)` core taper to cancel the `1/r` exponential-radius surface-density cusp,
+ * the bulge uses a smooth spherical radial falloff, disc luminosity weights toward arm tracers, and
+ * stars span a warm amber-gold core/lane palette through warm cream arms to pale blue-white OB
+ * tracers (driven by intrinsic `base` brightness rather than post-taper luminosity).
+ *
+ * 7 → 8: raised rich-tier disc population from 40,000 to 55,000 (within the 60,000 ceiling) and
+ * rebalanced disc emission (`0.73 * base^0.42` in the disc, `0.72 * base` in the bulge, keeping
+ * `base` for colour and size) so faint arm stars connect into continuous bands without blowing
+ * out the core, losing hue separation, or filling inter-arm lanes (Layer 3 iteration 3).
  */
-export const GALAXY_VERSION = 6;
+export const GALAXY_VERSION = 8;
 
 export type GalaxyTier = 'rich' | 'medium' | 'low';
 
 /** The renderer's star budget. Each tier is a prefix of the richer tier's address list. */
 export const GALAXY_TIER_STARS: Readonly<Record<GalaxyTier, { local: number; disc: number }>> =
   Object.freeze({
-    rich: Object.freeze({ local: 5000, disc: 40000 }),
+    rich: Object.freeze({ local: 5000, disc: 55000 }),
     medium: Object.freeze({ local: 2500, disc: 20000 }),
     low: Object.freeze({ local: 1600, disc: 12000 }),
   });
@@ -130,35 +141,15 @@ export interface Galaxy {
   readonly stars: readonly GalaxyStar[];
 }
 
+/** Bulge radius fraction, matching `BULGE_RADIUS_FRACTION` in `disc.ts`. */
+const BULGE_RADIUS_FRACTION = 0.13;
 /**
- * Bulge stars are drawn dimmer than disc stars. They are a dense 3D cluster, so the same
- * brightness stacks into an additive white blob that swallows the inner arms; the nucleus still
- * reads as the brightest part of the galaxy, but as a core rather than a clipped hole.
+ * Core taper scale for the exponential disc. Because `disc.ts` samples 1D radius exponentially,
+ * 2D surface density rises as `1/r` near the centre and pinches into a bright diagonal cusp.
+ * Scaling emission by `r / (r + DISC_CORE_RADIUS)` cancels the `1/r` singularity smoothly while
+ * preserving a luminous inner disc with no dark moat.
  */
-const BULGE_BRIGHTNESS = 0.20;
-/**
- * How much a star's brightness is scaled by its distance from the galactic centre, so the
- * nucleus has a gradient instead of a plateau. 1 at and beyond `NUCLEUS_FALLOFF_RADIUS`, and
- * `NUCLEUS_FLOOR` at the centre; the inner disc and bulge overlap hardest, so that is where the
- * compression has to live. The floor is not zero: an empty core would read as a hole.
- *
- * Calibrated against the capture, not by taste: at 0.58/0.30 the frame still carried 11 859 px at
- * exactly 1.00 with a 514x216 flat bounding box. Additive accumulation has no shoulder, so the
- * only lever is per-star intensity, and it has to be steep where the overlap is.
- *
- * These two only *work* because `galaxy-scene.ts` now folds each star's brightness into its
- * packed colour, so brightness is real emission amplitude. Before that, the renderer ignored
- * brightness at full legibility and these constants changed nothing (the nucleus stayed a
- * 109 px white plateau at 289 impostors/px).
- */
-const NUCLEUS_FLOOR = 0.22;
-const NUCLEUS_FALLOFF_RADIUS = 0.26;
-/**
- * How far the arm/lane hue split goes. Arm stars are pushed cool and lane stars warm at no pixel
- * cost — the hue is uploaded per impostor already. This is the reference's third claim
- * (hue separates arm from inter-arm) taken as a principle, not as its magenta/blue palette.
- */
-const ARM_HUE_SHIFT = 0.16;
+const DISC_CORE_RADIUS = 0.14;
 
 /**
  * Walk the galaxy's children and draw one light per address (ADR-0011).
@@ -248,23 +239,28 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
         y: placed.position.y,
         z: placed.position.z,
         brightness,
-        color: starColor(brightness, appearance),
+        color: starColorLocal(brightness, appearance),
         size: 0.55 + brightness * 1.10,
         home: false,
       });
     } else {
       const base = starBrightness(appearance);
-      const brightness =
-        (placed.inBulge ? base * BULGE_BRIGHTNESS : base) *
-        nucleusFalloff(placed.fromCentre / radius);
+      const radialFrac = placed.fromCentre / radius;
+      const armLum = placed.inBulge ? 1 : 0.16 + 0.84 * placed.armMix ** 1.45;
+      const radialScale = placed.inBulge ? bulgeProfile(radialFrac) : discCoreTaper(radialFrac);
+      const emitBase = placed.inBulge ? base * 0.72 : Math.pow(base, 0.42) * 0.73;
+      const brightness = clampUnit(Math.max(0.008, emitBase * radialScale * armLum));
+      const size = placed.inBulge
+        ? 0.85 + Math.min(1, base) * 0.65
+        : 0.55 + base * (0.75 + 0.35 * placed.armMix);
       discs.push({
         address: child,
         x: placed.position.x,
         y: placed.position.y,
         z: placed.position.z,
         brightness,
-        color: starColor(brightness, appearance, placed.armMix),
-        size: 0.55 + brightness * 1.10,
+        color: starColor(base, appearance, placed.armMix, placed.inBulge, radialFrac),
+        size,
         home: false,
       });
     }
@@ -290,10 +286,17 @@ function appearanceKey(seed: string, address: Address): string {
   return `${seed}|${formatAddress(address)}|appearance|v${GALAXY_VERSION}`;
 }
 
-/** Brightness scale for the nucleus gradient: 1 outside the falloff radius, `NUCLEUS_FLOOR` at the centre. */
-function nucleusFalloff(fraction: number): number {
-  const t = Math.min(1, Math.max(0, fraction / NUCLEUS_FALLOFF_RADIUS));
-  return NUCLEUS_FLOOR + (1 - NUCLEUS_FLOOR) * t * t * (3 - 2 * t);
+/** Smooth Gaussian bulge profile: luminous warm core tapering smoothly to the outer edge. */
+function bulgeProfile(fraction: number): number {
+  const u = clampUnit(fraction / BULGE_RADIUS_FRACTION);
+  return 0.15 + 0.85 * Math.exp(-3.8 * u * u);
+}
+
+/** Smoothly cancels the exponential disc's `1/r` surface-density cusp near the galactic centre. */
+function discCoreTaper(fraction: number): number {
+  const r = Math.max(0, fraction);
+  const smooth = r / (r + DISC_CORE_RADIUS);
+  return Math.min(1, Math.max(0.02, smooth * 1.4));
 }
 
 /** Heavy-tailed: most stars dim, a few bright. Never zero, or the field disappears. */
@@ -302,23 +305,67 @@ function starBrightness(rng: Rng): number {
   return 0.10 + 0.90 * u * u * u;
 }
 
+/** Local-field stellar colour: warm K/M dwarfs through white to pale blue-white stars. */
+function starColorLocal(brightness: number, rng: Rng): readonly [number, number, number] {
+  const jitter = rng.range(-0.035, 0.035);
+  const t = clampUnit(brightness);
+  const ob = smoothstepUnit(0.50, 0.95, t);
+  return [
+    clampUnit(1.0 - 0.12 * ob + jitter),
+    clampUnit(0.68 + 0.26 * t + jitter),
+    clampUnit(0.40 + 0.58 * t + jitter),
+  ] as const;
+}
+
 /**
- * Brightness → tint: dim stars orange, mid white, bright blue-white. `armMix` pushes arm stars
- * cool and lane stars warm at no pixel cost — the reference's third claim, taken as a principle.
+ * Intrinsic brightness + population → tint:
+ * - Bulge: warm golden-amber transitioning to warm ivory-gold at the core.
+ * - Lane / inner old disc: warm amber-gold (`R > G > B`).
+ * - Arm: warm cream-gold bulk, with luminous young OB stars (`base` high) cooling toward pale
+ *   blue-white outside the inner core.
  */
 function starColor(
-  brightness: number,
+  baseBrightness: number,
   rng: Rng,
-  armMix = 0,
+  armMix: number,
+  inBulge: boolean,
+  radialFrac: number,
 ): readonly [number, number, number] {
-  const jitter = rng.range(-0.04, 0.04);
-  // A small hue jitter keeps the field from looking like three flat classes.
-  const t = Math.min(1, Math.max(0, brightness));
-  const cool = ARM_HUE_SHIFT * armMix;
-  const clamp = (value: number): number => Math.min(1, Math.max(0, value));
+  const jitter = rng.range(-0.03, 0.03);
+  const t = clampUnit(baseBrightness);
+
+  if (inBulge) {
+    const u = clampUnit(radialFrac / BULGE_RADIUS_FRACTION);
+    return [
+      clampUnit(1.0 + jitter),
+      clampUnit(0.68 + 0.20 * (1 - u) + 0.06 * t + jitter),
+      clampUnit(0.32 + 0.26 * (1 - u) + 0.08 * t + jitter),
+    ] as const;
+  }
+
+  const innerWarm = 1 - smoothstepUnit(0.08, 0.36, radialFrac);
+  const laneR = 1.0;
+  const laneG = 0.64 + 0.12 * t;
+  const laneB = 0.26 + 0.14 * t;
+
+  const ob = smoothstepUnit(0.18, 0.72, t) * (1 - 0.75 * innerWarm);
+  const armR = 0.96 - 0.30 * ob;
+  const armG = 0.88 + 0.02 * ob;
+  const armB = 0.72 + 0.28 * ob;
+
+  const armWeight = clampUnit(armMix ** 1.15) * (1 - 0.65 * innerWarm);
   return [
-    clamp(1.0 + jitter),
-    clamp(0.62 + 0.34 * t + jitter + cool * 0.5),
-    clamp(0.38 + 0.58 * t + jitter + cool),
+    clampUnit(laneR + (armR - laneR) * armWeight + jitter),
+    clampUnit(laneG + (armG - laneG) * armWeight + jitter),
+    clampUnit(laneB + (armB - laneB) * armWeight + jitter),
   ] as const;
+}
+
+function clampUnit(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+function smoothstepUnit(edge0: number, edge1: number, value: number): number {
+  const u = clampUnit((value - edge0) / (edge1 - edge0));
+  return u * u * (3 - 2 * u);
 }

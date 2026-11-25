@@ -408,6 +408,17 @@ describe('the impostor buffer', () => {
       low.out.slice(lowDisc, (lowCounts.local + lowCounts.disc) * GALAXY_INSTANCE_FLOATS),
     ).toEqual(rich.out.slice(richDisc, richDisc + lowCounts.disc * GALAXY_INSTANCE_FLOATS));
   });
+
+  it('balances per-seed exposure at galaxy scale while leaving lod 0 at 1.0', () => {
+    const near = frameAt('rich', ORRERY);
+    expect(near.frame.lod).toBe(0);
+    expect(near.frame.exposure).toBe(1);
+
+    const far = frameAt('rich', GALAXY_CAMERA);
+    expect(Number.isFinite(far.frame.exposure)).toBe(true);
+    expect(far.frame.exposure).toBeGreaterThanOrEqual(0.68);
+    expect(far.frame.exposure).toBeLessThanOrEqual(1.55);
+  });
 });
 
 describe('the arm contrast is measured from the population', () => {

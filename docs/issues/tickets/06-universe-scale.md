@@ -130,7 +130,7 @@ is its evidence (10/10).
 3. **Root layout — DONE.** `src/universe/layout.ts`, `galaxyPosition`. Total and unbounded, so
    "further out" always has something; `cbrt(|g|)` gives roughly constant density instead of a
    shell. Galaxy 0 is the origin (Sol). 10 tests.
-4. **Galaxy variation law - DONE (2026-11-25), `perception` gate pending.** A parameter space
+4. **Galaxy variation law - DONE (2026-11-25), `perception` 8/10 SHIP.** A parameter space
    sampled from the address: arms, pitch, bar, bulge, halo, dust, colour, size. Informed by
    `celestial-lab` references, implemented independently.
 
@@ -172,10 +172,25 @@ is its evidence (10/10).
    `GALAXY_SHAPE_VERSION` 1. `GALAXY_STREAM_VERSION` 3 and `SCALE_VERSION` 1 unchanged.
 
    **Evidence:** `tools/galaxy-gallery.mjs` (12 galaxies at the manifest composition, 2.6× each
-   galaxy's own radius) is the instrument for judging the law — it is what caught the spoke defect.
+   galaxy's own radius) is the instrument for judging the law - it is what caught the spoke defect.
    `npm run capture` 20/20, `measure-layer3` 12-seed report, and the full probe set. Tests: 337
    passed. Caveats: the harness `arm-measure.test.ts` is opt-in (`UGB_MEASURE=1`) and asserts
-   nothing — its numbers are a calibration to paste into `galaxy-scene.ts`.
+   nothing - its numbers are a calibration to paste into `galaxy-scene.ts`.
+
+   **Gate: `perception` 8/10, SHIP** (`.scratch/runs/layer3-iteration4-gate.json`). The three nits
+   that hold it below 9, all recorded and carried: (1) 4K 1:1 stars are uniform pebbles with no
+   per-star size cue - the one change that would reach 9, and it is shader work (Neon handoff
+   territory); (2) halo clumps at the top of the halo range read as detached wads; (3) lane:arm
+   width 2.33 at the thin-arm end. The blindspot pass ran and found no art defect; of its 12
+   findings 9 were downscale misreads of HUD text and 2 restated the home-star camera anchor. Its
+   one real hit was against **my own brief**, not the art: the camera targets the home star, which
+   is a random point in the disc, so the nucleus sits ~237 px off frame centre by design. Proof of
+   the size law now exists at a fixed camera: `--fixed-distance-m 3.0e21` shows `v1/2` at ~52 px and
+   `v1/0` at ~196 px from identical camera coordinates.
+
+   **Not done for this item:** the security lens was skipped, not passed - `surplus/glm-5.3` was
+   unroutable at its `min80` floor (best eligible discount 69.4%) and the rule is to note a skip
+   rather than silently change the seat. `8e6f73e` has not been through the security lens.
 5. **Galaxy naming.** A deterministic name per galaxy address, presentation-only, shown on hover.
 6. **Multi-galaxy rendering.** Instanced galaxy impostors with LOD, selected by apparent brightness.
    Addressable density stays full; the *render* set is a selection — that is how "infinite feel,

@@ -61,3 +61,22 @@ cleaner law; until then it is not worth re-rolling the sky.
 - The angular **phase** (where slice 0 begins) is sampled per galaxy, so sector boundaries are not
   identical across galaxies. It is a frame-level draw like the arm phase, and follows the same rule:
   a `GALAXY_STREAM_VERSION` change, not an address re-key.
+
+## The mechanic that must change for this to hold
+
+**This is load-bearing and easy to miss.** Today `placementKey` hashes the **full address string**
+(`src/universe/placement.ts`), so `v1/0.3` and `v1/0.3.1` produce different placement streams. If the
+re-key simply rewrote a star's address from `v1/0.3` to `v1/0.3.1`, **every star would move** and the
+"keeps the drawn galaxy" half of this decision would be false.
+
+So the insertion must do *both*:
+
+1. build the star's address as `galaxy.sector.starIndex`, where **`starIndex` is the level the old
+   address used** (`v1/0.3` → `v1/0.<sector>.3`), keeping the star's identity number; and
+2. make `placementKey` key on that **star level** — not the whole address — so the sector level is
+   transparent to position.
+
+Point 2 is the actual code change, and it must land **in the same commit** as point 1. Doing only
+point 1 silently re-rolls the sky while claiming it did not, which is the failure mode this ADR
+exists to prevent. A test should pin it: a star's position is unchanged across the re-key, and the
+sector of that position is derivable from its angle.

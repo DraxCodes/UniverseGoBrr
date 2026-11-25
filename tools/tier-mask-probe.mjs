@@ -6,8 +6,10 @@
  * - warp (star streaks) and transwarp (slipstream tunnel) both play distinct mid-effect frames;
  * - screen time is independent of distance, and the address line switches silently once mid-effect;
  * - last effect frame matches the first static frame and a fresh arrival link reload (`maxChannelDiff === 0`);
- * - interrupted crossings (Escape, pointer drag, Back, mid-crossing re-travel) and refused
- *   crossings (`subspace`) never leave a half-swapped frame.
+ * - interrupted crossings (Escape, pointer drag, Back, mid-crossing re-travel) never leave a
+ *   half-swapped frame;
+ * - a galaxy-to-galaxy crossing is a real hyperspace jump (the root layout gives it a distance) and,
+ *   having no mask yet, still lands on the same frame a fresh link does.
  *
  * Usage: npm run build && npm run probe:masks
  */
@@ -28,7 +30,7 @@ const EPOCH = '2000-01-01T00:00:00.000Z';
 const DEPART = 'v1/0';
 const WARP_DEST = 'v1/0.9'; // local-field star -> warp
 const TRANSWARP_DEST = 'v1/0.1'; // disc star -> transwarp
-const SUBSPACE_DEST = 'v1/1'; // different galaxy -> subspace (refused)
+const HYPERSPACE_DEST = 'v1/1'; // different galaxy -> hyperspace (now travellable via the root layout)
 
 const checks = [];
 function check(name, ok, detail) {
@@ -475,21 +477,36 @@ try {
     `addr=${retravelAddrText} maxDiff=${retravelVsLink.maxChannelDiff}`,
   );
 
-  // 3d. Refused subspace jump leaves current coordinate and frame untouched
-  const refusedPlan = await page.evaluate((to) => window.__ugb.travel(to), SUBSPACE_DEST);
-  await page.waitForTimeout(200);
-  const afterRefusalAddr = await page.evaluate(() => window.__ugb.state.address);
-  const refusedPath = path.join(outDir, 'refused-subspace.png');
-  await page.screenshot({ path: refusedPath });
-  const refusedVsBefore = await diffCanvasPng(refusedPath, retravelPath, { ignoreNotice: true });
+  // 3d. Galaxy-to-galaxy is now a real hyperspace crossing (the root layout gives it a distance).
+  // Hyperspace has no mask yet, so this also proves a methodless-with-mask crossing swaps the frame
+  // cleanly: the settled frame must equal a fresh link to the same address, not a half-swapped one.
+  const hyperPlan = await page.evaluate((to) => window.__ugb.travel(to), HYPERSPACE_DEST);
+  await ready(page, HYPERSPACE_DEST);
+  // The travel notice pill lives 1200 ms; wait past it so the comparison is canvas, not toast.
+  await page.waitForTimeout(1400);
+  const afterHyperAddr = await page.evaluate(() => window.__ugb.state.address);
+  const hyperPath = path.join(outDir, 'hyper-galaxy-jump.png');
+  await page.screenshot({ path: hyperPath });
 
+  const hyperUrl = page.url();
+  const hyperReplay = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  await hyperReplay.goto(hyperUrl, { waitUntil: 'domcontentloaded' });
+  await ready(hyperReplay, HYPERSPACE_DEST);
+  await hyperReplay.waitForTimeout(1400);
+  const hyperLinkPath = path.join(outDir, 'hyper-galaxy-jump-link.png');
+  await hyperReplay.screenshot({ path: hyperLinkPath });
+  await hyperReplay.close();
+
+  const hyperVsLink = await diffCanvasPng(hyperPath, hyperLinkPath);
   check(
-    'refused subspace crossing plays no mask and leaves frame untouched',
-    refusedPlan.ok === false &&
-      refusedPlan.method === 'subspace' &&
-      afterRefusalAddr === WARP_DEST &&
-      refusedVsBefore.maxChannelDiff === 0,
-    `ok=${refusedPlan.ok} method=${refusedPlan.method} addr=${afterRefusalAddr} maxDiff=${refusedVsBefore.maxChannelDiff}`,
+    'galaxy-to-galaxy crosses as hyperspace and lands on the linked frame',
+    hyperPlan.ok === true &&
+      hyperPlan.method === 'hyperspace' &&
+      hyperPlan.distanceM !== null &&
+      hyperPlan.elapsedS !== null &&
+      afterHyperAddr === HYPERSPACE_DEST &&
+      hyperVsLink.maxChannelDiff === 0,
+    `ok=${hyperPlan.ok} method=${hyperPlan.method} d=${hyperPlan.distanceM} addr=${afterHyperAddr} maxDiff=${hyperVsLink.maxChannelDiff}`,
   );
 
   const failures = checks.filter((c) => !c.ok).length;

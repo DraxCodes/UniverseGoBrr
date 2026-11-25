@@ -4,8 +4,10 @@ import { LY_M } from './disc';
 import { placement } from './placement';
 import {
   TRAVEL_SPEED_M_PER_S,
+  WORMHOLE_ELAPSED_S,
   methodForPair,
   planTravel,
+  rootPosition,
 } from './travel';
 
 const SEED = 'ugb-0000';
@@ -23,7 +25,7 @@ describe('speed table', () => {
     expect(TRAVEL_SPEED_M_PER_S.impulse).toBeCloseTo(0.01 * 299_792_458, 6);
     expect(TRAVEL_SPEED_M_PER_S.warp).toBeCloseTo(LY_M / 86_400, 3);
     expect(TRAVEL_SPEED_M_PER_S.transwarp).toBeCloseTo((100 * LY_M) / 86_400, 3);
-    expect(TRAVEL_SPEED_M_PER_S.subspace).toBeCloseTo((10_000 * LY_M) / 86_400, 3);
+    expect(TRAVEL_SPEED_M_PER_S.hyperspace).toBeCloseTo((10_000 * LY_M) / 86_400, 3);
   });
 
   it('makes 1 ly at warp cost exactly one day', () => {
@@ -53,7 +55,11 @@ describe('planTravel', () => {
 
     expect(plan.reason).toBeNull();
     expect(plan.distanceM).toBeCloseTo(expected, 6);
-    expect(plan.elapsedS).toBeCloseTo(expected / TRAVEL_SPEED_M_PER_S[plan.method], 6);
+    // Same-galaxy pairs are warp or transwarp, both distance-priced, so the speed table applies.
+    expect(plan.method === 'warp' || plan.method === 'transwarp').toBe(true);
+    if (plan.method === 'warp' || plan.method === 'transwarp') {
+      expect(plan.elapsedS).toBeCloseTo(expected / TRAVEL_SPEED_M_PER_S[plan.method], 6);
+    }
     expect(plan.method).toBe(methodForPair(parseAddressOrThrow('v1/0.1'), parseAddressOrThrow('v1/0.2')));
     expect(plan.distanceM).toBeGreaterThan(0);
   });
@@ -92,14 +98,78 @@ describe('planTravel', () => {
     expect(plan.distanceM).toBeCloseTo(distance('v1/0.0.0', 'v1/0.5.0'), 6);
   });
 
-  it('refuses a galaxy-to-galaxy jump instead of inventing zero', () => {
-    const plan = planTravel(SEED, parseAddressOrThrow('v1/0'), parseAddressOrThrow('v1/1'));
-    expect(plan.method).toBe('subspace');
+  it('travels galaxy-to-galaxy now that the root layout gives a distance', () => {
+    const from = parseAddressOrThrow('v1/0');
+    const to = parseAddressOrThrow('v1/1');
+    const plan = planTravel(SEED, from, to);
+
+    expect(plan.reason).toBeNull();
+    // Recommended method across galaxies is hyperspace (ADR-0019's advice column).
+    expect(plan.method).toBe('hyperspace');
+    expect(plan.distanceM).not.toBeNull();
+    expect(plan.distanceM).toBeGreaterThan(0);
+
+    // The distance is the root-frame separation, which is galaxy-scale, not zero.
+    const a = rootPosition(SEED, from)!;
+    const b = rootPosition(SEED, to)!;
+    const expected = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+    expect(plan.distanceM).toBeCloseTo(expected, 3);
+    expect(plan.elapsedS).toBeCloseTo(expected / TRAVEL_SPEED_M_PER_S.hyperspace, 3);
+  });
+
+  it('carries each star own offset into a galaxy-to-galaxy distance', () => {
+    // Two stars, one in each galaxy: the distance is the galaxies' separation *plus* each star's
+    // offset, minus the other's. Dropping the offsets would show two stars at the galaxies' centres.
+    const here = parseAddressOrThrow('v1/0.1');
+    const there = parseAddressOrThrow('v1/1.2');
+    const plan = planTravel(SEED, here, there);
+    expect(plan.reason).toBeNull();
+    const a = rootPosition(SEED, here)!;
+    const b = rootPosition(SEED, there)!;
+    expect(plan.distanceM).toBeCloseTo(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z), 3);
+  });
+
+  it('prices every method, and a wormhole costs a fixed time whatever the distance', () => {
+    const near = planTravel(SEED, parseAddressOrThrow('v1/0.1'), parseAddressOrThrow('v1/0.2'));
+    const far = planTravel(SEED, parseAddressOrThrow('v1/0'), parseAddressOrThrow('v1/1'));
+
+    for (const plan of [near, far]) {
+      expect(plan.costs).toHaveLength(5);
+      expect(plan.costs.map((c) => c.method)).toEqual([
+        'impulse',
+        'warp',
+        'transwarp',
+        'hyperspace',
+        'wormhole',
+      ]);
+      const wormhole = plan.costs.find((c) => c.method === 'wormhole')!;
+      expect(wormhole.elapsedS).toBe(WORMHOLE_ELAPSED_S);
+    }
+
+    // The point of the carve-out: same wormhole cost across a few hundred AU and across megaparsecs.
+    const nearWormhole = near.costs.find((c) => c.method === 'wormhole')!.elapsedS;
+    const farWormhole = far.costs.find((c) => c.method === 'wormhole')!.elapsedS;
+    expect(nearWormhole).toBe(farWormhole);
+  });
+
+  it('applies a requested method even when it is not the recommended one', () => {
+    const from = parseAddressOrThrow('v1/0.1');
+    const to = parseAddressOrThrow('v1/0.2');
+    const plan = planTravel(SEED, from, to, 'wormhole');
+    expect(plan.reason).toBeNull();
+    expect(plan.method).toBe('wormhole');
+    expect(plan.elapsedS).toBe(WORMHOLE_ELAPSED_S);
+  });
+
+  it('rejects an unknown method rather than guessing', () => {
+    const plan = planTravel(
+      SEED,
+      parseAddressOrThrow('v1/0.1'),
+      parseAddressOrThrow('v1/0.2'),
+      'teleport',
+    );
+    expect(plan.reason).toContain('not a travel method');
     expect(plan.distanceM).toBeNull();
-    expect(plan.elapsedS).toBeNull();
-    expect(plan.reason).toContain('not modelled');
-    expect(plan.reason).toContain('v1/0');
-    expect(plan.reason).toContain('v1/1');
   });
 
   it('refuses the same address, the root, and mixed versions', () => {

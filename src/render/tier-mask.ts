@@ -7,7 +7,8 @@
  *
  * Invariants enforced here:
  * - Only `warp` (star streaks) and `transwarp` (slipstream tunnel) have masks. `impulse` is
- *   free flight and `subspace` is unmodelled / refused.
+ *   free flight, and `hyperspace` and `wormhole` have no mask built yet (ADR-0019's effects,
+ *   ticket 07) so they cross without one rather than being refused.
  * - Only two lifecycle states exist: playing (`active === true`) or settled at the destination
  *   (`active === false`). Interruption or completion snaps cleanly to arrival; half-swapped
  *   frames are not representable.

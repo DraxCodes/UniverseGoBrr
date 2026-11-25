@@ -32,7 +32,7 @@ interface UniversePrecisionReport {
 interface UniverseTravelResult {
   ok: boolean;
   reason: string | null;
-  method: 'impulse' | 'warp' | 'transwarp' | 'subspace' | null;
+  method: 'impulse' | 'warp' | 'transwarp' | 'hyperspace' | 'wormhole' | null;
   distanceM: number | null;
   elapsedS: number | null;
 }

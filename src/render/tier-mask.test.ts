@@ -8,11 +8,12 @@ import {
 } from './tier-mask';
 
 describe('maskMethodFor', () => {
-  it('selects warp and transwarp and rejects impulse and subspace', () => {
+  it('selects warp and transwarp and rejects the methods with no mask built', () => {
     expect(maskMethodFor('warp')).toBe('warp');
     expect(maskMethodFor('transwarp')).toBe('transwarp');
     expect(maskMethodFor('impulse')).toBeNull();
-    expect(maskMethodFor('subspace')).toBeNull();
+    expect(maskMethodFor('hyperspace')).toBeNull();
+    expect(maskMethodFor('wormhole')).toBeNull();
   });
 });
 

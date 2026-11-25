@@ -16,7 +16,7 @@ import { createServer, preview } from 'vite';
 const root = path.resolve(import.meta.dirname, '..');
 const DEFAULT_BASE_URL = 'http://127.0.0.1:4173/';
 const SEEDS = Array.from({ length: 12 }, (_, i) => `ugb-${String(i).padStart(4, '0')}`);
-const ADDRESS_STR = 'v1/4.-2.7';
+const ADDRESS_STR = 'v1/4.0.-2.7'; // star -2 (sector 0), which is the orrery system
 const EPOCH_STR = '2000-01-01T00:00:00.000Z';
 const T_VAL = 1200;
 const GALAXY_CAM = {

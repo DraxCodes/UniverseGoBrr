@@ -14,7 +14,11 @@ import { fnv1a32 } from '../lib/hash';
 import { createRng, type Rng } from '../lib/random';
 import { formatAddress, ancestorAddress, type Address } from '../frame/address';
 import { GALAXY_RADIUS_M } from '../render/scale';
-import { GALAXY_DEPTH as LEVEL_GALAXY_DEPTH, sectorCount as sectorCountOf } from './levels';
+import {
+  GALAXY_DEPTH as LEVEL_GALAXY_DEPTH,
+  sectorCount as sectorCountOf,
+  sectorIndexForAngle,
+} from './levels';
 
 export interface Vec3 {
   readonly x: number;
@@ -253,6 +257,21 @@ export function discPlanePoint(centre: Vec3, point: Vec3): Vec3 {
 export function discAzimuthOf(frame: GalaxyFrame, point: Vec3): number {
   const flat = discPlanePoint(frame.centre, point);
   return Math.atan2(flat.z, flat.x);
+}
+
+/**
+ * Which sector a **drawn** point in the galaxy frame falls in (ADR-0023).
+ *
+ * The whole of the sector derivation in one place: the azimuth of the point about the galactic
+ * centre, then the wedge law. The generator, `placement` and the tests all read this, so a star's
+ * label and the wedge it is visibly inside cannot be computed by two slightly different rules.
+ */
+export function sectorOfPoint(frame: GalaxyFrame, point: Vec3): number {
+  return sectorIndexForAngle(
+    discAzimuthOf(frame, point),
+    frame.sectorCount,
+    frame.sectorPhaseRad,
+  );
 }
 
 /**

@@ -50,29 +50,7 @@ describe('placement is a pure function of (seed, address)', () => {
   });
 });
 
-describe('the sector rung is transparent to position (ADR-0023)', () => {
-  it('keys a star on the address it had before the sector existed', () => {
-    // The exact string is the mechanic: `v1/4.3.-7` (star -7 of sector 3) must key on
-    // `v1/4.-7`, the pre-re-key address of that star. A full-address key would silently re-roll
-    // every star while claiming the galaxy was unchanged.
-    expect(placementKey(SEED, address('v1/4.3.-7'))).toBe(
-      `${SEED}|v1/4.-7|placement|v${PLACEMENT_VERSION}`,
-    );
-    // And the generator's identity-keyed path produces the same string.
-    expect(placementKey(SEED, address('v1/4.-7'))).toBe(placementKey(SEED, address('v1/4.3.-7')));
-  });
-
-  it('puts a star at the same point whichever valid sector labels it', () => {
-    const frame = galaxyFrame(SEED, address(GALAXY));
-    const index = 7;
-    const first = placement(SEED, starAddressAt(address(GALAXY), 0, index))!;
-    const second = placement(SEED, starAddressAt(address(GALAXY), 3, index))!;
-    expect(second).toEqual(first);
-    // And the point is the one the disc law draws from the star's own stream.
-    const expected = sampleDiscStar(createRng(fnv1a32(placementKey(SEED, address('v1/4.7')))), frame);
-    expect(first).toEqual({ x: expected.x, y: expected.y, z: expected.z });
-  });
-
+describe('a sector is a real destination', () => {
   it('places a sector at the middle of its wedge, as a real destination', () => {
     const frame = galaxyFrame(SEED, address(GALAXY));
     const here = placement(SEED, address('v1/4.0'))!;

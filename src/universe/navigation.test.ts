@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseAddressOrThrow } from '../frame/address';
-import { GALACTIC_PLANE_NORMAL } from '../universe/disc';
+import { GALACTIC_PLANE_NORMAL, galaxyAddressOf, galaxyFrame } from '../universe/disc';
 import { orbitTo } from '../input/orbit-controls';
 import { cameraBasis } from '../render/camera';
 import { GALAXY_RADIUS_M, galaxyFramingDistanceM } from '../render/scale';
@@ -153,6 +153,21 @@ describe('planZoomOut', () => {
     expect(plan.reason).toContain('item 9');
   });
 
+  it('does not blame the sector when the missing rung is a system or a body', () => {
+    // The refusal is per-target, not one shared sentence. A system line (`v1/0.3.1`, keeping three
+    // levels) has nothing to do with the sector work, and telling the reader about item 9 there
+    // would point at the wrong missing feature.
+    const deep = parseAddressOrThrow('v1/0.3.1.2.5');
+    for (const depth of [3, 4]) {
+      const plan = planZoomOut(deep, depth);
+      expect(plan.ok, String(depth)).toBe(false);
+      if (plan.ok) continue;
+      expect(plan.reason, String(depth)).not.toContain('sector');
+      expect(plan.reason, String(depth)).not.toContain('item 9');
+      expect(plan.reason).toContain('galaxy');
+    }
+  });
+
   it('refuses a level an address does not have', () => {
     expect(planZoomOut(STAR, 5).ok).toBe(false);
     expect(planZoomOut(STAR, -1).ok).toBe(false);
@@ -208,5 +223,29 @@ describe('galaxyFraming', () => {
     expect(rebuild.x).toBeCloseTo(camera.x, 3);
     expect(rebuild.y).toBeCloseTo(camera.y, 3);
     expect(rebuild.z).toBeCloseTo(camera.z, 3);
+  });
+});
+
+describe('a sector opens on the same frame it zooms out to', () => {
+  it('frames the galaxy from the sector’s own address, exactly as zoom-out does', () => {
+    // `main.ts`'s `openingCamera` for a non-star is `galaxyFraming(galaxyFrame(seed,
+    // galaxyAddressOf(address)).centre)`; `commitZoomOut` builds the same camera from
+    // `galaxyFrame(seed, plan.address)`. Those two must be one frame, or arriving at a sector by
+    // link and by zoom-out would show two different pictures. Both derive the galaxy address the
+    // same way, so evaluating the shared inputs here pins the agreement without importing `main`.
+    const seed = 'ugb-0000';
+    for (const sectorText of ['v1/4.0', 'v1/4.1', 'v1/4.2']) {
+      const sector = parseAddressOrThrow(sectorText);
+      // Link-arrival path: from the sector address.
+      const fromSector = galaxyFraming(galaxyFrame(seed, galaxyAddressOf(sector)).centre);
+      // Zoom-out path: from the galaxy ancestor the plan would return.
+      const plan = planZoomOut(parseAddressOrThrow(`${sectorText}.-2.7`), 1);
+      expect(plan.ok, sectorText).toBe(true);
+      if (!plan.ok) continue;
+      const fromGalaxy = galaxyFraming(galaxyFrame(seed, plan.address).centre);
+      expect(fromSector.yaw, sectorText).toBeCloseTo(fromGalaxy.yaw, 12);
+      expect(fromSector.pitch, sectorText).toBeCloseTo(fromGalaxy.pitch, 12);
+      expect(fromSector.distanceM, sectorText).toBeCloseTo(fromGalaxy.distanceM, 6);
+    }
   });
 });

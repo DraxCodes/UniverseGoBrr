@@ -1,6 +1,6 @@
 # The address ladder moved: what depth now means
 
-Written 2026-11-25, against `main` after ticket 06 Slice A. Base 0.7.1.
+Written 2026-11-25, against `main` after ticket 06 item 2 (the sector rung). Base 0.7.1.
 
 **Read this before touching `GALAXY_DEPTH`, `starKind`, or anything that indexes `address.levels`.**
 
@@ -30,27 +30,44 @@ sector rung at depth 2 does not move a system; it changes what **depth 2** means
 
 Concretely:
 
-- `v1/4.-2` used to be a star. After the re-key it is a **sector** address, and it means the same
+- `v1/4.-2` used to be a star. After the re-key it is a **sector** address, and it collides with the
   string a star identity uses — see the collision note below.
-- `v1/4.-2.7` is a system before and after. Its *meaning* changes: it is now "star 7 of sector −2",
-  not "body 7 of star −2". Star identity kept its integer, so honest new addresses read
-  `v1/4.<sector>.-2.7`.
+- `v1/4.-2.7` is a *system* before and after, and the rung is **inserted above** the star identity:
+  it is now `v1/4.<sector>.-2.7`, still "star −2, body 7". It is **not** `v1/4.-2.<n>` and it does not
+  become "sector −2, star 7". The stale string `v1/4.-2.7` is now read as *sector −2*, which is not a
+  valid sector index — see the negative-sector trap below.
 
 Check the claim against `starKind`: it reads `address.levels[SECTOR_DEPTH]`, i.e. `levels[2]`, so a
 star is depth 3 now. That is the ground truth, not the prose.
 
 ## State after the insertion (ticket 06 item 2)
 
-- `levels.ts` — `withoutSectorRung`, the ladder, `sectorCountForSize`, `sectorIndexForAngle`,
-  `galaxySizeFraction`.
-- `disc.ts` — `GalaxyFrame` carries `sectorCount` and `sectorPhaseRad`; `discAzimuthOf` and
-  `sectorPosition` are the two readers of the derived phase.
-- `placement.ts` — `placementKey` and `appearanceKey` both strip the sector rung, so position and
-  light do not re-roll. `sectorOfStar` derives the sector from the drawn angle.
+- `levels.ts` — `withoutSectorRung`, `contentKey` (the one place the key shape is built), the
+  ladder, `hasSystemScene`, `sectorCountForSize`, `sectorIndexForAngle`, `galaxySizeFraction`.
+- `disc.ts` — `GalaxyFrame` carries `sectorCount` and `sectorPhaseRad`; `sectorOfPoint` is the one
+  derivation every caller shares (`discAzimuthOf` + the wedge law), and `sectorPosition` is the
+  wedge-centre reader.
+- `placement.ts` — `placementKey` and `appearanceKey` both go through `contentKey`, so position and
+  light do not re-roll. `sectorOfStar` derives the sector from the drawn angle via `sectorOfPoint`.
 - `galaxy.ts` — `GALAXY_VERSION` 9, `APPEARANCE_VERSION` unchanged at 8, the walk emits
-  `galaxy.sector.star`.
-- `system.ts` — `generateSystem` keys on `withoutSectorRung`, so planets do not re-roll.
+  `galaxy.sector.star`, and `toDiscFrame` is `discPlanePoint` (one copy of the plane rotation).
+- `system.ts` — `generateSystem` keys through `contentKey`, so planets do not re-roll.
 - `travel.ts` — a sector is disc; `methodForPair` no longer throws on a depth-2 address.
+- `main.ts` — `hasSystemScene` decides the scene: a sector resolves **no** system and draws the
+  galaxy it slices; the root draws nothing; a galaxy/system/body keeps its orrery.
+
+## `generateSystem` is total, and that is the trap behind the scene switch
+
+`generateSystem(seed, address)` will answer for **any** address, including a sector and the root.
+Nothing in it refuses a wedge, so the scene switch that called `resolveSystem` unconditionally drew a
+complete, invented planetary system for `?addr=v1/4.0` — nine plausible planets for a place that is
+not a star. If you add a rung or a new scene, ask `hasSystemScene(address)` rather than assuming a
+resolved system means a real one. The test in `sector-rung.test.ts` pins both halves: the predicate is
+false for a sector, *and* the generator still happily returns planets for it.
+
+The same guard is why a sector's zoom controls are attached with `SYSTEM_EXTENT_M` as the frame scale:
+there is no system to borrow `displayScaleM` from, and the galaxy's own far limit
+(`GALAXY_MAX_DISTANCE_M`) already bounds the other end.
 
 ## The three traps the insertion actually hit
 
@@ -81,7 +98,7 @@ looks like a plausible derivation. `sector-rung.test.ts` pins it.
 
 ## Probes
 
-- `npm run probe:ladder` — new, 10/10, the Slice A evidence.
+- `npm run probe:ladder` — 11/11, the re-key evidence.
 - `npm run probe:masks` — 12/12. Its last check used to assert a galaxy jump was *refused*; it now
   asserts the jump succeeds as hyperspace and lands pixel-identical to a fresh link. Do not "restore"
   the old refusal: it was the bug.

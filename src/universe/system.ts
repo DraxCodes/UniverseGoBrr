@@ -12,10 +12,10 @@
  * population. The exaggeration is reported, not hidden.
  */
 
-import { formatAddress, type Address } from '../frame/address';
+import { type Address } from '../frame/address';
 import { fnv1a32 } from '../lib/hash';
 import { createRng } from '../lib/random';
-import { withoutSectorRung } from './levels';
+import { contentKey } from './levels';
 
 /** Bumped whenever the generator's output would change. Old links must break loudly (ADR-0005). */
 export const SYSTEM_VERSION = 2;
@@ -111,7 +111,7 @@ export function generateSystem(seed: string, address: Address): StarSystem {
   // and the layer-2 captures — which are of a system, not a galaxy — would all become invalid. It
   // is the same mechanic as `placementKey`, one rung down: identity is the address *without* the
   // sector, so a sector is a filing cabinet, not a parent that changes its contents.
-  const key = `${seed}|${formatAddress(withoutSectorRung(address))}|system|v${SYSTEM_VERSION}`;
+  const key = contentKey(seed, address, 'system', SYSTEM_VERSION);
   const rng = createRng(fnv1a32(key));
 
   const starClass = rng.pick<StarClass>(['M', 'M', 'M', 'M', 'K', 'K', 'K', 'G', 'G', 'F', 'A']);

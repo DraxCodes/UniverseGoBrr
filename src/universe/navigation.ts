@@ -49,6 +49,7 @@ import { cameraBasis } from '../render/camera';
 import { galaxyFramingDistanceM } from '../render/scale';
 import type { Camera } from '../state/url-state';
 import { GALACTIC_PLANE_NORMAL, GALAXY_DEPTH } from './disc';
+import { SECTOR_DEPTH } from './levels';
 
 /** A drawn star: an address and where it sits, in its galaxy's frame. */
 export interface AnchorCandidate {
@@ -187,11 +188,20 @@ export function planZoomOut(from: Address, depth: number): ZoomOutPlan {
     };
   }
   if (depth !== GALAXY_DEPTH) {
+    // A *sector* line has its own answer, because it is the one rung that would be reachable in
+    // ordinary use and the reason it is not is a specific missing feature. Any deeper line is just
+    // a system or a body and gets the generic answer.
+    if (depth === SECTOR_DEPTH) {
+      return {
+        ok: false,
+        reason:
+          'the galaxy is the only rung with a scene to zoom out to so far; a sector is now a real ' +
+          'address and a real travel destination, but standing in its wedge is ticket 06 item 9',
+      };
+    }
     return {
       ok: false,
-      reason:
-        'the galaxy is the only rung with a scene to zoom out to so far; a sector is now a real ' +
-        'address and a real travel destination, but standing in its wedge is ticket 06 item 9',
+      reason: 'the galaxy is the only rung with a scene to zoom out to so far',
     };
   }
   return { ok: true, address: ancestorAddress(from, depth) };

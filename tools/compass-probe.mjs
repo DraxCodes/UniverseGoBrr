@@ -25,7 +25,7 @@ const BASE = urlArg >= 0 ? process.argv[urlArg + 1] : 'http://127.0.0.1:4173/';
 
 const SEED = 'ugb-0000';
 const EPOCH = '2000-01-01T00:00:00.000Z';
-const DEPART = 'v1/0.3';
+const DEPART = 'v1/0.2.3'; // a real star: sector 2, identity 3
 
 const checks = [];
 function check(name, ok, detail) {
@@ -76,8 +76,11 @@ try {
   );
   const crumbButtons = crumbs.filter((c) => c.tag === 'button');
   check(
-    'address shows v1/0/3 with the level above clickable',
-    crumbs.length === 5 && crumbButtons.length === 2,
+    'address shows v1/0/2/3 with every level above "here" clickable',
+    // Four levels (version + galaxy + sector + star), three slashes between them, and three
+    // buttons: the version (depth 0), the galaxy (depth 1) and the sector (depth 2). The star is
+    // where you are, so it is a span — the count is the re-key in one assertion.
+    crumbs.length === 7 && crumbButtons.length === 3,
     JSON.stringify(crumbs),
   );
   check(

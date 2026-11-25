@@ -2,10 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { formatAddress, parseAddressOrThrow } from '../frame/address';
 import { createRng } from '../lib/random';
 import { fnv1a32 } from '../lib/hash';
-import { discAzimuthOf, galaxyFrame, sampleDiscStar } from './disc';
+import { discAzimuthOf, galaxyFrame, sampleDiscStar, sectorOfPoint } from './disc';
 import { appearanceKey, generateGalaxy } from './galaxy';
-import { sectorIndexForAngle, withoutSectorRung } from './levels';
-import { PLACEMENT_VERSION, placement, placementKey, starAddressAt } from './placement';
+import { withoutSectorRung, hasSystemScene } from './levels';
+import {
+  PLACEMENT_VERSION,
+  placement,
+  placementKey,
+  sectorOfStar,
+  starAddressAt,
+} from './placement';
 import { generateSystem } from './system';
 
 /**
@@ -79,7 +85,10 @@ describe('position and appearance did not move with the re-key', () => {
     // And the point is the one the disc law draws from the star's own stream, read through the
     // pre-re-key address. (Star 7 is positive, so its old and new keys agree here; the negative
     // case is pinned by the string test above, because `v1/4.-7` is now a *body* address.)
-    const expected = sampleDiscStar(createRng(fnv1a32(placementKey(SEED, parseAddressOrThrow('v1/4.7')))), frame);
+    const expected = sampleDiscStar(
+      createRng(fnv1a32(placementKey(SEED, parseAddressOrThrow('v1/4.7')))),
+      frame,
+    );
     expect(first).toEqual({ x: expected.x, y: expected.y, z: expected.z });
   });
 
@@ -97,21 +106,39 @@ describe('position and appearance did not move with the re-key', () => {
 });
 
 describe('the sector is derived from the angle the star is drawn at', () => {
-  it('files every star under the sector its drawn angle falls in', () => {
+  it('files every star under the wedge its drawn angle falls in', () => {
     // ADR-0023's invariant: the sector is derived from the position, so the label and the wedge
-    // cannot disagree. Re-deriving from the drawn point is the check the ADR asks for.
+    // cannot disagree. The wedge is computed **independently** here — slice `k` is the angular
+    // interval `[phase + k·2π/count, phase + (k+1)·2π/count)` — so this is not the production
+    // `sectorIndexForAngle` checked against itself, which would pass for any law at all.
     const galaxyAddress = parseAddressOrThrow('v1/0');
     const frame = galaxyFrame(SEED, galaxyAddress);
     const galaxy = generateGalaxy(SEED, galaxyAddress, 'low');
+    const TAU = Math.PI * 2;
+    const wedgeRad = TAU / frame.sectorCount;
     for (const star of galaxy.stars.slice(1)) {
-      const sector = sectorIndexForAngle(
-        discAzimuthOf(frame, star),
-        frame.sectorCount,
-        frame.sectorPhaseRad,
+      const offset =
+        (((discAzimuthOf(frame, star) - frame.sectorPhaseRad) % TAU) + TAU) % TAU;
+      const wedge = Math.min(frame.sectorCount - 1, Math.floor(offset / wedgeRad));
+      expect(star.address.levels[1], formatAddress(star.address)).toBe(wedge);
+      expect(wedge).toBeGreaterThanOrEqual(0);
+      expect(wedge).toBeLessThan(frame.sectorCount);
+    }
+  });
+
+  it('agrees with the sector the star’s address was written from', () => {
+    // The re-key took the label from the drawn angle; `sectorOfStar` must still answer the same
+    // number, or a regenerated address and the drawn star would disagree. Star -2 in `v1/4` is the
+    // one `capture/shots.json` pins as `v1/4.0.-2.7`, so that shot's honesty is this assertion.
+    expect(sectorOfStar(SEED, parseAddressOrThrow('v1/4'), -2)).toBe(0);
+    // And the address the generator hands out is the one this predicate predicts.
+    const galaxy = generateGalaxy(SEED, parseAddressOrThrow('v1/4'), 'low');
+    for (const star of galaxy.stars.slice(1)) {
+      const index = star.address.levels[2];
+      if (index === undefined) throw new Error('a star address has no star level');
+      expect(star.address.levels[1], formatAddress(star.address)).toBe(
+        sectorOfStar(SEED, parseAddressOrThrow('v1/4'), index),
       );
-      expect(star.address.levels[1], formatAddress(star.address)).toBe(sector);
-      expect(sector).toBeGreaterThanOrEqual(0);
-      expect(sector).toBeLessThan(frame.sectorCount);
     }
   });
 
@@ -121,12 +148,23 @@ describe('the sector is derived from the angle the star is drawn at', () => {
     // the home star, so the home azimuth is `homeAngle`, and it is easy to negate twice.
     for (const galaxyText of ['v1/0', 'v1/1', 'v1/4', 'v1/7']) {
       const frame = galaxyFrame(SEED, parseAddressOrThrow(galaxyText));
-      const homeSector = sectorIndexForAngle(
-        discAzimuthOf(frame, { x: 0, y: 0, z: 0 }),
-        frame.sectorCount,
-        frame.sectorPhaseRad,
-      );
-      expect(homeSector, galaxyText).toBe(0);
+      // The home star is the frame origin, so its drawn azimuth is where slice zero must start.
+      expect(sectorOfPoint(frame, { x: 0, y: 0, z: 0 }), galaxyText).toBe(0);
     }
+  });
+});
+
+describe('a sector is not a star', () => {
+  it('has no system scene, even though the generator would happily make one', () => {
+    // The trap: `generateSystem` is total. Nothing in it refuses a sector address, so a scene
+    // switch that asked it to resolve `?addr=v1/4.0` got a complete, invented planetary system for
+    // a wedge of the disc. `hasSystemScene` is what the switch now reads; this pins the reason it
+    // has to, so a future "simplification" that drops the guard fails here instead of in a shot.
+    expect(hasSystemScene(parseAddressOrThrow('v1/4.0'))).toBe(false);
+    // It is not that the generator refuses — it does not, and that is the whole hazard.
+    expect(generateSystem(SEED, parseAddressOrThrow('v1/4.0')).planets.length).toBeGreaterThan(0);
+    // The galaxy itself and a real star both keep their orrery.
+    expect(hasSystemScene(parseAddressOrThrow('v1/4'))).toBe(true);
+    expect(hasSystemScene(parseAddressOrThrow('v1/4.0.-2.7'))).toBe(true);
   });
 });

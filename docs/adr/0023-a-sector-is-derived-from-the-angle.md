@@ -64,6 +64,13 @@ cleaner law; until then it is not worth re-rolling the sky.
   local neighbourhood is always sector 0. A free per-galaxy draw would have made Sol's reserved
   address mean a different slice in each galaxy. (This replaces the "sampled per galaxy" option
   first written here; the field still varies, because `homeAngle` does.)
+- **A sector link shows the galaxy, face-on** (owner, 2026-11-25). A sector is a wedge, not a star,
+  and `generateSystem` is total — so before this, a crafted `?addr=v1/4.0` drew a complete invented
+  planetary system for a place that has none. `hasSystemScene` (in `levels.ts`) is the ladder's
+  answer, and `main.ts` draws the disc the sector slices with the same camera `commitZoomOut` uses.
+  The wedge itself stays undrawn until ticket 06 item 9. The **galaxy** rung (`v1/0`) deliberately
+  keeps its system scene: its home star *is* the node, and the four `desktop-*` captures pin that
+  boot frame.
 
 ## The mechanic that must change for this to hold
 

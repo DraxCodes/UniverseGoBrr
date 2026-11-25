@@ -7,12 +7,13 @@ import { mountHud, showFatal, type CompassEntry } from './ui/hud';
 import { attachOrbitControls, orbitDistance, orbitTo } from './input/orbit-controls';
 import { defaultSystemCamera, displayScaleM } from './render/system-scene';
 import { GALAXY_MAX_DISTANCE_M } from './render/galaxy-scene';
-import { notchFactor } from './render/scale';
+import { notchFactor, SYSTEM_EXTENT_M } from './render/scale';
 import { maskMethodFor, type MaskMethod } from './render/tier-mask';
-import { AU_M, describeSystem } from './universe/system';
+import { AU_M, describeSystem, type StarSystem } from './universe/system';
 import { resolveSystem } from './universe/authored';
 import { generateGalaxy, type Galaxy, type GalaxyTier } from './universe/galaxy';
 import { LY_M, galaxyAddressOf, galaxyFrame } from './universe/disc';
+import { GALAXY_DEPTH, hasSystemScene } from './universe/levels';
 import { placement } from './universe/placement';
 import { galaxyFraming, nearestAnchors, planZoomOut } from './universe/navigation';
 import { planTravel, type TravelPlan } from './universe/travel';
@@ -26,6 +27,7 @@ import {
   parseUrlState,
   urlForState,
   type UrlState,
+  type Camera,
 } from './state/url-state';
 
 interface AppHandle {
@@ -270,8 +272,9 @@ function commitTravel(toText: string): UniverseTravelResult {
     epochMs: clock.epochMs,
     // "See the destination" (owner, 2026-11-24): the arrival camera is exactly the opening
     // framing a fresh shared link to that place would choose, so a link taken mid-jump and the
-    // jump's own arrival are the same state.
-    camera: defaultSystemCamera(resolveSystem(state.seed, parsed.address)),
+    // jump's own arrival are the same state. `openingCamera` is that one answer for every rung —
+    // including a sector, which now has a scene to arrive at.
+    camera: arrivalCamera(state.seed, parsed.address),
     cameraExplicit: true,
   };
 
@@ -423,6 +426,49 @@ function describeDurationS(seconds: number): string {
   return `${seconds.toFixed(0)} s`;
 }
 
+/**
+ * The framing a place opens with, or `null` when the place has no scene to frame.
+ *
+ * Three answers, and the address decides which (see `hasSystemScene`):
+ *
+ * - a **star** opens framed on its system, exactly as it always has — this is the branch every
+ *   gated capture pins, so it must not move;
+ * - a **sector** opens **face-on to the galaxy it slices**, at the distance that fits the whole
+ *   disc. That is the same framing `commitZoomOut` uses, which is the point: the sector's scene is
+ *   that galaxy, and arriving there by link and by travel must agree;
+ * - the **root** frames nothing. Nothing is dropped into the universe yet, so there is no object
+ *   to look at, and the honest frame is the plain default one.
+ *
+ * Only the frame's centre is needed for a non-star, so this never pays to generate a population.
+ */
+function openingCamera(
+  seed: string,
+  address: Address,
+  system: StarSystem | null,
+): Camera | null {
+  if (system) return defaultSystemCamera(system);
+  if (address.levels.length < GALAXY_DEPTH) return null;
+  const framing = galaxyFraming(galaxyFrame(seed, galaxyAddressOf(address)).centre);
+  return orbitTo(framing.yaw, framing.pitch, framing.distanceM);
+}
+
+/** The default camera, copied so a caller cannot alias the frozen module constant. */
+function plainCamera(): Camera {
+  return { ...DEFAULT_CAMERA, target: { ...DEFAULT_CAMERA.target } };
+}
+
+/**
+ * The camera a **fresh link** to `address` opens with. Never null: the root has no scene, so it
+ * falls back to the plain default rather than refusing to frame anything.
+ *
+ * This is the single answer behind both boot (`init`) and arrival (`commitTravel`), which is what
+ * keeps "reload the arrival link" and "arrive by travel" the same state.
+ */
+function arrivalCamera(seed: string, address: Address): Camera {
+  const system = hasSystemScene(address) ? resolveSystem(seed, address) : null;
+  return openingCamera(seed, address, system) ?? plainCamera();
+}
+
 async function init(attempt: number): Promise<AppHandle> {
   const travelMask = pendingMask;
   pendingMask = null;
@@ -462,18 +508,33 @@ async function init(attempt: number): Promise<AppHandle> {
 
     // The system is resolved from the address alone (ADR-0005): an authored node (spec §3.6) wins,
     // otherwise the generator does. A shared link reproduces either one exactly; nothing is cached.
-    const system = probe ? null : resolveSystem(state.seed, state.address);
+    //
+    // **Not every address is a star.** A sector is a wedge of the disc, and `generateSystem` is
+    // total, so resolving one there invented a whole planetary system for a place that has none.
+    // `hasSystemScene` is the ladder's answer; the sector's scene is the galaxy it slices, which
+    // `galaxy` below supplies even when `system` is null.
+    const system = probe || !hasSystemScene(state.address)
+      ? null
+      : resolveSystem(state.seed, state.address);
     // The galaxy is generated once, in real metres, and is the backdrop the home system sits in.
     // It is keyed on the galaxy's own level rather than this address (ADR-0011), so every star in
     // one galaxy gets the same sky; nothing about it is persisted or cached across loads (ADR-0005).
-    const galaxy = system ? generateGalaxy(state.seed, state.address, GALAXY_TIER) : null;
+    // A sector and the galaxy itself both resolve the galaxy with no system: that is the whole
+    // scene at those rungs, rather than a backdrop behind an invented orrery.
+    const galaxy = !probe && state.address.levels.length >= GALAXY_DEPTH
+      ? generateGalaxy(state.seed, state.address, GALAXY_TIER)
+      : null;
     currentGalaxy = galaxy;
 
     // A camera at the origin is inside the star. When the URL did not name one, the scene picks a
-    // framing that shows the system, and that framing is then written back to the URL.
-    if (system && !state.cameraExplicit) {
-      state.camera = defaultSystemCamera(system);
-      state.cameraExplicit = true;
+    // framing that shows what is there and writes it back to the URL. The precision probe is
+    // exempt: its camera is part of the negative control and must stay exactly as the link set it.
+    if (!state.cameraExplicit && !probe) {
+      const framing = openingCamera(state.seed, state.address, system);
+      if (framing) {
+        state.camera = framing;
+        state.cameraExplicit = true;
+      }
     }
 
     // The compass is built from the population the picture already draws, so an anchor is a light
@@ -539,12 +600,13 @@ async function init(attempt: number): Promise<AppHandle> {
         // Issue 04 D8: the existing scene row carries the galaxy factor; there is no second
         // disclaimer and no new panel. Positions are never scaled, so the galaxy reads `×1 real`;
         // the only distortion is traversal, and it is printed where it is active.
+        //
+        // The scene row states *where you are*, so it keys off `identity` (are we at galaxy scale?)
+        // rather than `lod`. `lod` also folds in the disc's inclination; a straight zoom-out from
+        // the default view is edge-on, and it would leave the row reading "K-type · 9 planets" at
+        // 45 000 ly while the whole galaxy fills the frame.
+        const identity = created.galaxyFrame()?.identity ?? 0;
         if (system) {
-          // The scene row states *where you are*, so it keys off `identity` (are we at galaxy
-          // scale?) rather than `lod`. `lod` also folds in the disc's inclination; a straight
-          // zoom-out from the default view is edge-on, and it would leave the row reading
-          // "K-type · 9 planets" at 45 000 ly while the whole galaxy fills the frame.
-          const identity = created.galaxyFrame()?.identity ?? 0;
           // The zoom rate follows the orbit distance (eye to target), not the eye's distance from
           // the frame origin: after a pan both move together, so the wheel keeps its feel.
           const distance = orbitDistance(state.camera);
@@ -556,6 +618,10 @@ async function init(attempt: number): Promise<AppHandle> {
           } else {
             hud.setScene(describeSystem(system));
           }
+        } else if (galaxy) {
+          // No star at this rung: the galaxy is the whole scene (see `hasSystemScene`). It reads
+          // the same as the zoom-out row, because it is the same picture and the same claim.
+          hud.setScene(identity > 0.5 ? 'one galaxy · ×1 real' : 'inside one galaxy · ×1 real');
         }
       },
       onPipeline: (generation, error) => hud.setPipeline(generation, error),
@@ -576,15 +642,22 @@ async function init(attempt: number): Promise<AppHandle> {
 
     hud.setCamera(state.camera);
     if (system) hud.setScene(describeSystem(system));
+    else if (galaxy) hud.setScene('one galaxy · ×1 real');
 
     // Framing controls. They mutate `state.camera` in place, so the renderer (which holds that
     // reference) picks the change up on the next frame. The URL is rewritten only when a gesture
     // settles: browsers rate-limit `history.replaceState`.
-    const controls = system
+    //
+    // The controls are attached whenever the address has a scene to frame — a sector's scene is
+    // the galaxy, so it gets the same orbit/pan/zoom. Its zoom limits are the galaxy's own: the
+    // frame scale is a system's extent (the smallest reachable scale), because a sector frame has
+    // no system to borrow one from, and `GALAXY_MAX_DISTANCE_M` already bounds the far end.
+    const frameScaleM = system ? displayScaleM(system) : SYSTEM_EXTENT_M;
+    const controls = system || galaxy
       ? attachOrbitControls({
           element: canvas,
           camera: state.camera,
-          frameScaleM: displayScaleM(system),
+          frameScaleM,
           maxDistanceM: GALAXY_MAX_DISTANCE_M,
           onChange: () => {
             if (created.isMaskActive()) created.interruptMask();
@@ -607,10 +680,10 @@ async function init(attempt: number): Promise<AppHandle> {
       } else if (event.key.toLowerCase() === 'r') {
         if (created.isMaskActive()) created.interruptMask();
         // Reset means "the framing this scene opens with", not "the origin" — the origin is
-        // inside the star.
-        const home = system
-          ? defaultSystemCamera(system)
-          : { ...DEFAULT_CAMERA, target: { ...DEFAULT_CAMERA.target } };
+        // inside the star. `arrivalCamera` is the same answer a fresh link gets, so `r` restores
+        // exactly the frame the address arrived with (a sector included). The precision probe is
+        // exempt for the same reason boot is: its camera is part of the negative control.
+        const home = probe ? plainCamera() : arrivalCamera(state.seed, state.address);
         Object.assign(state.camera, home);
         persist();
         hud.setCamera(state.camera);

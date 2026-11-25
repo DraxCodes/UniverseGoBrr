@@ -8,7 +8,9 @@ import {
   SECTOR_DEPTH,
   SYSTEM_DEPTH,
   UNIVERSE_DEPTH,
+  contentKey,
   galaxySizeFraction,
+  hasSystemScene,
   isKind,
   kindOfAddress,
   levelKindAt,
@@ -49,6 +51,19 @@ describe('the address ladder', () => {
     const galaxy = parseAddressOrThrow('v1/0');
     expect(isKind(galaxy, 'galaxy')).toBe(true);
     expect(isKind(galaxy, 'sector')).toBe(false);
+  });
+
+  it('knows which rungs have a star system for a scene', () => {
+    // The predicate the scene switch reads (`main.ts`). A sector is the interesting answer: the
+    // generator is total, so *without* this a crafted `?addr=v1/4.0` drew a complete invented
+    // planetary system for a wedge that has no star in it.
+    expect(hasSystemScene(parseAddressOrThrow('v1/'))).toBe(false);
+    expect(hasSystemScene(parseAddressOrThrow('v1/0'))).toBe(true);
+    expect(hasSystemScene(parseAddressOrThrow('v1/0.3'))).toBe(false);
+    expect(hasSystemScene(parseAddressOrThrow('v1/0.3.1'))).toBe(true);
+    expect(hasSystemScene(parseAddressOrThrow('v1/0.3.1.2'))).toBe(true);
+    // Deeper than a body is still a body, so it is still the star's system.
+    expect(hasSystemScene(parseAddressOrThrow('v1/0.3.1.2.5'))).toBe(true);
   });
 
   it('puts a star one level deeper than it used to be', () => {
@@ -159,6 +174,27 @@ describe('the galaxy size law', () => {
         sectorCountForSize(galaxySizeFraction('ugb-0000', address)),
       );
     }
+  });
+});
+
+describe('the content key', () => {
+  it('is the address string without the sector rung, with a stream and its own version', () => {
+    // One definition for the mechanic ADR-0023 depends on. Position, appearance and system content
+    // all come through here, so pinning the shape here pins all three at once.
+    expect(contentKey('ugb-0000', parseAddressOrThrow('v1/4.3.-7'), 'placement', 2)).toBe(
+      'ugb-0000|v1/4.-7|placement|v2',
+    );
+    expect(contentKey('ugb-0000', parseAddressOrThrow('v1/4.3.-7'), 'appearance', 8)).toBe(
+      'ugb-0000|v1/4.-7|appearance|v8',
+    );
+    // A bare sector is not stripped (the `withoutSectorRung` collision), so it keys on itself.
+    expect(contentKey('ugb-0000', parseAddressOrThrow('v1/4.3'), 'placement', 2)).toBe(
+      'ugb-0000|v1/4.3|placement|v2',
+    );
+    // The version is the stream's, not a shared one: the same address gives different strings.
+    expect(contentKey('ugb-0000', parseAddressOrThrow('v1/4.3.-7'), 'placement', 1)).not.toBe(
+      contentKey('ugb-0000', parseAddressOrThrow('v1/4.3.-7'), 'placement', 2),
+    );
   });
 });
 

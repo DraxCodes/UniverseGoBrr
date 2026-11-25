@@ -114,7 +114,7 @@ is its evidence (10/10).
 1. **Level model — DONE.** `src/universe/levels.ts` names every rung and is the single authority;
    `GALAXY_DEPTH` re-exports it. Also carries the galaxy **size fraction** and the **1–6 sector
    count** derived from it. Non-breaking: nothing consumed the kinds yet when it landed. 21 tests.
-2. **Sectors as an address level — DONE for insertion; the *view* is item 9** (ADR-0018,
+2. **Sectors as an address level — DONE for insertion and scene; the *wedge* is item 9** (ADR-0018,
    ADR-0023). A star's address is `galaxy.sector.star`: the sector is derived from the angle the
    star is already drawn at and the star keeps its old identity integer, so `v1/4.-2` is now
    `v1/4.<sector>.-2`. The rung is **inserted**, not appended: the orrery that was `v1/4.-2.7` is now
@@ -122,8 +122,11 @@ is its evidence (10/10).
    rung-stripped address, so the gated galaxy is byte-identical; the whole population was diffed
    against `4405c2d` at a worst delta of exactly zero. `GALAXY_VERSION` 8 → 9;
    `PLACEMENT_VERSION`/`APPEARANCE_VERSION` unchanged. A sector is a real travel destination (mid
-   radius, its own wedge) but standing *inside* it has no scene: that is item 9, and
-   `planZoomOut` still refuses it by name.
+   radius, its own wedge). **Its scene is the galaxy it slices, framed face-on** (owner,
+   2026-11-25): `hasSystemScene` says a sector has no star, so `main.ts` resolves no system there and
+   draws the disc instead — the same framing `commitZoomOut` uses, HUD row `one galaxy · ×1 real`.
+   Before the guard, `generateSystem` (total) invented a planetary system for every sector link.
+   The wedge itself is still undrawn: item 9, and `planZoomOut` refuses a sector line by name.
 3. **Root layout — DONE.** `src/universe/layout.ts`, `galaxyPosition`. Total and unbounded, so
    "further out" always has something; `cbrt(|g|)` gives roughly constant density instead of a
    shell. Galaxy 0 is the origin (Sol). 10 tests.

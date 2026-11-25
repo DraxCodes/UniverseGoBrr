@@ -34,15 +34,14 @@ import { childAddress, formatAddress, type Address } from '../frame/address';
 import {
   GALAXY_DEPTH,
   SECTOR_DEPTH,
-  sectorIndexForAngle,
-  withoutSectorRung,
+  contentKey,
 } from './levels';
 import {
-  discAzimuthOf,
   galaxyAddressOf,
   galaxyFrame,
   sampleDiscStar,
   sampleLocalStar,
+  sectorOfPoint,
   sectorPosition,
   type GalaxyFrame,
   type Vec3,
@@ -130,7 +129,7 @@ export interface PlacedStar {
  * every star in every galaxy while the commit message claimed the galaxy was unchanged.
  */
 export function placementKey(seed: string, address: Address): string {
-  return `${seed}|${formatAddress(withoutSectorRung(address))}|placement|v${PLACEMENT_VERSION}`;
+  return contentKey(seed, address, 'placement', PLACEMENT_VERSION);
 }
 
 /**
@@ -216,11 +215,7 @@ export function starAddressAt(
 export function sectorOfStar(seed: string, galaxyAddress: Address, index: number): number {
   const frame = galaxyFrame(seed, galaxyAddress);
   const placed = placedStarForIndex(frame, seed, galaxyAddress, index);
-  return sectorIndexForAngle(
-    discAzimuthOf(frame, placed.position),
-    frame.sectorCount,
-    frame.sectorPhaseRad,
-  );
+  return sectorOfPoint(frame, placed.position);
 }
 
 /**
@@ -258,7 +253,8 @@ export function placement(seed: string, address: Address): Vec3 | null {
   if (depth === 0) return null;
   if (depth <= GALAXY_DEPTH) return { x: 0, y: 0, z: 0 };
   if (depth === SECTOR_DEPTH) {
-    return sectorPosition(galaxyFrame(seed, galaxyAddressOf(address)), address.levels[SECTOR_DEPTH - 1]!);
+    const frame = galaxyFrame(seed, galaxyAddressOf(address));
+    return sectorPosition(frame, address.levels[SECTOR_DEPTH - 1]!);
   }
 
   return placedStar(seed, address)!.position;

@@ -222,10 +222,19 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
   `GALAXY_VERSION` 8 → 9, `PLACEMENT_VERSION` stays 2, `APPEARANCE_VERSION` stays 8 (its own stream,
   so an address change cannot re-roll a light). `capture/shots.json` and every probe address were
   re-seated. A sector is now a **travel destination** with a real distance, which
-  `probe:ladder` asserts. Evidence: tests 329/329 (27 files), build clean, `probe:ladder` 11/11,
-  `probe:masks` 12/12, `probe:travel` 12/12, `probe:compass` 20/20, `probe:pan` 15/15, `capture`
-  20/20. **Not run:** a `perception` gate (deliberately — the picture is meant to be identical, so
-  the capture plus looking is the right evidence), the 1650-class proxy, any mobile loop.
+  `probe:ladder` asserts. **A sector link now shows the galaxy it slices, face-on** (owner,
+  2026-11-25): `hasSystemScene` says a sector is not a star, so `main.ts` resolves no system at that
+  rung and the scene is the disc (same framing as `commitZoomOut`, HUD `one galaxy · ×1 real`). The
+  guard also fixes a live lie — `generateSystem` is total, so `?addr=v1/4.0` used to draw a complete
+  invented planetary system. Depth 1 (`v1/0`) still draws the boot orrery on purpose: the four
+  `desktop-*` captures pin it. The root now frames nothing (`v1/` writes a default camera and no
+  scene) instead of inventing one. Evidence: tests 332/332 (27 files), build clean,
+  `probe:ladder` 11/11, `probe:masks` 12/12, `probe:travel` 12/12, `probe:compass` 20/20,
+  `probe:pan` 15/15, `capture` 20/20, plus a looked-at sector frame
+  (`?addr=v1/4.0` → lod 1, `one galaxy`) that also proved wheel zoom, `r` reset, sector→galaxy
+  zoom-out and a travel arrival all match a fresh link. **Not run:** a `perception` gate
+  (deliberately — the gated pictures are meant to be identical, so looking at the sector frame is
+  the right evidence), the 1650-class proxy, any mobile loop.
 
 - **The product is Cairn and the repo is MIT-licensed** (owner, 2026-11-25; ADR-0016, ADR-0017).
   A cairn is a marker a traveller leaves for the next one — the same act as sending a coordinate.

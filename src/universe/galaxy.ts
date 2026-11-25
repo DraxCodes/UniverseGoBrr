@@ -32,15 +32,14 @@ import { fnv1a32 } from '../lib/hash';
 import { createRng, type Rng } from '../lib/random';
 import { formatAddress, type Address } from '../frame/address';
 import {
-  GALACTIC_PLANE_TILT_RAD,
   GALAXY_DEPTH,
-  discAzimuthOf,
+  discPlanePoint,
   galaxyAddressOf,
   galaxyFrame,
-  rotateAboutX,
+  sectorOfPoint,
   type Vec3,
 } from './disc';
-import { sectorIndexForAngle, withoutSectorRung } from './levels';
+import { contentKey } from './levels';
 import {
   LOCAL_STAR_EVERY,
   placedStarForIndex,
@@ -115,14 +114,7 @@ export const GALAXY_TIER_STARS: Readonly<Record<GalaxyTier, { local: number; dis
  * disc as an ellipse and smear the m=2 arm signal the renderer's crossfade depends on.
  */
 export function toDiscFrame(galaxy: Galaxy, point: Vec3): Vec3 {
-  return rotateAboutX(
-    {
-      x: point.x - galaxy.centre.x,
-      y: point.y - galaxy.centre.y,
-      z: point.z - galaxy.centre.z,
-    },
-    -GALACTIC_PLANE_TILT_RAD,
-  );
+  return discPlanePoint(galaxy.centre, point);
 }
 
 export interface GalaxyStar {
@@ -255,11 +247,7 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
     // drawn at (ADR-0023), never chosen before it. `placedStarForIndex` keys on `(galaxy, level)`,
     // which is the stream the star had before the sector existed, so this cannot move a light.
     const placed = placedStarForIndex(frame, seed, galaxyAddress, level);
-    const sector = sectorIndexForAngle(
-      discAzimuthOf(frame, placed.position),
-      frame.sectorCount,
-      frame.sectorPhaseRad,
-    );
+    const sector = sectorOfPoint(frame, placed.position);
     const child = starAddressAt(galaxyAddress, sector, level);
     const appearance = createRng(fnv1a32(appearanceKey(seed, child)));
 
@@ -331,7 +319,7 @@ const APPEARANCE_VERSION = 8;
  * light byte-identical across the re-key.
  */
 export function appearanceKey(seed: string, address: Address): string {
-  return `${seed}|${formatAddress(withoutSectorRung(address))}|appearance|v${APPEARANCE_VERSION}`;
+  return contentKey(seed, address, 'appearance', APPEARANCE_VERSION);
 }
 
 /** Smooth Gaussian bulge profile: luminous warm core tapering smoothly to the outer edge. */

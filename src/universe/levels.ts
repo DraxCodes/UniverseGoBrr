@@ -1,20 +1,21 @@
 /**
  * What each address level *means* (spec §3.2 "octree levels", ADR-0008, ADR-0018).
  *
- * This is ticket 06's work item 1, and it is deliberately a pure module with no consumers yet:
- * every later item — sectors as a real address level, the sector law in `disc.ts`, the hierarchy
- * rule in `travel.ts` — asks this file what a depth *is* rather than hard-coding a number.
+ * This is ticket 06's work item 1, and it is deliberately a pure module: every consumer — the
+ * sector rung in the address, the sector law in `disc.ts`, the hierarchy rule in `travel.ts`, the
+ * scene switch in `main.ts` — asks this file what a depth *is* rather than hard-coding a number.
  *
  * ## Why the ladder needs naming at all
  *
  * ADR-0008 made the address a pure integer path on purpose: `v1/0.3.-7.12` says *where*, never
  * *what*. That unboundedness is what keeps the universe infinite. But it also meant the code had
- * to guess at scale wherever scale mattered, and the guesses are visible in the current tree:
+ * to guess at scale wherever scale mattered, and the guesses this module replaced were visible in
+ * the tree of the time:
  *
- * - `GALAXY_DEPTH = 1` is a fixed constant documented as "a shortcut, and it says so";
- * - `starKind` calls `level % 9 === 0` local vs disc, a placeholder for "this level is a star";
- * - `travel.ts` picks a method from *local field versus disc* because an address cannot say
- *   whether it is a sector or a system, and its own comment promises "the day a level answers
+ * - `GALAXY_DEPTH = 1` was a fixed constant with no authority behind it;
+ * - `starKind` called `level % 9 === 0` local vs disc, a placeholder for "this level is a star";
+ * - `travel.ts` picked a method from *local field versus disc* because an address could not say
+ *   whether it was a sector or a system, and its own comment promised "the day a level answers
  *   'this is a sector', this becomes the hierarchy rule and nothing else changes."
  *
  * This module is that answer. The address stays an integer path; the *meaning* of a depth comes
@@ -34,8 +35,7 @@
  * depth 2 or deeper re-keys**. Depth 2 was a star and is now a sector, so a star that was `v1/4.-2`
  * is now `v1/4.<sector>.-2` — the rung is **inserted**, and the star identity keeps its value and
  * its position in the path. The system that was `v1/4.-2.7` therefore now reads
- * `v1/4.<sector>.-2.7`: still "star -2, body 7", not "sector -2, star 7". The module exists first so
- * the re-key has one authority to move rather than four independent guesses.
+ * `v1/4.<sector>.-2.7`: still "star -2, body 7", not "sector -2, star 7".
  *
  * ## The version boundary
  *
@@ -53,9 +53,9 @@ import { formatAddress, type Address } from '../frame/address';
 /**
  * The address depth at which each rung sits.
  *
- * These replace `GALAXY_DEPTH` as the authority. `GALAXY_DEPTH` survives as an alias so the
- * re-key can land in steps without two constants disagreeing; when the sector rung is wired the
- * alias is deleted.
+ * These are the authority. `GALAXY_DEPTH` is not a shortcut standing in for a guess: it *is* the
+ * ladder's answer for depth 1, and `disc.ts` re-exports this same value so every caller that asks
+ * "which galaxy am I in?" reads one number rather than a second copy of it.
  */
 export const UNIVERSE_DEPTH = 0;
 export const GALAXY_DEPTH = 1;
@@ -95,6 +95,28 @@ export function kindOfAddress(address: Address): LevelKind {
 /** Whether `address` is deep enough to be the given kind. Used by guards and by travel. */
 export function isKind(address: Address, kind: LevelKind): boolean {
   return kindOfAddress(address) === kind;
+}
+
+/**
+ * Whether the scene at `address` is a star system — the orrery and its bodies.
+ *
+ * Three rungs, and the middle one is the surprise:
+ *
+ * - a **system** or a **body** is a star, so yes, by definition;
+ * - a **galaxy** is yes, deliberately: its home star *is* the node (the galaxy's own address is the
+ *   home star's address), and the boot frame every `desktop-*` capture pins is that home system
+ *   inside the disc. Changing depth 1 would be a different app, not a fix;
+ * - a **sector** is **no**. A sector is a wedge of the disc, not a star. `generateSystem` is total
+ *   for any address, so without this answer a crafted `?addr=v1/4.0` drew a complete, invented
+ *   planetary system for a place that has no star — a lie the address cannot support. The scene
+ *   there is the galaxy the sector is a slice of (see `main.ts`); the wedge itself is ticket 06
+ *   item 9;
+ * - the **root** is no: nothing has been dropped into the universe yet, so there is no system and
+ *   no galaxy layout to stand in.
+ */
+export function hasSystemScene(address: Address): boolean {
+  const kind = kindOfAddress(address);
+  return kind === 'galaxy' || kind === 'system' || kind === 'body';
 }
 
 // ---------------------------------------------------------------------------
@@ -209,6 +231,23 @@ export function withoutSectorRung(address: Address): Address {
     version: address.version,
     levels: [...levels.slice(0, SECTOR_DEPTH - 1), ...levels.slice(SECTOR_DEPTH)],
   };
+}
+
+/**
+ * The RNG key for one content stream at `address`: `seed|address-without-sector|stream|vN`.
+ *
+ * Every generator that must be transparent to the sector rung — position, appearance, system
+ * content — builds its key here rather than by hand, so the one mechanic ADR-0023 depends on has
+ * one definition. The rung is dropped by `withoutSectorRung`; `version` is the *stream's* own, not
+ * the address's, so an address change cannot re-roll a stream that did not change.
+ */
+export function contentKey(
+  seed: string,
+  address: Address,
+  stream: string,
+  version: number,
+): string {
+  return `${seed}|${formatAddress(withoutSectorRung(address))}|${stream}|v${version}`;
 }
 
 /**

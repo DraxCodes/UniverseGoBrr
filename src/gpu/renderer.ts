@@ -73,9 +73,12 @@ export interface RendererOptions {
   canvas: HTMLCanvasElement;
   seed: string;
   camera: Camera;
-  /** The scene drawn when no probe is active. */
+  /** The scene drawn when no probe is active. Null where the address names no star. */
   system: StarSystem | null;
-  /** The galaxy drawn behind the system. Null in probe mode or when there is no system. */
+  /**
+   * The galaxy drawn behind the system — or, at a sector or the galaxy itself, the whole scene.
+   * Null in probe mode and at the root.
+   */
   galaxy: Galaxy | null;
   /** The initial impostor budget; the watchdog may drop it. */
   galaxyTier: GalaxyTier;

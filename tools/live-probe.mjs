@@ -37,7 +37,7 @@ const target = new URL(baseUrl);
 target.search = new URLSearchParams({
   seed: 'ugb-0000',
   epoch: '2000-01-01T00:00:00.000Z',
-  addr: 'v1/4.-2.7',
+  addr: 'v1/4.0.-2.7',
   t: '1200',
   cam: ORRERY_CAMERA,
 }).toString();

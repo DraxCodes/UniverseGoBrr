@@ -1,4 +1,4 @@
-# UniverseGoBrr
+# Cairn
 
 A procedural universe explorer for the web: TypeScript, WebGPU, no assets, no server.
 This repository is at **Layer 2** of the roadmap in `docs/issues/spec.md` — one

@@ -4,7 +4,7 @@
     "name": "drax-ai-workflow",
     "version": "0.7.1"
   },
-  "project": "UniverseGoBrr",
+  "project": "Cairn",
   "workflows": [
     "council",
     "hillclimb",

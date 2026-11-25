@@ -1,6 +1,7 @@
 # Status — Layer 3: star field and galaxy
 
 Updated: 2026-11-25
+Name: **Cairn** (ADR-0016). Licence: MIT (ADR-0017). The GitHub repo is still `UniverseGoBrr`.
 Branch: `main` — the Layer 3 line, now including Sol, the shipped visual pass and the Layer 4 lanes
 so far. The `wip/layer-3` line, the two Neon handoff branches and the five review worktrees were
 merged and removed on 2026-11-25; `main` is the only branch on `origin`. Tag
@@ -170,12 +171,20 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
 ## Blocked
 
 - **Nothing wanted from the owner to start.** The Layer 4 questions are answered: the speed table,
-  the panning binding, and the arrival view. What remains is V1-level — the product name and the
-  root `LICENSE`.
+  the panning binding, and the arrival view. The V1 name and licence are decided too: **Cairn**,
+  **MIT** (ADR-0016, ADR-0017).
 - Nothing technical. The 1650-class proxy is unavailable, so floor performance stays an argument,
   never a measurement.
 
 ## Decisions
+
+- **The product is Cairn and the repo is MIT-licensed** (owner, 2026-11-25; ADR-0016, ADR-0017).
+  A cairn is a marker a traveller leaves for the next one — the same act as sending a coordinate.
+  The obvious vocabulary was searched and nearly every candidate was taken, several by direct
+  competitors (Perihelion, Farspan, Orrery, Old Light); `Cairn` collides with a 2026 climbing game
+  and that is accepted. The rename touches the live surfaces only — the `ugb-` seeds, the
+  `window.__ugb` hook and the `*_VERSION` constants do not move
+  (`docs/notes/renaming-surface.md`). The GitHub repo is still named `UniverseGoBrr`.
 
 - **Layer 4 shape (owner, 2026-11-24):** A (address-origin frames), rebasing on tier crossings only;
   a tier crossing is a journey; tiers + panning first, compass second. The focus rebase is out of v1
@@ -294,6 +303,9 @@ The decision record is tracked, so a clone on another machine is enough to resum
 
 ## Verification
 
+- **Rename re-run (2026-11-25, `Cairn`):** `npm test` 269/269 (23 files), `npm run build` clean
+  (96.92 kB / 34.57 kB gzip, unchanged), `npm run capture` **20/20** with `capture/shots.json`
+  untouched — no seed, `window.__ugb` hook or `*_VERSION` moved — and `base doctor` no errors.
 - `npm test` - pass, 23 files, **269 tests** (re-run on the merged tree and by the gate).
 - `npm run build` - pass, `tsc --noEmit && vite build`, clean; **96.92 kB JS / 34.57 kB gzip** on
   the merged tree (the density branch alone built 97.35 kB / 34.49 kB gzip).

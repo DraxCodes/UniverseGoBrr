@@ -1,4 +1,4 @@
-# Spec — UniverseGoBrr: a procedural universe explorer
+# Spec — Cairn: a procedural universe explorer
 
 **Status:** draft for review (2026-11-23)
 **Directory:** `docs/issues/` (tracked: spec, tickets, gates)
@@ -20,7 +20,7 @@ Reference points, in order of usefulness:
 - **No Man's Sky** — the scale claim, but it cheats: warp between systems rather than
   continuous zoom, and generationally simple planets. Useful for *feel*, not architecture.
 
-Working title: **UniverseGoBrr**.
+Working title: **Cairn** (decided 2026-11-25, ADR-0016; formerly `UniverseGoBrr`).
 
 ### Experience thesis
 
@@ -274,7 +274,7 @@ population** by class (emission, reflection, planetary, dark) for abundance.
 3. **Time base** — wall clock is assumed. Confirm that shared `epoch` coordinates are
    acceptable as the stability mechanism, rather than a frozen universe.
 4. **Landing** — confirmed super-long-term. Revisit only after Layer 5.
-5. **Naming** — "UniverseGoBrr" is a working title; is it the product name?
+5. **Naming** — **Answered: "Cairn"** (ADR-0016). The working title `UniverseGoBrr` is retired.
 
 ## 9. Idea backlog (captured, not committed)
 

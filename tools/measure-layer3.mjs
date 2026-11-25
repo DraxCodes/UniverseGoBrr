@@ -161,6 +161,7 @@ try {
       above97: nuc.above97,
       above99: nuc.above99,
       maxLum: nuc.maxLum,
+      maxLumAt: nuc.maxLumAt,
       litPx: disc.litPx,
       meanLum: disc.meanLum,
       litMeanLum: disc.litMeanLum,
@@ -194,6 +195,21 @@ try {
   if (await exists(gal1080Path)) {
     const img1080 = decodePng(await readFile(gal1080Path));
     guardrails.homeStarFull1080p = measureHomeStar(img1080, 960, 540, 1);
+    guardrails.armWindow1080p = measureRegionCoverage(
+      img1080,
+      { x: 1150, y: 780, width: 240, height: 160 },
+      0.06,
+    );
+  }
+
+  const armEdgePath = path.join(capturesDir, 'layer3-arm-edge-2160p.png');
+  if (await exists(armEdgePath)) {
+    const imgArmEdge = decodePng(await readFile(armEdgePath));
+    guardrails.armEdge2160p = measureRegionCoverage(
+      imgArmEdge,
+      { x: 0, y: 0, width: imgArmEdge.width, height: imgArmEdge.height },
+      0.08,
+    );
   }
 
   const homeCropPath = path.join(capturesDir, 'layer3-home-star-1080p.png');
@@ -306,6 +322,7 @@ function measureNucleus(image) {
   let above97 = 0;
   let above99 = 0;
   let maxLum = 0;
+  let maxLumAt = [0, 0];
 
   for (let y = 0; y < height; y += 1) {
     for (let x = hudWidth; x < width; x += 1) {
@@ -316,7 +333,10 @@ function measureNucleus(image) {
       const g = pixels[p + 1];
       const b = pixels[p + 2];
       const lum = rec709Lum(r, g, b);
-      if (lum > maxLum) maxLum = lum;
+      if (lum > maxLum) {
+        maxLum = lum;
+        maxLumAt = [x, y];
+      }
       if (lum > 0.97) above97 += 1;
       if (lum > 0.99) above99 += 1;
       if (r >= 254 && g >= 254 && b >= 254) clipped[idx] = 1;
@@ -375,6 +395,107 @@ function measureNucleus(image) {
     above97,
     above99,
     maxLum,
+    maxLumAt,
+  };
+}
+
+function measureRegionCoverage(image, region, lumThreshold) {
+  const { width, height, pixels } = image;
+  const x0 = Math.max(0, Math.min(width, region.x));
+  const y0 = Math.max(0, Math.min(height, region.y));
+  const x1 = Math.max(x0, Math.min(width, region.x + region.width));
+  const y1 = Math.max(y0, Math.min(height, region.y + region.height));
+  const rw = x1 - x0;
+  const rh = y1 - y0;
+  const totalPx = rw * rh;
+  if (totalPx === 0) {
+    return {
+      region: { x: x0, y: y0, width: rw, height: rh },
+      lumThreshold,
+      totalPx: 0,
+      litPx: 0,
+      coverage: 0,
+      componentCount: 0,
+      meanComponentPx: 0,
+      largestComponentPx: 0,
+      largestComponentShare: 0,
+      isolatedBlobsGe80: 0,
+      meanLum: 0,
+    };
+  }
+
+  const mask = new Uint8Array(totalPx);
+  let litPx = 0;
+  let sumLum = 0;
+  for (let ry = 0; ry < rh; ry += 1) {
+    const iy = y0 + ry;
+    for (let rx = 0; rx < rw; rx += 1) {
+      const ix = x0 + rx;
+      const p = (iy * width + ix) * 4;
+      const lum = rec709Lum(pixels[p], pixels[p + 1], pixels[p + 2]);
+      sumLum += lum;
+      if (lum > lumThreshold) {
+        mask[ry * rw + rx] = 1;
+        litPx += 1;
+      }
+    }
+  }
+
+  const seen = new Uint8Array(totalPx);
+  const sizes = [];
+  for (let start = 0; start < totalPx; start += 1) {
+    if (!mask[start] || seen[start]) continue;
+    let size = 0;
+    const stack = [start];
+    seen[start] = 1;
+    while (stack.length > 0) {
+      const idx = stack.pop();
+      size += 1;
+      const rx = idx % rw;
+      const ry = (idx - rx) / rw;
+      if (rx > 0 && mask[idx - 1] && !seen[idx - 1]) {
+        seen[idx - 1] = 1;
+        stack.push(idx - 1);
+      }
+      if (rx < rw - 1 && mask[idx + 1] && !seen[idx + 1]) {
+        seen[idx + 1] = 1;
+        stack.push(idx + 1);
+      }
+      if (ry > 0 && mask[idx - rw] && !seen[idx - rw]) {
+        seen[idx - rw] = 1;
+        stack.push(idx - rw);
+      }
+      if (ry < rh - 1 && mask[idx + rw] && !seen[idx + rw]) {
+        seen[idx + rw] = 1;
+        stack.push(idx + rw);
+      }
+    }
+    sizes.push(size);
+  }
+
+  let largestComponentPx = 0;
+  for (const size of sizes) {
+    if (size > largestComponentPx) largestComponentPx = size;
+  }
+  const componentCount = sizes.length;
+  let ge80 = 0;
+  for (const size of sizes) {
+    if (size >= 80) ge80 += 1;
+  }
+  const isolatedBlobsGe80 = largestComponentPx >= 80 ? ge80 - 1 : ge80;
+
+  return {
+    region: { x: x0, y: y0, width: rw, height: rh },
+    lumThreshold,
+    totalPx,
+    litPx,
+    coverage: litPx / totalPx,
+    componentCount,
+    meanComponentPx: componentCount > 0 ? litPx / componentCount : 0,
+    largestComponentPx,
+    largestComponentShare: litPx > 0 ? largestComponentPx / litPx : 0,
+    isolatedBlobsGe80,
+    meanLum: sumLum / totalPx,
   };
 }
 
@@ -817,6 +938,18 @@ function printReport(report) {
     const db = report.guardrails.dustBand;
     console.log(
       `guardrail dust-band (orrery): axisRatio=${db.axisRatio.toFixed(2)}, faintPx=${db.faintPx}, skyFloor=${db.skyFloor.toFixed(4)}`,
+    );
+  }
+  if (report.guardrails.armWindow1080p) {
+    const aw = report.guardrails.armWindow1080p;
+    console.log(
+      `guardrail arm-window (1080p, >${aw.lumThreshold}): coverage=${(aw.coverage * 100).toFixed(1)}%, components=${aw.componentCount}, meanComp=${aw.meanComponentPx.toFixed(1)}px, largest=${aw.largestComponentPx}px (${(aw.largestComponentShare * 100).toFixed(1)}%)`,
+    );
+  }
+  if (report.guardrails.armEdge2160p) {
+    const ae = report.guardrails.armEdge2160p;
+    console.log(
+      `guardrail arm-edge (2160p 1:1, >${ae.lumThreshold}): coverage=${(ae.coverage * 100).toFixed(1)}%, components=${ae.componentCount}, blobs>=80=${ae.isolatedBlobsGe80}, largest=${ae.largestComponentPx}px (${(ae.largestComponentShare * 100).toFixed(1)}%)`,
     );
   }
   if (report.baselineDiffs.length > 0) {

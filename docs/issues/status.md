@@ -248,6 +248,17 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
 - **The zoom-out stays a face-on reframe, even now that a target exists** (ADR-0013 unchanged). A
   translation-preserving zoom-out would look along the disc's own plane, which reads as a band; the
   target made the option available, not correct.
+- **Free flight is a speed the traveller sets, and it may leave a system** (ADR-0021, owner
+  2026-11-25, **long term**). Sublight stays the sensible in-system default, but a user can set free
+  flight to warp and fly a quadrant by hand. The law is unchanged — flying at `v` advances `t` by
+  `d/v`, so `t` tracks wall rate at every speed and free flight is not a shortcut past the anchors.
+  Consequence: crossing a galaxy at warp takes **7 real days** at ×1, so **time acceleration is a
+  dependency** of the feature, not a decoration.
+- **Scale must not rest on travel time alone** (owner correction to ADR-0020). Crossing time is a
+  *floor*, not the whole effect: a universe whose only size cue is "the trip was long" reads as slow,
+  not vast. Size is carried by nested structure, genuine emptiness, parallax and approach, far things
+  visibly far, variety at distance, and the HUD re-anchoring as you cross rungs. **A screenshot at rest
+  should already read as big.**
 - **The address grid is the world; the picture is a view of it** (ADR-0011, owner 2026-11-24). Every
   drawn light is a rendered address that resolves to the same thing when you arrive; placement is
   `placement(seed, address)`, never the inverse; occupancy is one rule shared by the renderer and

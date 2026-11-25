@@ -21,7 +21,8 @@
 | 0017 | accepted | The repository is **MIT**-licensed. A fork may be closed and commercial; no patent grant. A successor would be AGPL-3.0, applying only to later versions. |
 | 0018 | accepted | **A galaxy has sectors, and a sector is an address level**: universe → galaxy → sector → system → body. A sector is an **angular slice**, and a galaxy has **1–6** by size. Every address re-keys; accepted now because nothing has shipped. |
 | 0019 | accepted | **Travel method is an input, and any method works for any trip** — the only restriction is sublight inside one system. A **wormhole costs a fixed `Δt`**, the one carve-out to ADR-0010. Absolute speeds remain open. |
-| 0020 | accepted | **Scale and speed are decoupled; crossing *time* is the invariant.** Speeds are derived from time anchors (`v = d / Δt`), so growing the universe changes no experience. Raising speed alone makes it feel *smaller*. |
+| 0020 | accepted | **Scale and speed are decoupled; crossing *time* is the invariant.** Speeds are derived from time anchors (`v = d / Δt`), so growing the universe changes no experience. Raising speed alone makes it feel *smaller*. Scale must nonetheless rest on visible structure, not on travel time. |
+| 0021 | accepted (direction, long term) | **Free flight is a user-set speed** (sublight/warp/transwarp/hyperspace) and obeys the same `d/v` law, so `t` tracks wall rate at every speed. It may leave a system. **Time acceleration is a dependency**: crossing a galaxy at warp is 7 real days at ×1. |
 
 Status is one of `proposed`, `accepted`, `superseded` (name the successor),
 `deprecated` or `rejected`. The numbered filename is `NNNN-slug.md`.

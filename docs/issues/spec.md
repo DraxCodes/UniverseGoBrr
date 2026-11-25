@@ -2,7 +2,7 @@
 
 **Status:** draft for review (2026-11-23)
 **Directory:** `docs/issues/` (tracked: spec, tickets, gates)
-**Decisions:** see `docs/adr/0001`-`0020` (index: `docs/adr/README.md`)
+**Decisions:** see `docs/adr/0001`-`0021` (index: `docs/adr/README.md`)
 
 ## 1. What this is
 
@@ -115,7 +115,10 @@ Vocabulary (and octree levels): **universe → galaxy → sector → system → 
 synonym for sector in copy, not a separate rung. A sector is an address level, so it is linkable
 (ADR-0018); it is an **angular slice** of the disc, and a galaxy has **1–6** of them derived from its
 size.
-Free flight is preserved inside every frame. Warping to an arbitrary empty point is
+Free flight is preserved inside every frame — and, long term, **free flight is its own speed** (ADR-0021):
+sublight inside a system, but a settable speed that can be warp, so a quadrant can be crossed by hand.
+It obeys the same `d/v` law, so flying is never cheaper than jumping; it is the same journey played out
+continuously. Warping to an arbitrary empty point is
 supported, and requires a **navigation compass** (bearing + distance to nearest anchors, a
 pin on where you came from, a return breadcrumb) or the void is simply disorienting.
 
@@ -130,6 +133,12 @@ take; `v = d / Δt_anchor` follows. Because `d` and `v` scale together, **making
 changes no crossing time** — so scale is free, and raising speed alone would make the universe feel
 *smaller*, not larger. The values in `travel.ts` today are superseded; the size law and the time
 anchors must be settled before a new table is written.
+
+**But time is a floor, not the whole of scale.** A universe whose only size cue is "that trip took a
+while" reads as slow, not vast. Size must also be carried by evidence visible at rest — nested
+structure at every scale, emptiness that is genuinely empty, parallax as you close on something, far
+things that look far, and variety among distant things. A screenshot taken while standing still should
+already read as big; if scale only shows up during a trip, it is being faked by duration.
 
 **A wormhole is the one exception** (ADR-0019): it costs a fixed amount of universe time whatever the
 distance, because the cost is entering the mouth, not crossing the gap. Galaxy-to-galaxy is the first
@@ -317,6 +326,10 @@ population** by class (emission, reflection, planetary, dark) for abundance.
    `tickets/06-universe-scale.md`.
 8. **Galaxy names** - a curated real-name list, procedurally generated names, or a mix? Deterministic
    either way, and never in the link (ADR-0008).
+9. **Free flight and time acceleration** - ADR-0021 makes free flight a settable speed. It is **long
+   term and unscheduled**, and it needs time acceleration to be usable across a galaxy (7 real days at
+   ×1). Open: whether the address changes per boundary crossed or only on landing, and whether
+   free-flight speed rides in the link.
 
 ## 9. Idea backlog (captured, not committed)
 

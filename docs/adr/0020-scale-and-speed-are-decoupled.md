@@ -55,3 +55,26 @@ decision and not a tweak. The *ratios* are stable across every row — warp : tr
   *reachability* question for the level model, not a travel question.
 - **This does not license an unbounded speed.** Very high speeds make a *system* hop cross in
   milliseconds, so short-range trips need their own answer (sublight). That is ADR-0019 §3.
+
+## Scale must not rest on travel time alone
+
+The invariance above is a fact about *time*, not a claim that time is the only source of scale. The
+owner's correction, recorded here because it is easy to over-read the decoupling argument:
+
+> speed and crossing time are a floor, not the whole effect. A universe whose only size cue is "the
+> trip took a while" reads as *slow*, not as *vast*.
+
+So "big" has to be carried by **evidence you can see**, independently of any clock:
+
+| Cue | What it does | Where it lives |
+| --- | --- | --- |
+| **Nested structure at every scale** | a system inside a sector inside a galaxy inside a field: each level is legible as a shape, so zooming reveals structure rather than just smaller dots | 4b, level model |
+| **Genuine emptiness between things** | most of the volume is nothing. Compression of *emptiness* is already the `displayRadiusM` decision; it must not compress the *structure* | shipped (Layer 3), extended by 4b |
+| **Parallax and approach** | things visibly grow, shift and resolve as you close on them — the strongest scale cue available, and it costs no travel time at all | camera + LOD |
+| **Seeing far things that are far** | the galaxy from orbit; other galaxies as smudges; the local cluster as a field | 4b |
+| **Variety in what is far** | ten identical galaxies read as wallpaper. Difference is what makes distance believable | 4b, variation law |
+| **Frame of reference changing hands** | the HUD's address and the compass re-anchoring as you cross a rung | ADR-0013, extended |
+
+The consequence for design: **a screenshot at rest should already communicate scale.** If size is only
+apparent while a trip is in progress, the universe is not big — it is just slow, and the fix is
+composition and structure, not a longer trip.

@@ -40,8 +40,13 @@ This file is that ticket.
 7. **Free camera travel is not a jump.** With no method selected, `t` advances normally as real time
    passes (ADR-0010: camera gestures never advance the clock).
 8. **Long term:** the camera drifts and scrolling carries you deeper into the universe, with
-   generation streaming ahead — travel by looking, not by selecting.
-9. **Idea, not settled:** user-controlled time acceleration (2×, 10×, 20×). Recorded, not decided.
+   generation streaming ahead — travel by looking, not by selecting. **ADR-0021** makes this concrete:
+   free flight has a **user-selectable speed** (sublight / warp / transwarp / hyperspace) and obeys
+   the same `d/v` law, so flying a quadrant at warp is the same journey a warp jump is. Its
+   **dependency** is time acceleration: crossing a galaxy at warp takes 7 real days at ×1 and 10
+   minutes at ×1000, so the acceleration idea in item 9 becomes a prerequisite rather than a garnish.
+9. **Idea, not settled:** user-controlled time acceleration (2×, 10×, 20×). Recorded, not decided —
+   but see item 8: free flight across a galaxy needs it, so it is coupled to a real feature.
 
 ## The ladder, and how methods map onto it
 

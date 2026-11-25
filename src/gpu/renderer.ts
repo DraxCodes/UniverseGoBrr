@@ -1,6 +1,7 @@
 import stage0Source from './stage0.wgsl?raw';
 import sceneSource from './scene.wgsl?raw';
 import galaxySource from './galaxy.wgsl?raw';
+import tierMaskSource from './tier-mask.wgsl?raw';
 import noiseSource from './noise.wgsl?raw';
 import { seedUnit } from '../lib/hash';
 import {
@@ -17,7 +18,7 @@ import type {
 } from '../universe/galaxy';
 import type { StarSystem } from '../universe/system';
 import { displayOrbitRadius } from '../universe/system';
-import { cameraBasis, FOV_Y_RAD } from '../render/camera';
+import { cameraBasis, FOV_Y_RAD, projectPoint } from '../render/camera';
 import { buildSceneFrame, displayScaleM, type SceneFrame } from '../render/system-scene';
 import {
   GALAXY_GAIN,
@@ -29,6 +30,12 @@ import {
   writeGalaxyFrame,
   type GalaxyFrame,
 } from '../render/galaxy-scene';
+import {
+  createMaskController,
+  type MaskController,
+  type MaskEnvelope,
+  type MaskMethod,
+} from '../render/tier-mask';
 import { createOrbitRing, createSphere } from './mesh';
 
 export interface RenderStats {
@@ -44,8 +51,23 @@ export interface RenderSample {
   samples: number;
 }
 
+export interface FrameSnapshot {
+  readonly texture: GPUTexture;
+  readonly width: number;
+  readonly height: number;
+  readonly deviceId: string;
+}
+
+export interface TravelMaskOptions {
+  readonly method: MaskMethod;
+  readonly departure: FrameSnapshot | null;
+  readonly onMidpoint?: () => void;
+  readonly onComplete?: () => void;
+}
+
 export interface RendererOptions {
   device: GPUDevice;
+  deviceId?: string;
   context: GPUCanvasContext;
   format: GPUTextureFormat;
   canvas: HTMLCanvasElement;
@@ -61,6 +83,8 @@ export interface RendererOptions {
   precision: PrecisionProbe | null;
   /** Which path the probe uses to build its camera-relative positions. */
   precisionMode: PrecisionMode;
+  /** Optional active tier mask playing across a committed travel arrival. */
+  travelMask?: TravelMaskOptions | null;
   getTime(): number;
   onFirstFrame(): void;
   onStats(stats: RenderStats): void;
@@ -83,6 +107,12 @@ export interface RendererHandle {
   galaxyFrame(): GalaxyFrame | null;
   /** Render one deterministic frame offscreen and read it back. Used as capture evidence. */
   sampleFrame(): Promise<RenderSample>;
+  /** Render one clean static frame into an offscreen texture for a departure snapshot. */
+  captureSnapshot(): FrameSnapshot | null;
+  /** Clamp an active tier mask immediately to the settled static destination. */
+  interruptMask(): void;
+  /** Whether a tier mask is currently playing. */
+  isMaskActive(): boolean;
   /** Debug only: stall the next N frames so the watchdog's tier drop can be observed. */
   forceSlowFrames(frames: number): void;
   dispose(): void;
@@ -99,6 +129,10 @@ const SCENE_BYTES = SCENE_FLOATS * 4;
 /** 28 floats: view-projection (16), camera basis (8), meta (4). */
 const GALAXY_FLOATS = 28;
 const GALAXY_BYTES = GALAXY_FLOATS * 4;
+
+/** 20 floats: viewport (4), timing (4), envelope (4), focus (4), star_color (4). */
+const MASK_FLOATS = 20;
+const MASK_BYTES = MASK_FLOATS * 4;
 
 /** Per planet: centre+radius, colour+atmosphere, tilt+spin+seed+class, detail. */
 const INSTANCE_FLOATS = 16;
@@ -117,6 +151,7 @@ type Reload = {
   sky?: (source: string) => Promise<void>;
   scene?: (source: string) => Promise<void>;
   galaxy?: (source: string) => Promise<void>;
+  mask?: (source: string) => Promise<void>;
 };
 
 let activeReload: Reload | null = null;
@@ -254,9 +289,99 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     galaxyCompositePipelineLayout,
   );
 
+  // ---- Tier mask (HDR effect + departure/destination composite) -------------
+  const maskParams = new Float32Array(MASK_FLOATS);
+  const maskUniform = device.createBuffer({
+    label: 'tier mask params',
+    size: MASK_BYTES,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+  const maskSampler = device.createSampler({
+    label: 'tier mask sampler',
+    magFilter: 'linear',
+    minFilter: 'linear',
+    addressModeU: 'clamp-to-edge',
+    addressModeV: 'clamp-to-edge',
+  });
+  const maskUniformLayout = device.createBindGroupLayout({
+    label: 'tier mask uniform layout',
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+        buffer: { type: 'uniform' },
+      },
+    ],
+  });
+  const maskCompositeTexLayout = device.createBindGroupLayout({
+    label: 'tier mask composite tex layout',
+    entries: [
+      {
+        binding: 0,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { sampleType: 'unfilterable-float' },
+      },
+      {
+        binding: 1,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { sampleType: 'float' },
+      },
+      {
+        binding: 2,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { sampleType: 'float' },
+      },
+      {
+        binding: 3,
+        visibility: GPUShaderStage.FRAGMENT,
+        sampler: { type: 'filtering' },
+      },
+    ],
+  });
+  const maskHdrPipelineLayout = device.createPipelineLayout({
+    bindGroupLayouts: [maskUniformLayout],
+  });
+  const maskCompositePipelineLayout = device.createPipelineLayout({
+    bindGroupLayouts: [maskUniformLayout, maskCompositeTexLayout],
+  });
+  const maskBindGroup = device.createBindGroup({
+    label: 'tier mask params',
+    layout: maskUniformLayout,
+    entries: [{ binding: 0, resource: { buffer: maskUniform } }],
+  });
+  let { maskHdrPipeline, maskCompositePipeline } = await buildTierMaskPipelines(
+    device,
+    format,
+    tierMaskSource,
+    maskHdrPipelineLayout,
+    maskCompositePipelineLayout,
+  );
+
   let depth: GPUTexture | null = null;
   let galaxyHdr: GPUTexture | null = null;
   let galaxyHdrBindGroup: GPUBindGroup | null = null;
+  let maskSceneTex: GPUTexture | null = null;
+  let maskHdrTex: GPUTexture | null = null;
+  let fallbackDepartTex: GPUTexture | null = null;
+  let maskCompositeBindGroup: GPUBindGroup | null = null;
+  let maskCompositeDepartRef: GPUTexture | null = null;
+  let departureTex: GPUTexture | null = options.travelMask?.departure?.texture ?? null;
+  const releaseDepartureTex = (): void => {
+    departureTex?.destroy();
+    departureTex = null;
+    maskCompositeBindGroup = null;
+    maskCompositeDepartRef = null;
+  };
+  const maskController: MaskController | null = options.travelMask
+    ? createMaskController({
+        method: options.travelMask.method,
+        onMidpoint: options.travelMask.onMidpoint,
+        onComplete: () => {
+          releaseDepartureTex();
+          options.travelMask?.onComplete?.();
+        },
+      })
+    : null;
   let generation = 1;
   let frame = 0;
   let fps = 0;
@@ -476,6 +601,161 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     return { texture: galaxyHdr, bindGroup: galaxyHdrBindGroup };
   }
 
+  function ensureFallbackDepart(): GPUTexture {
+    if (!fallbackDepartTex) {
+      fallbackDepartTex = device.createTexture({
+        label: 'tier mask fallback depart',
+        size: [1, 1],
+        format,
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+      device.queue.writeTexture(
+        { texture: fallbackDepartTex },
+        new Uint8Array([3, 4, 7, 255]),
+        { bytesPerRow: 4 },
+        { width: 1, height: 1 },
+      );
+    }
+    return fallbackDepartTex;
+  }
+
+  function ensureMaskTargets(
+    width: number,
+    height: number,
+  ): {
+    sceneView: GPUTextureView;
+    hdrView: GPUTextureView;
+    compositeBindGroup: GPUBindGroup;
+  } {
+    const departSource = departureTex ?? ensureFallbackDepart();
+    if (
+      !maskSceneTex ||
+      !maskHdrTex ||
+      !maskCompositeBindGroup ||
+      maskSceneTex.width !== width ||
+      maskSceneTex.height !== height ||
+      maskCompositeDepartRef !== departSource
+    ) {
+      maskSceneTex?.destroy();
+      maskHdrTex?.destroy();
+      maskSceneTex = device.createTexture({
+        label: 'tier mask dest scene',
+        size: [width, height],
+        format,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
+      maskHdrTex = device.createTexture({
+        label: 'tier mask hdr',
+        size: [width, height],
+        format: GALAXY_HDR_FORMAT,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
+      maskCompositeBindGroup = device.createBindGroup({
+        label: 'tier mask composite views',
+        layout: maskCompositeTexLayout,
+        entries: [
+          { binding: 0, resource: maskHdrTex.createView() },
+          { binding: 1, resource: departSource.createView() },
+          { binding: 2, resource: maskSceneTex.createView() },
+          { binding: 3, resource: maskSampler },
+        ],
+      });
+      maskCompositeDepartRef = departSource;
+    }
+    return {
+      sceneView: maskSceneTex.createView(),
+      hdrView: maskHdrTex.createView(),
+      compositeBindGroup: maskCompositeBindGroup,
+    };
+  }
+
+  function writeMaskParams(envelope: MaskEnvelope, width: number, height: number): void {
+    let focusU = 0.5;
+    let focusV = 0.5;
+    if (lastScene) {
+      const projected = projectPoint(lastScene.viewProjection, lastScene.starCenter);
+      if (
+        Number.isFinite(projected.w) &&
+        projected.w > 0 &&
+        Number.isFinite(projected.x) &&
+        Number.isFinite(projected.y)
+      ) {
+        const u = projected.x * 0.5 + 0.5;
+        const v = 0.5 - projected.y * 0.5;
+        focusU = Math.min(0.8, Math.max(0.2, u));
+        focusV = Math.min(0.8, Math.max(0.2, v));
+      }
+    }
+
+    const starColor = lastScene?.starColor ?? [1.0, 0.94, 0.86];
+    maskParams[0] = width;
+    maskParams[1] = height;
+    maskParams[2] = width / Math.max(1, height);
+    maskParams[3] = seed;
+
+    maskParams[4] = envelope.progress;
+    maskParams[5] = envelope.method === 'warp' ? 0 : 1;
+    maskParams[6] = envelope.elapsedS;
+    maskParams[7] = 0;
+
+    maskParams[8] = envelope.departWeight;
+    maskParams[9] = envelope.destWeight;
+    maskParams[10] = envelope.effectIntensity;
+    maskParams[11] = envelope.departPull;
+
+    maskParams[12] = focusU;
+    maskParams[13] = focusV;
+    maskParams[14] = envelope.destSettle;
+    maskParams[15] = 0;
+
+    maskParams[16] = starColor[0];
+    maskParams[17] = starColor[1];
+    maskParams[18] = starColor[2];
+    maskParams[19] = 0;
+
+    device.queue.writeBuffer(maskUniform, 0, maskParams);
+  }
+
+  function encodeMaskPasses(
+    encoder: GPUCommandEncoder,
+    targetView: GPUTextureView,
+    hdrView: GPUTextureView,
+    compositeBindGroup: GPUBindGroup,
+  ): void {
+    const hdrPass = encoder.beginRenderPass({
+      label: 'tier mask hdr pass',
+      colorAttachments: [
+        {
+          view: hdrView,
+          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+      ],
+    });
+    hdrPass.setPipeline(maskHdrPipeline);
+    hdrPass.setBindGroup(0, maskBindGroup);
+    hdrPass.draw(3);
+    hdrPass.end();
+
+    const compositePass = encoder.beginRenderPass({
+      label: 'tier mask composite pass',
+      colorAttachments: [
+        {
+          view: targetView,
+          clearValue: { r: 0.012, g: 0.016, b: 0.028, a: 1 },
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+      ],
+    });
+    compositePass.setPipeline(maskCompositePipeline);
+    compositePass.setBindGroup(0, maskBindGroup);
+    compositePass.setBindGroup(1, compositeBindGroup);
+    compositePass.draw(3);
+    compositePass.end();
+  }
+
   function encodePass(
     encoder: GPUCommandEncoder,
     view: GPUTextureView,
@@ -644,7 +924,31 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     }
   }
 
-  activeReload = { sky: reloadSky, scene: reloadScene, galaxy: reloadGalaxy };
+  async function reloadMask(source: string): Promise<void> {
+    const token = ++reloadToken;
+    try {
+      const next = await buildTierMaskPipelines(
+        device,
+        format,
+        source,
+        maskHdrPipelineLayout,
+        maskCompositePipelineLayout,
+      );
+      if (disposed || token !== reloadToken) return;
+      maskHdrPipeline = next.maskHdrPipeline;
+      maskCompositePipeline = next.maskCompositePipeline;
+      generation += 1;
+      options.onPipeline(generation, null);
+      console.info(`[ugb] tier-mask rebuilt → pipeline generation ${generation}`);
+    } catch (error) {
+      if (disposed || token !== reloadToken) return;
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[ugb] tier-mask rebuild failed; previous pipeline is still live.\n${message}`);
+      options.onPipeline(generation, message);
+    }
+  }
+
+  activeReload = { sky: reloadSky, scene: reloadScene, galaxy: reloadGalaxy, mask: reloadMask };
 
   function render(now: number): void {
     if (disposed) return;
@@ -687,13 +991,29 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     const encoder = device.createCommandEncoder({ label: 'stage0 frame' });
     const depthTexture = ensureDepth(canvas.width, canvas.height);
     const hdr = galaxyFrame && galaxyFrame.count > 0 ? ensureGalaxyHdr(canvas.width, canvas.height) : null;
-    encodePass(
-      encoder,
-      context.getCurrentTexture().createView(),
-      depthTexture.createView(),
-      hdr ? hdr.texture.createView() : null,
-      hdr ? hdr.bindGroup : null,
-    );
+    const swapchainView = context.getCurrentTexture().createView();
+    const maskEnv = maskController ? maskController.sample(now) : null;
+
+    if (maskEnv) {
+      const maskTargets = ensureMaskTargets(canvas.width, canvas.height);
+      writeMaskParams(maskEnv, canvas.width, canvas.height);
+      encodePass(
+        encoder,
+        maskTargets.sceneView,
+        depthTexture.createView(),
+        hdr ? hdr.texture.createView() : null,
+        hdr ? hdr.bindGroup : null,
+      );
+      encodeMaskPasses(encoder, swapchainView, maskTargets.hdrView, maskTargets.compositeBindGroup);
+    } else {
+      encodePass(
+        encoder,
+        swapchainView,
+        depthTexture.createView(),
+        hdr ? hdr.texture.createView() : null,
+        hdr ? hdr.bindGroup : null,
+      );
+    }
     device.queue.submit([encoder.finish()]);
 
     frame += 1;
@@ -728,6 +1048,8 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     let texture: GPUTexture | undefined;
     let sampleDepth: GPUTexture | undefined;
     let sampleGalaxyHdr: GPUTexture | undefined;
+    let sampleMaskScene: GPUTexture | undefined;
+    let sampleMaskHdr: GPUTexture | undefined;
     let readback: GPUBuffer | undefined;
 
     try {
@@ -765,13 +1087,55 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
       writeParams(time, width, height);
       const galaxyFrame = writeGalaxy(time, width, height);
       writeScene(time, width, height, galaxyFrame?.lod ?? 0);
-      encodePass(
-        encoder,
-        texture.createView(),
-        sampleDepth.createView(),
-        sampleGalaxyHdr.createView(),
-        sampleGalaxyBindGroup,
-      );
+
+      const maskEnv = maskController ? maskController.peek(performance.now()) : null;
+      if (maskEnv) {
+        sampleMaskScene = device.createTexture({
+          label: 'sample tier mask scene',
+          size: [width, height],
+          format,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        sampleMaskHdr = device.createTexture({
+          label: 'sample tier mask hdr',
+          size: [width, height],
+          format: GALAXY_HDR_FORMAT,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        const departSource = departureTex ?? ensureFallbackDepart();
+        const sampleMaskBindGroup = device.createBindGroup({
+          label: 'sample tier mask views',
+          layout: maskCompositeTexLayout,
+          entries: [
+            { binding: 0, resource: sampleMaskHdr.createView() },
+            { binding: 1, resource: departSource.createView() },
+            { binding: 2, resource: sampleMaskScene.createView() },
+            { binding: 3, resource: maskSampler },
+          ],
+        });
+        writeMaskParams(maskEnv, width, height);
+        encodePass(
+          encoder,
+          sampleMaskScene.createView(),
+          sampleDepth.createView(),
+          sampleGalaxyHdr.createView(),
+          sampleGalaxyBindGroup,
+        );
+        encodeMaskPasses(
+          encoder,
+          texture.createView(),
+          sampleMaskHdr.createView(),
+          sampleMaskBindGroup,
+        );
+      } else {
+        encodePass(
+          encoder,
+          texture.createView(),
+          sampleDepth.createView(),
+          sampleGalaxyHdr.createView(),
+          sampleGalaxyBindGroup,
+        );
+      }
       encoder.copyTextureToBuffer(
         { texture },
         { buffer: readback, bytesPerRow },
@@ -811,6 +1175,47 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
       texture?.destroy();
       sampleDepth?.destroy();
       sampleGalaxyHdr?.destroy();
+      sampleMaskScene?.destroy();
+      sampleMaskHdr?.destroy();
+    }
+  }
+
+  function captureSnapshot(): FrameSnapshot | null {
+    if (disposed || canvas.width <= 0 || canvas.height <= 0) return null;
+    const width = canvas.width;
+    const height = canvas.height;
+    const snapshotTex = device.createTexture({
+      label: 'departure snapshot',
+      size: [width, height],
+      format,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    try {
+      const encoder = device.createCommandEncoder({ label: 'capture departure snapshot' });
+      const time = options.getTime();
+      writeParams(time, width, height);
+      const galaxyFrame = writeGalaxy(time, width, height);
+      writeScene(time, width, height, galaxyFrame?.lod ?? 0);
+      const depthTexture = ensureDepth(width, height);
+      const hdr =
+        galaxyFrame && galaxyFrame.count > 0 ? ensureGalaxyHdr(width, height) : null;
+      encodePass(
+        encoder,
+        snapshotTex.createView(),
+        depthTexture.createView(),
+        hdr ? hdr.texture.createView() : null,
+        hdr ? hdr.bindGroup : null,
+      );
+      device.queue.submit([encoder.finish()]);
+      return {
+        texture: snapshotTex,
+        width,
+        height,
+        deviceId: options.deviceId ?? '',
+      };
+    } catch (error) {
+      snapshotTex.destroy();
+      throw error;
     }
   }
 
@@ -822,9 +1227,14 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     window.removeEventListener('resize', resize);
     depth?.destroy();
     galaxyHdr?.destroy();
+    maskSceneTex?.destroy();
+    maskHdrTex?.destroy();
+    fallbackDepartTex?.destroy();
+    releaseDepartureTex();
     uniformBuffer.destroy();
     sceneUniform.destroy();
     galaxyUniform.destroy();
+    maskUniform.destroy();
     galaxyInstanceBuffer.destroy();
     sphereVertexBuffer.destroy();
     sphereIndexBuffer.destroy();
@@ -855,6 +1265,13 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
       debugSlowFrames = Math.max(0, Math.floor(frames));
     },
     sampleFrame,
+    captureSnapshot,
+    interruptMask() {
+      maskController?.interrupt();
+    },
+    isMaskActive() {
+      return maskController?.active ?? false;
+    },
     dispose,
   };
 }
@@ -1164,6 +1581,43 @@ async function buildOrbitPipeline(
   );
 }
 
+async function buildTierMaskPipelines(
+  device: GPUDevice,
+  format: GPUTextureFormat,
+  source: string,
+  hdrLayout: GPUPipelineLayout,
+  compositeLayout: GPUPipelineLayout,
+): Promise<{ maskHdrPipeline: GPURenderPipeline; maskCompositePipeline: GPURenderPipeline }> {
+  const module = await compileModule(device, 'tier-mask', noiseSource + source);
+  const maskHdrPipeline = await guardPipeline(device, 'tier mask hdr', () =>
+    device.createRenderPipelineAsync({
+      label: 'tier mask hdr',
+      layout: hdrLayout,
+      vertex: { module, entryPoint: 'vs_mask' },
+      fragment: {
+        module,
+        entryPoint: 'fs_mask_hdr',
+        targets: [{ format: GALAXY_HDR_FORMAT }],
+      },
+      primitive: { topology: 'triangle-list', cullMode: 'none' },
+    }),
+  );
+  const maskCompositePipeline = await guardPipeline(device, 'tier mask composite', () =>
+    device.createRenderPipelineAsync({
+      label: 'tier mask composite',
+      layout: compositeLayout,
+      vertex: { module, entryPoint: 'vs_mask' },
+      fragment: {
+        module,
+        entryPoint: 'fs_mask_composite',
+        targets: [{ format }],
+      },
+      primitive: { topology: 'triangle-list', cullMode: 'none' },
+    }),
+  );
+  return { maskHdrPipeline, maskCompositePipeline };
+}
+
 if (import.meta.hot) {
   // Shader edits rebuild the pipeline only. The page, canvas and GPUDevice are untouched,
   // so a hot reload is cheaper than a page reload and cannot duplicate the device.
@@ -1179,9 +1633,14 @@ if (import.meta.hot) {
     const source = (module as { default?: unknown } | undefined)?.default;
     if (typeof source === 'string') void activeReload?.galaxy?.(source);
   });
-  // The noise module is shared, so an edit to it invalidates both pipelines.
+  import.meta.hot.accept('./tier-mask.wgsl?raw', (module) => {
+    const source = (module as { default?: unknown } | undefined)?.default;
+    if (typeof source === 'string') void activeReload?.mask?.(source);
+  });
+  // The noise module is shared, so an edit to it invalidates the dependent pipelines.
   import.meta.hot.accept('./noise.wgsl?raw', () => {
     if (typeof stage0Source === 'string') void activeReload?.sky?.(stage0Source);
     if (typeof sceneSource === 'string') void activeReload?.scene?.(sceneSource);
+    if (typeof tierMaskSource === 'string') void activeReload?.mask?.(tierMaskSource);
   });
 }

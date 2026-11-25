@@ -324,3 +324,28 @@ that keeps an audit from quietly widening to the whole tree.
 Cloud is the default: chair, shape and the experience gate run DeepSeek 4.1
 Flash, audit runs GLM 5.3. Local models are an opt-in fallback for privacy,
 offline work, or unlimited throughput - **not a cost saving**.
+
+### Shell and commit hygiene (this repo, Windows/PowerShell)
+
+A project-local rule, not part of the regenerated workflow base. Paid for in real
+wasted turns; keep it here so it survives a change of session.
+
+- **Commit messages go through a file.** `git commit -m "…"` with an apostrophe or
+  other punctuation is mangled by PowerShell's argument parsing into a burst of
+  `error: pathspec '…' did not match any file(s)` — the commit silently does not
+  happen. Write the message with the `write` tool to
+  `%TEMP%\opencode\commit-msg-N.txt`, then `git commit -q -F <that path>`.
+- **Never redirect output into a repo file with `>`.** PowerShell writes UTF-16,
+  which corrupts tracked text files and produces diffs full of NUL bytes. Use the
+  `write`/`edit` tools for file content; `>` is only safe for throwaway scratch.
+- **`git push` exits 1 on success** here, printing to stderr. Do not read the exit
+  code as failure and do not retry: verify with `git ls-remote origin refs/heads/main`
+  against `git rev-parse --short HEAD`.
+- **No heredocs** (`<<'EOF'`) — PowerShell does not support them.
+- **Reading non-ASCII text**, decode explicitly:
+  `[System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($path))`.
+  A raw console read mangles `—`, `→` and curly quotes, which has already been
+  mistaken for a rendering defect in a HUD screenshot.
+- **Port 4173 must be free before a probe.** A stale preview server fails the run
+  with `Port 4173 is already in use`; find it with
+  `Get-NetTCPConnection -LocalPort 4173 -State Listen` and stop that PID.

@@ -255,6 +255,13 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
   anchors. Consequence: crossing a galaxy at warp takes **7 real days** at ×1, so time acceleration is
   a dependency of the feature. The owner has parked it and accepted that a later implementation may be
   heavy to change; the reason it is recorded anyway is so nobody designs *against* it by accident.
+- **A light you can resolve is a place you can go** (ADR-0022, owner 2026-11-25). Distant galaxies and
+  stars share one appearance continuum — **resolved** (arms, a bar: unmistakably a galaxy), **smudge**,
+  and **point** (a dot, indistinguishable from a star). The point tier is deliberately ambiguous and is
+  the largest: many of those dots are galaxies, as in Earth's sky. What must *not* exist is a discrete,
+  noticeable dot with no address, because tapping it and getting nothing teaches the user the sky is
+  fake. The diffuse infinity backdrop stays diffuse texture; everything resolvable is an addressed
+  object at a real distance.
 - **The first three seconds carry the scale** (owner, 2026-11-25; spec §1 thesis, ADR-0020). Standing
   still anywhere, the scale must already be obvious — arriving in a system should show neighbouring
   galaxies the way Earth's sky shows Andromeda, a few recognisable smudges rather than a wallpaper.

@@ -120,13 +120,24 @@ permission. The only restriction is upward: inside one system, sublight is the n
 6. **Multi-galaxy rendering.** Instanced galaxy impostors with LOD, selected by apparent brightness.
    Addressable density stays full; the *render* set is a selection — that is how "infinite feel,
    finite render" works.
-7. **Other galaxies visible from orbit.** Same impostor population at very small angular size, plus
-   the *windows out of the disc* that make them findable: from inside a galaxy the plane itself is a
-   wall of stars, so a bright neighbour is only visible where the disc is thin or face-on. Constrained
-   by ADR-0015's per-pass ceiling, so a distant galaxy is **big and faint**, never bright — if it
-   outshines the home star, the tone curve was spent on the wrong object. Target: a handful of
-   recognisable smudges, as Earth's sky has Andromeda and the Magellanic Clouds — not a sky full of
-   galaxies, which would flatten the local structure and defeat the ceiling.
+7. **Other galaxies on every tier, not just in the sky.** The distant population is a **continuum of
+   appearance**, and the tiers are the whole point (ADR-0022):
+
+   - **Resolved** — arms, bar or elliptical glow: unmistakably a galaxy. Andromeda-tier. Must respect
+     ADR-0015's `ceil_lum` 0.79 so it never outshines the home star.
+   - **Smudge** — a small elongated blob, "is that one?".
+   - **Point** — an ordinary dot, indistinguishable from a star. Deliberately ambiguous, and the
+     largest tier: many of those dots are galaxies.
+
+   **These cannot be drawn in the infinity sky.** `stage0.wgsl` answers to orientation only (a position
+   term breaks float precision and bands — documented in the shader), so anything placed there is
+   permanently unreachable. Distant galaxies are therefore **real addressed objects at real distances**,
+   rendered as points when far. That is a population, not a texture.
+
+   **Composition is the lever.** At galaxy zoom-out the disc fills the middle of the frame and leaves a
+   lot of free space around it — that space is where the smudge and point tiers live, and how densely it
+   is filled is a direct control on perceived scale (ADR-0020). Filling it is not decoration; it is the
+   answer to "does it feel big".
 8. **Travel rework.** Method becomes an input (`planTravel(from, to, method)`), the plan prices every
    method, and wormhole gets its fixed-time path. **Coverage becomes the done-criterion:** every
    address reachable, every trip priceable, nothing refused for want of a distance.

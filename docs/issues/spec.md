@@ -2,7 +2,7 @@
 
 **Status:** draft for review (2026-11-23)
 **Directory:** `docs/issues/` (tracked: spec, tickets, gates)
-**Decisions:** see `docs/adr/0001`-`0021` (index: `docs/adr/README.md`)
+**Decisions:** see `docs/adr/0001`-`0022` (index: `docs/adr/README.md`)
 
 ## 1. What this is
 
@@ -29,10 +29,11 @@ Working title: **Cairn** (decided 2026-11-25, ADR-0016; formerly `UniverseGoBrr`
 > alive because things move, orbit, react and grow while you are not looking.
 
 **The first-three-seconds rule.** Standing still, wherever you are, the scale must already be obvious.
-Arriving in a solar system should show neighbouring galaxies in the sky the way Earth's sky shows
-Andromeda and the Magellanic Clouds: a few recognisable smudges, not a wallpaper of galaxies. A viewer
-should be able to think *"that is enormous"* before touching anything. If size only becomes apparent
-while a trip is in progress, it is being faked by duration (ADR-0020).
+Arriving in a solar system should show neighbouring galaxies the way Earth's sky shows Andromeda and the
+Magellanic Clouds — a few recognisable smudges. Beyond those, the sky is a **continuum**: some of the
+brightest dots are galaxies you cannot yet tell apart from stars, and resolving one is the reward
+(ADR-0022). A viewer should be able to think *"that is enormous"* before touching anything. If size only
+becomes apparent while a trip is in progress, it is being faked by duration (ADR-0020).
 
 **Coverage.** Every address is reachable, and the traveller always has a choice: a slow method if they
 want the journey, a wormhole if they want to arrive now. No destination is refused for lack of a way to

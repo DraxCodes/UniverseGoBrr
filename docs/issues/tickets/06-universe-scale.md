@@ -129,10 +129,24 @@ permission. The only restriction is upward: inside one system, sublight is the n
    - **Point** — an ordinary dot, indistinguishable from a star. Deliberately ambiguous, and the
      largest tier: many of those dots are galaxies.
 
+   **The sky is anisotropic, and that is the point.** Appearance depends on *two* axes, not one: distance
+   (resolved / smudge / point) **and** direction relative to the disc's plane. Looking **into** the plane
+   you see the disc band — local stars, dust, nebula — and distant things are occluded. Looking **out of**
+   the plane the disc is thin, so local stars thin out and other galaxies show through as smudges and
+   points. The same galaxy is therefore a point one way and invisible the other, which is what makes the
+   sky read as a place with a shape rather than a uniform sphere of dots. The plane normal already exists
+   (`GALACTIC_PLANE_TILT_RAD` in `disc.ts`), so the split is computable.
+
    **These cannot be drawn in the infinity sky.** `stage0.wgsl` answers to orientation only (a position
    term breaks float precision and bands — documented in the shader), so anything placed there is
    permanently unreachable. Distant galaxies are therefore **real addressed objects at real distances**,
    rendered as points when far. That is a population, not a texture.
+
+   **The shipped capture already shows the layout.** `layer3-sol-1080p` has the disc band across roughly
+   a third of the frame and open sky everywhere else. The composition is already right; the content in
+   that open region is `stage0`'s point layers, which look like places and are not. That region is where
+   the smudge and point tiers go, and **how much of the frame is disc band versus populated open sky** is
+   a checkable scale figure.
 
    **Composition is the lever.** At galaxy zoom-out the disc fills the middle of the frame and leaves a
    lot of free space around it — that space is where the smudge and point tiers live, and how densely it

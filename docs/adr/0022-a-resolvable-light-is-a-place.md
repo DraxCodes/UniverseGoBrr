@@ -54,3 +54,42 @@ object, it is an addressed object with a distance and a price.
 - **Composition gets a job.** At galaxy zoom-out the frame holds a lot of free space around the disc.
   That space is not filler: it is where the smudge and point tiers live, and how densely it is
   populated is a direct lever on perceived scale (ADR-0020).
+
+## The sky has two axes, not one
+
+The three appearances above are a **distance** axis. There is a second, independent axis: **where you
+are looking relative to the disc's own plane.**
+
+A galaxy has a shape, and the shape decides what direction is rich and what is empty. From inside a
+flat disc — a solar system, which is where the player starts — the sky splits:
+
+| Looking | What is there | Why |
+| --- | --- | --- |
+| **Into the plane** | the disc itself: a dense band of local stars, dust and nebulae | you are looking *along* the disc, so you are looking through 50,000 ly of it |
+| **Out of the plane** | far fewer local stars; and beyond them, other galaxies | the disc is thin, so the line of sight leaves it quickly |
+
+So the same distant galaxy is a **point** when you look out of the plane and **invisible** when you look
+into it. That is not a contradiction — it is what makes the sky read as a *place* with a shape rather
+than a uniform sphere of dots. It is also why the disc's orientation must be known: `disc.ts` already
+carries the plane normal (from `GALACTIC_PLANE_TILT_RAD`), so the split is computable, not decorative.
+
+**The two axes multiply:**
+
+| | near | far |
+| --- | --- | --- |
+| **out of plane** | local stars, resolved neighbour | smudges, then points — *many are galaxies* |
+| **into plane** | the disc band, dust, nebula | occluded: nothing beyond the band reads |
+
+This is the answer to "does it feel big": the sky is not uniformly populated, it is **anisotropic**,
+and the pattern of richness tells you where you are and which way is out.
+
+## Measured against the shipped capture
+
+`layer3-sol-1080p` is the evidence, and it already shows the shape of the problem: the disc band
+occupies roughly a third of the frame, and the rest is open sky. That open region is currently filled
+by `stage0.wgsl`'s three infinity point layers — which look correct and are, under this ADR, **not
+places**. So the composition is already right and the content is already wrong: those dots need to
+become addressed galaxies, not texture.
+
+A useful, checkable figure: **what fraction of the frame is disc band versus open sky.** If the open
+region is not being populated with places, that is wasted scale.

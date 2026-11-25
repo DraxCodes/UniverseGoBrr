@@ -268,6 +268,13 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
   noticeable dot with no address, because tapping it and getting nothing teaches the user the sky is
   fake. The diffuse infinity backdrop stays diffuse texture; everything resolvable is an addressed
   object at a real distance.
+- **The sky is anisotropic, and that is the shape of the place** (ADR-0022, owner 2026-11-25). A galaxy
+  is a flat disc, so the sky depends on direction: looking **into** the plane you see the disc band —
+  local stars, dust, nebula; looking **out of** it the disc is thin, local stars thin out, and other
+  galaxies show through as smudges and points. The same galaxy is a point one way, invisible the other.
+  The plane normal is already a constant (`GALACTIC_PLANE_TILT_RAD`), so the split is computable, and
+  `layer3-sol-1080p` shows the layout: the band takes about a third of the frame and the rest is open
+  sky that must be populated with places, not texture.
 - **The first three seconds carry the scale** (owner, 2026-11-25; spec §1 thesis, ADR-0020). Standing
   still anywhere, the scale must already be obvious — arriving in a system should show neighbouring
   galaxies the way Earth's sky shows Andromeda, a few recognisable smudges rather than a wallpaper.

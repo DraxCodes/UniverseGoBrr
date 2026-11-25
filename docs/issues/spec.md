@@ -35,6 +35,12 @@ brightest dots are galaxies you cannot yet tell apart from stars, and resolving 
 (ADR-0022). A viewer should be able to think *"that is enormous"* before touching anything. If size only
 becomes apparent while a trip is in progress, it is being faked by duration (ADR-0020).
 
+**The sky is anisotropic, and that is the shape of the place.** A galaxy is a flat disc, so the sky
+depends on which way you look: **into** the plane you see the disc — a dense band of local stars, dust
+and nebulae; **out of** the plane the disc is thin, local stars thin out, and other galaxies show
+through. The visible sky is therefore a map of where you are and which way is out, not a uniform field
+of dots.
+
 **Coverage.** Every address is reachable, and the traveller always has a choice: a slow method if they
 want the journey, a wormhole if they want to arrive now. No destination is refused for lack of a way to
 get there — which is also why the missing root layout is a defect, not a boundary.

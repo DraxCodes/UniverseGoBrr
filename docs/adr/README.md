@@ -23,7 +23,7 @@
 | 0019 | accepted | **Travel method is an input, and any method works for any trip** — the only restriction is sublight inside one system. A **wormhole costs a fixed `Δt`**, the one carve-out to ADR-0010. Absolute speeds remain open. |
 | 0020 | accepted | **Scale and speed are decoupled; crossing *time* is the invariant.** Speeds are derived from time anchors (`v = d / Δt`), so growing the universe changes no experience. Raising speed alone makes it feel *smaller*. Scale must nonetheless rest on visible structure, not on travel time. |
 | 0021 | accepted (direction), **deferred** | **Free flight is a user-set speed** (sublight/warp/transwarp/hyperspace) and obeys the same `d/v` law, so `t` tracks wall rate at every speed. It may leave a system. Deferred indefinitely by the owner; the rework risk (address timing during continuous flight) is accepted. |
-| 0022 | accepted | **A light you can resolve is a place you can go.** Distant galaxies and stars share one appearance continuum — resolved, smudge, point — and the point tier is deliberately ambiguous. Distant galaxies are real addressed objects, **not** infinity-sky texture; the diffuse backdrop must stay diffuse. |
+| 0022 | accepted | **A light you can resolve is a place you can go.** Distant galaxies and stars share one appearance continuum — resolved, smudge, point — and the point tier is deliberately ambiguous. The sky is also **anisotropic**: looking into the disc gives the band and occlusion, looking out of it gives other galaxies. Distant galaxies are real addressed objects, **not** infinity-sky texture. |
 
 Status is one of `proposed`, `accepted`, `superseded` (name the successor),
 `deprecated` or `rejected`. The numbered filename is `NNNN-slug.md`.

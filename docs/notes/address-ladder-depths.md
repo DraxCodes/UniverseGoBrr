@@ -52,6 +52,21 @@ Sectors are **not** in any address: `generateGalaxy` still iterates stars direct
 That insertion is the next commit, and it is where `v1/0.3` stops being a star. `GALAXY_VERSION` must
 bump when it lands, because every drawn address changes.
 
+### Two traps that will bite the insertion
+
+1. **`placementKey` hashes the full address string**, so a naive `v1/0.3` → `v1/0.3.1` re-key moves
+   every star. To keep the drawn galaxy (ADR-0023) the re-key must key placement on the **star
+   level**, not the whole address, in the *same* commit. Doing only the address change silently
+   re-rolls the sky.
+
+2. **Existing levels are negative, sector indices are not.** Capture and test addresses are things
+   like `v1/4.-2.7`; `-2` is a valid *star* index but `sectorIndexForAngle` returns `0..count-1`, so
+   `-2` is not a valid *sector*. So "the capture addresses do not change" is false: every drawn
+   star's address gains a sector level and its old level-2 integer has to be re-seated as the star
+   index inside a sector. Decide deliberately whether sector indices are allowed to be negative
+   (they should not be - they are ordinals over a slice count) and rewrite the addresses and
+   `capture/shots.json` accordingly.
+
 ## Probes
 
 - `npm run probe:ladder` — new, 10/10, the Slice A evidence.

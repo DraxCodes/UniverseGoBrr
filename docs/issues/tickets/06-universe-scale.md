@@ -120,10 +120,16 @@ permission. The only restriction is upward: inside one system, sublight is the n
 6. **Multi-galaxy rendering.** Instanced galaxy impostors with LOD, selected by apparent brightness.
    Addressable density stays full; the *render* set is a selection — that is how "infinite feel,
    finite render" works.
-7. **Other galaxies visible from orbit.** Same impostor population at very small angular size,
-   respecting ADR-0015's per-pass ceiling so a distant galaxy cannot outshine the home star.
-8. **Travel rework.** Method becomes an input (`planTravel(from, to, method)`), the plan returns the
-   cost in each method, and wormhole gets its fixed-time path.
+7. **Other galaxies visible from orbit.** Same impostor population at very small angular size, plus
+   the *windows out of the disc* that make them findable: from inside a galaxy the plane itself is a
+   wall of stars, so a bright neighbour is only visible where the disc is thin or face-on. Constrained
+   by ADR-0015's per-pass ceiling, so a distant galaxy is **big and faint**, never bright — if it
+   outshines the home star, the tone curve was spent on the wrong object. Target: a handful of
+   recognisable smudges, as Earth's sky has Andromeda and the Magellanic Clouds — not a sky full of
+   galaxies, which would flatten the local structure and defeat the ceiling.
+8. **Travel rework.** Method becomes an input (`planTravel(from, to, method)`), the plan prices every
+   method, and wormhole gets its fixed-time path. **Coverage becomes the done-criterion:** every
+   address reachable, every trip priceable, nothing refused for want of a distance.
 9. **Sectors as places.** Compass entries and address lines for a sector, not just a star.
 
 ## Open questions
@@ -140,9 +146,19 @@ permission. The only restriction is upward: inside one system, sublight is the n
 
 ## Evidence this ticket will need
 
+- **The first-three-seconds capture (the primary one).** A screenshot from a solar system, standing
+  still, with neighbouring galaxies visible as smudges. It is scored against the experience thesis
+  directly: can a viewer tell this is enormous before anything moves? This is the capture that proves
+  4b, not the galaxy field itself.
+- A capture of the multi-galaxy field, and one of the same galaxy seen from orbit.
+- **The sky must stay under ADR-0015's per-pass ceiling** (`ceil_lum` 0.79, below the home star's
+  0.887). A neighbouring galaxy is visible *because it is big and faint*, never because it is bright;
+  if it outshines the home star, the tone curve was spent on the wrong thing.
+- **A coverage check.** Every address reachable, every trip priceable in every method. Today
+  galaxy-to-galaxy is refused, so this check *fails* until the root layout lands — which is what makes
+  it the honest definition of done.
 - A probe that walks the ladder: system → sector → galaxy, printing the address at each rung and the
   distance in the parent frame.
-- A capture of the multi-galaxy field, and one of a galaxy seen from orbit.
 - A `planTravel` table showing one destination priced in every method, including the wormhole's fixed
   time.
 - `npm test`, `npm run build`, `npm run capture` green at every step.

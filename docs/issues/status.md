@@ -249,11 +249,21 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
   translation-preserving zoom-out would look along the disc's own plane, which reads as a band; the
   target made the option available, not correct.
 - **Free flight is a speed the traveller sets, and it may leave a system** (ADR-0021, owner
-  2026-11-25, **long term**). Sublight stays the sensible in-system default, but a user can set free
-  flight to warp and fly a quadrant by hand. The law is unchanged — flying at `v` advances `t` by
-  `d/v`, so `t` tracks wall rate at every speed and free flight is not a shortcut past the anchors.
-  Consequence: crossing a galaxy at warp takes **7 real days** at ×1, so **time acceleration is a
-  dependency** of the feature, not a decoration.
+  2026-11-25 — **deferred indefinitely**). Sublight stays the sensible in-system default, but a user
+  can set free flight to warp and fly a quadrant by hand. The law is unchanged — flying at `v` advances
+  `t` by `d/v`, so `t` tracks wall rate at every speed and free flight is not a shortcut past the
+  anchors. Consequence: crossing a galaxy at warp takes **7 real days** at ×1, so time acceleration is
+  a dependency of the feature. The owner has parked it and accepted that a later implementation may be
+  heavy to change; the reason it is recorded anyway is so nobody designs *against* it by accident.
+- **The first three seconds carry the scale** (owner, 2026-11-25; spec §1 thesis, ADR-0020). Standing
+  still anywhere, the scale must already be obvious — arriving in a system should show neighbouring
+  galaxies the way Earth's sky shows Andromeda, a few recognisable smudges rather than a wallpaper.
+  This is scored directly by the `perception` gate on a **stationary capture**, and it is why the
+  universe layer (4b) is structural rather than cosmetic.
+- **Coverage: every address is reachable, every trip is priced in every method** (owner, 2026-11-25).
+  Slow if you want the journey, wormhole if you want to arrive now. Nothing is refused for want of a
+  distance — so the current galaxy-to-galaxy refusal is a **defect**, not a boundary, and the coverage
+  check is what proves 4b done.
 - **Scale must not rest on travel time alone** (owner correction to ADR-0020). Crossing time is a
   *floor*, not the whole effect: a universe whose only size cue is "the trip was long" reads as slow,
   not vast. Size is carried by nested structure, genuine emptiness, parallax and approach, far things

@@ -1,7 +1,8 @@
 # 0021 — Free flight is a speed the traveller sets, and it can leave a system
 
-**Status:** accepted in direction (2026-11-25, owner). **Long term — not scheduled.** This is a
-destination, not a ticket; the numbers it needs are open.
+**Status:** accepted in direction (2026-11-25, owner); **deferred indefinitely** — the owner's call on
+2026-11-25: "leave the freecam idea for a much later date, even if I ultimately land on wanting an
+implementation that is heavy to change, that's my own fault at this point."
 **Context:** ADR-0010 draws a hard line — *camera gestures are not travel; orbit, pan and zoom never
 advance `t`* — and ADR-0019 §3 restricts free flight to sublight inside one system. Both were
 written when free flight meant "a slight dolly while looking at something". The owner wants free
@@ -9,6 +10,14 @@ flight to be a **first-class way to move**: sublight near a star, but a settable
 warp, and crossing a quadrant by flying rather than by selecting a jump.
 
 That is a real change to the model, not a camera tweak, so it is recorded before any of it is built.
+
+## Why this is recorded even though it is deferred
+
+So that a later session does not mistake the current sublight-only free flight for the intended end
+state, and does not design something that forecloses it by accident. **The cheap part is preserved
+now:** the *law* is unchanged (`d/v`), so free flight is not a second time model and does not need one.
+**The expensive part is the one named below** — when the address changes during continuous flight —
+and that is the piece the owner has accepted may cost rework later.
 
 ## Decision
 

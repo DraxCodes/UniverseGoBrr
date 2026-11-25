@@ -24,9 +24,19 @@ Working title: **Cairn** (decided 2026-11-25, ADR-0016; formerly `UniverseGoBrr`
 
 ### Experience thesis
 
-> The universe should feel **vast, legible and alive** — vast because the emptiness is real
+> The universe should feel **vast, legible and alive** - vast because the emptiness is real
 > and traversable; legible because every scale has structure you can recognise and name;
 > alive because things move, orbit, react and grow while you are not looking.
+
+**The first-three-seconds rule.** Standing still, wherever you are, the scale must already be obvious.
+Arriving in a solar system should show neighbouring galaxies in the sky the way Earth's sky shows
+Andromeda and the Magellanic Clouds: a few recognisable smudges, not a wallpaper of galaxies. A viewer
+should be able to think *"that is enormous"* before touching anything. If size only becomes apparent
+while a trip is in progress, it is being faked by duration (ADR-0020).
+
+**Coverage.** Every address is reachable, and the traveller always has a choice: a slow method if they
+want the journey, a wormhole if they want to arrive now. No destination is refused for lack of a way to
+get there — which is also why the missing root layout is a defect, not a boundary.
 
 This thesis is what the `perception` rubric scores against. It outranks feature count.
 

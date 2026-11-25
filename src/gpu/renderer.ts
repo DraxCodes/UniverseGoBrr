@@ -722,55 +722,63 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     const height = Math.max(1, Math.round((width * canvas.height) / Math.max(1, canvas.width)));
     const bytesPerRow = Math.ceil((width * 4) / 256) * 256;
 
-    const texture = device.createTexture({
-      label: 'stage0 sample',
-      size: [width, height],
-      format,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
-    });
-    const sampleDepth = device.createTexture({
-      label: 'sample depth',
-      size: [width, height],
-      format: DEPTH_FORMAT,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT,
-    });
-    const sampleGalaxyHdr = device.createTexture({
-      label: 'sample galaxy hdr',
-      size: [width, height],
-      format: GALAXY_HDR_FORMAT,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-    });
-    const sampleGalaxyBindGroup = device.createBindGroup({
-      label: 'sample galaxy hdr view',
-      layout: galaxyCompositeTexLayout,
-      entries: [{ binding: 0, resource: sampleGalaxyHdr.createView() }],
-    });
-    const readback = device.createBuffer({
-      label: 'stage0 readback',
-      size: bytesPerRow * height,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-    });
-
-    const encoder = device.createCommandEncoder({ label: 'stage0 sample' });
-    const time = options.getTime();
-    writeParams(time, width, height);
-    const galaxyFrame = writeGalaxy(time, width, height);
-    writeScene(time, width, height, galaxyFrame?.lod ?? 0);
-    encodePass(
-      encoder,
-      texture.createView(),
-      sampleDepth.createView(),
-      sampleGalaxyHdr.createView(),
-      sampleGalaxyBindGroup,
-    );
-    encoder.copyTextureToBuffer(
-      { texture },
-      { buffer: readback, bytesPerRow },
-      { width, height },
-    );
-    device.queue.submit([encoder.finish()]);
+    // Every resource is created inside the try: a failure anywhere below (a lost device, a
+    // validation error in encodePass or submit) then still reaches the finally and releases
+    // whatever had already been allocated.
+    let texture: GPUTexture | undefined;
+    let sampleDepth: GPUTexture | undefined;
+    let sampleGalaxyHdr: GPUTexture | undefined;
+    let readback: GPUBuffer | undefined;
 
     try {
+      texture = device.createTexture({
+        label: 'stage0 sample',
+        size: [width, height],
+        format,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      });
+      sampleDepth = device.createTexture({
+        label: 'sample depth',
+        size: [width, height],
+        format: DEPTH_FORMAT,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      sampleGalaxyHdr = device.createTexture({
+        label: 'sample galaxy hdr',
+        size: [width, height],
+        format: GALAXY_HDR_FORMAT,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
+      const sampleGalaxyBindGroup = device.createBindGroup({
+        label: 'sample galaxy hdr view',
+        layout: galaxyCompositeTexLayout,
+        entries: [{ binding: 0, resource: sampleGalaxyHdr.createView() }],
+      });
+      readback = device.createBuffer({
+        label: 'stage0 readback',
+        size: bytesPerRow * height,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+
+      const encoder = device.createCommandEncoder({ label: 'stage0 sample' });
+      const time = options.getTime();
+      writeParams(time, width, height);
+      const galaxyFrame = writeGalaxy(time, width, height);
+      writeScene(time, width, height, galaxyFrame?.lod ?? 0);
+      encodePass(
+        encoder,
+        texture.createView(),
+        sampleDepth.createView(),
+        sampleGalaxyHdr.createView(),
+        sampleGalaxyBindGroup,
+      );
+      encoder.copyTextureToBuffer(
+        { texture },
+        { buffer: readback, bytesPerRow },
+        { width, height },
+      );
+      device.queue.submit([encoder.finish()]);
+
       await readback.mapAsync(GPUMapMode.READ);
       const bytes = new Uint8Array(readback.getMappedRange());
       const bgra = format.startsWith('bgra');
@@ -798,11 +806,11 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
       const variance = samples > 0 ? Math.max(0, sumSquares / samples - mean * mean) : 0;
       return { mean, stdev: Math.sqrt(variance), samples };
     } finally {
-      readback.unmap();
-      readback.destroy();
-      texture.destroy();
-      sampleDepth.destroy();
-      sampleGalaxyHdr.destroy();
+      readback?.unmap();
+      readback?.destroy();
+      texture?.destroy();
+      sampleDepth?.destroy();
+      sampleGalaxyHdr?.destroy();
     }
   }
 

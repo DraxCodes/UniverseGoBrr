@@ -1,7 +1,7 @@
 # Status — Layer 3: star field and galaxy
 
 Updated: 2026-11-25
-Name: **Cairn** (ADR-0016). Licence: MIT (ADR-0017). The GitHub repo is still `UniverseGoBrr`.
+Name: **Cairn** (ADR-0016). Licence: MIT (ADR-0017). GitHub: `DraxCodes/cairn`.
 Branch: `main` — the Layer 3 line, now including Sol, the shipped visual pass and the Layer 4 lanes
 so far. The `wip/layer-3` line, the two Neon handoff branches and the five review worktrees were
 merged and removed on 2026-11-25; `main` is the only branch on `origin`. Tag
@@ -31,7 +31,7 @@ structure is checked by `src/status-page.test.ts`; its content is the owner's to
   lod)`, exactly 1.0 at orrery scale so Layer 2 is untouched.
 - Evidence: 19/19 captures, 81-step live handoff (`decreases 0`, 2 notches, one scene-row swap),
   watchdog tier drop `rich → medium` with status still `ready`.
-- Public repo pushed: `https://github.com/DraxCodes/UniverseGoBrr`, default branch `main`, README
+- Public repo pushed: `https://github.com/DraxCodes/cairn`, default branch `main`, README
   now carries two captures from `main`'s own build (`docs/media/`, commit `1066994`).
 - **Gate iteration 1: 6/10, KEEP and iterate.** Scorecard: `gates/gate-layer-3-iteration-1.md`.
 - **Gate iteration 2: 7/10, KEEP and iterate.** The four iteration-1 flaws were fixed and measured
@@ -184,7 +184,8 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
   competitors (Perihelion, Farspan, Orrery, Old Light); `Cairn` collides with a 2026 climbing game
   and that is accepted. The rename touches the live surfaces only — the `ugb-` seeds, the
   `window.__ugb` hook and the `*_VERSION` constants do not move
-  (`docs/notes/renaming-surface.md`). The GitHub repo is still named `UniverseGoBrr`.
+  (`docs/notes/renaming-surface.md`). The GitHub repo was renamed to `DraxCodes/cairn` on
+  2026-11-25; GitHub redirects the old `UniverseGoBrr` links.
 
 - **Layer 4 shape (owner, 2026-11-24):** A (address-origin frames), rebasing on tier crossings only;
   a tier crossing is a journey; tiers + panning first, compass second. The focus rebase is out of v1

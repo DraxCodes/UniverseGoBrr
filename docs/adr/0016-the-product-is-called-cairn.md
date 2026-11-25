@@ -52,7 +52,8 @@ with several small productivity apps; the collision is in a different category a
   seam's project key. The `ugb-` seed strings, the `window.__ugb` hook and the `*_VERSION` constants
   do **not** move, or every capture and the gate evidence would describe a different picture
   (`docs/notes/renaming-surface.md`).
-- The GitHub repository is still named `UniverseGoBrr`. Renaming it is a separate, owner-run action;
-  old links keep working until it happens.
+- The GitHub repository was renamed to `DraxCodes/cairn` on 2026-11-25. GitHub redirects the old
+  `UniverseGoBrr` URLs, so existing links keep working; the local `origin` was repointed in the same
+  change. The on-disk directory is still `UniverseGoBrr` — that is a local path, not the product.
 - The old title is not kept as "formerly" in the README unless the owner asks for it.
 - A name is not a generator generation: no `*_VERSION` constant is bumped for a rename.

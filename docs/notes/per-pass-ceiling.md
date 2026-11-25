@@ -24,6 +24,16 @@ three seeds reported nucleus `maxLum` 0.865 against the 0.79 ceiling, at the **s
 `[1152,649]`, RGB ≈ (211,218,237) — blue-white, not the warm nucleus (218,176,117), and identical
 across seeds, which a galaxy pixel cannot be. It is a fixed sky star under a semi-transparent arm.
 
+**A fourth writer arrived with the Layer 4 tier masks** (2026-11-25, `src/gpu/tier-mask.wgsl`). During
+a `warp` or `transwarp` the frame is replaced by the mask composite, whose own tone curve uses
+`ceil_lum = 0.90` - deliberately **above** the home star's 0.887, because during a crossing the effect
+is the camera target and nothing else is. Measured on the probe frames: `transwarp-early` peaks at
+**0.9921**, `transwarp-mid` at 0.9420, `warp-early` at 0.9104, all in the aperture/streak core.
+`warp-mid` measures 0.8833 (the star showing through the streak field) and every settled frame is back
+at 0.8833. So the rule to apply to a mid-crossing frame is **0.93 channel clamp, no exception**, and a
+`maxLum` above 0.887 there is the mask, not a defect. Measure a *settled* frame before judging the
+ADR-0015 ordering.
+
 The galaxy composite's alpha reaches 1 where mapped luminance > 0.48, so at the core the sky cannot
 show through and the ceiling does bind. That is why the nucleus measures ≤ 0.79 while the frame
 measures higher a few hundred pixels away.

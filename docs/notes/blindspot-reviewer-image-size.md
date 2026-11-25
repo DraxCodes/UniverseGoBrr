@@ -26,6 +26,15 @@ works once that budget is raised.
 - **One shot per call.** Six 960 px shots in one manifest returned an empty response; the same six
   as single-shot manifests (at 6000 tokens) all answered. If a multi-shot pass is needed, expect
   to split it.
+- **Multi-shot does work once the budget is high enough** (2026-11-25): **eight 1280 px shots in one
+  manifest** returned 6 findings at `--max-tokens 16000 --timeout 240000`. The same eight failed at
+  the default budget; a 4-shot manifest failed at 1500 and a **single** 1280 px shot failed at 1200
+  but answered at 16000. So budget is the axis, and shot count only raises the budget needed.
+- **The endpoint caps a request at 8 images.** Nine or more returns HTTP 400
+  `Total number of images exceeds the maximum allowed of 8` — it fails loudly, not by silently
+  reviewing a subset. Trim the manifest to the eight most informative states rather than splitting
+  one review into two runs, because two runs give two independent reviewers and the pass is
+  supposed to be one.
 - **1920 px is in reach** with `--max-tokens 8000`: a 1920×1080 still returned two findings
   (composition, and the shape of the nucleus). The earlier "1920 is out of reach" conclusion came
   from calls that were actually hitting the reasoning budget. Do not pre-emptively downscale past

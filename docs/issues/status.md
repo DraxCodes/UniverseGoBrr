@@ -259,8 +259,15 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
   product's claim is a universe, and "one galaxy" would meet the old statement's letter while missing
   what it pointed at. Nebulae (5) and surfaces (6) stay after V1. This closes the last scope question
   in ticket 06; what remains open there is sector geometry, not scope.
-- **Neon's tier masks have returned** (owner, 2026-11-25) and are on `agent/antigravity-tier-masks`.
-  Review is the next action; the gate has not run yet.
+- **Tier masks: mechanics merged, finish deferred** (owner, 2026-11-25). Neon's work is reviewed,
+  re-proved on this tree, and merged for its **mechanics**: warp and transwarp are clearly different
+  effects, the address swaps once, the end frame is pixel-identical to a fresh arrival link, and
+  Escape/Back/re-travel/refusal all clamp cleanly (`probe:masks` 12/12, console and GPU validation
+  across three crossings: 0 errors). The `perception` gate scored the **look** 6/10 against a target of
+  8, and the owner chose to ship the verified mechanics rather than block on polish. The finish - a
+  grey focal disc in the warp, a veiled transwarp aperture, and the mask outshining the home star at
+  0.9921 against the star's 0.8833 - is `tickets/07-tier-mask-finish.md`, with the measured numbers and
+  the probe's own evidence gaps recorded so it cannot be mistaken for done.
 - **A light you can resolve is a place you can go** (ADR-0022, owner 2026-11-25). Distant galaxies and
   stars share one appearance continuum — **resolved** (arms, a bar: unmistakably a galaxy), **smudge**,
   and **point** (a dot, indistinguishable from a star). The point tier is deliberately ambiguous and is

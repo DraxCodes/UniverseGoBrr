@@ -22,7 +22,7 @@ const baseUrl = urlArg >= 0 ? process.argv[urlArg + 1] : 'http://127.0.0.1:5173/
 const pinned = new URLSearchParams({
   seed: 'ugb-0000',
   epoch: '2000-01-01T00:00:00.000Z',
-  addr: 'v1/4.-2.7',
+  addr: 'v1/4.0.-2.7',
   t: '1200',
   cam: '0,1.33,1.79,0,-0.64',
 });

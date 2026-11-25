@@ -30,42 +30,54 @@ sector rung at depth 2 does not move a system; it changes what **depth 2** means
 
 Concretely:
 
-- `v1/4.-2` used to be a star. After the re-key it is a sector.
-- `v1/4.-2.7` is a system before and after. Its address does not change.
-- So "every address re-keys" is too strong. The addresses that change are ones that named a star at
-  depth 2; systems at depth 3 keep their string but now read as "sector, system" rather than
-  "star, body".
+- `v1/4.-2` used to be a star. After the re-key it is a **sector** address, and it means the same
+  string a star identity uses — see the collision note below.
+- `v1/4.-2.7` is a system before and after. Its *meaning* changes: it is now "star 7 of sector −2",
+  not "body 7 of star −2". Star identity kept its integer, so honest new addresses read
+  `v1/4.<sector>.-2.7`.
 
-Check the claim against `starKind`: it reads `address.levels[GALAXY_DEPTH]`, i.e. `levels[1]`, so a
-star *is* depth 2 today. That is the ground truth, not the prose.
+Check the claim against `starKind`: it reads `address.levels[SECTOR_DEPTH]`, i.e. `levels[2]`, so a
+star is depth 3 now. That is the ground truth, not the prose.
 
-## State after Slice A
+## State after the insertion (ticket 06 item 2)
 
-- `levels.ts` — the ladder, `sectorCountForSize`, `sectorIndexForAngle`, `galaxySizeFraction`.
-- `layout.ts` — `galaxyPosition`, root positions, unbounded.
-- `travel.ts` — method is an input; `subspace` → `hyperspace`; `wormhole` is a fixed cost;
-  galaxy-to-galaxy works; **inside one system the recommendation is `impulse`** (`sameSystem`).
+- `levels.ts` — `withoutSectorRung`, the ladder, `sectorCountForSize`, `sectorIndexForAngle`,
+  `galaxySizeFraction`.
+- `disc.ts` — `GalaxyFrame` carries `sectorCount` and `sectorPhaseRad`; `discAzimuthOf` and
+  `sectorPosition` are the two readers of the derived phase.
+- `placement.ts` — `placementKey` and `appearanceKey` both strip the sector rung, so position and
+  light do not re-roll. `sectorOfStar` derives the sector from the drawn angle.
+- `galaxy.ts` — `GALAXY_VERSION` 9, `APPEARANCE_VERSION` unchanged at 8, the walk emits
+  `galaxy.sector.star`.
+- `system.ts` — `generateSystem` keys on `withoutSectorRung`, so planets do not re-roll.
+- `travel.ts` — a sector is disc; `methodForPair` no longer throws on a depth-2 address.
 
-## Not done yet
+## The three traps the insertion actually hit
 
-Sectors are **not** in any address: `generateGalaxy` still iterates stars directly under a galaxy.
-That insertion is the next commit, and it is where `v1/0.3` stops being a star. `GALAXY_VERSION` must
-bump when it lands, because every drawn address changes.
+1. **`placementKey` hashed the full address string**, so a naive re-key would have moved every star.
+   Fixed by hashing `withoutSectorRung(address)`, in the same commit as the address change.
 
-### Two traps that will bite the insertion
+2. **Existing levels are negative, sector indices are not.** `v1/4.-2.7` has a valid *star* index
+   `-2`, but `sectorIndexForAngle` returns `0..count-1`. Sector indices are non-negative ordinals,
+   so `capture/shots.json` and every probe address had to be rewritten, and `GALAXY_VERSION` bumped
+   in the same commit.
 
-1. **`placementKey` hashes the full address string**, so a naive `v1/0.3` → `v1/0.3.1` re-key moves
-   every star. To keep the drawn galaxy (ADR-0023) the re-key must key placement on the **star
-   level**, not the whole address, in the *same* commit. Doing only the address change silently
-   re-rolls the sky.
+3. **`withoutSectorRung` cannot strip a bare sector, and that is load-bearing.** `v1/4.3` is both a
+   well-formed `galaxy.sector` address *and* the pre-re-key address of star 3 — literally the same
+   string. Position and appearance depend on that equality: the star-identity path
+   (`placedStarForIndex`) keys on `childAddress(galaxy, index)`, which is exactly `v1/4.3`. So the
+   function keeps `length <= SECTOR_DEPTH` unchanged and only strips from depth 3 down. The cost is
+   that a crafted `?addr=v1/4.3` resolves to star 3's system; ADR-0023 accepts that, because a
+   sector is redundant to content and is never drawn as a system.
 
-2. **Existing levels are negative, sector indices are not.** Capture and test addresses are things
-   like `v1/4.-2.7`; `-2` is a valid *star* index but `sectorIndexForAngle` returns `0..count-1`, so
-   `-2` is not a valid *sector*. So "the capture addresses do not change" is false: every drawn
-   star's address gains a sector level and its old level-2 integer has to be re-seated as the star
-   index inside a sector. Decide deliberately whether sector indices are allowed to be negative
-   (they should not be - they are ordinals over a slice count) and rewrite the addresses and
-   `capture/shots.json` accordingly.
+## Sector phase: derived from home, not drawn
+
+ADR-0023 originally allowed the phase to be sampled per galaxy. It is instead **derived from
+`homeAngle`**, so slice 0 is centred on the home star and `v1/0.0.0` keeps meaning "sector 0, star
+0" in every galaxy. The sign is the trap: the galactic centre is *opposite* the home star, so the
+home star's azimuth about the centre is `homeAngle`, **not** `homeAngle + π`. The first cut had the
+`+ π` and put the place you start in on the far side of its own galaxy, which is a one-line bug that
+looks like a plausible derivation. `sector-rung.test.ts` pins it.
 
 ## Probes
 

@@ -26,7 +26,7 @@ const BASE = urlArg >= 0 ? process.argv[urlArg + 1] : 'http://127.0.0.1:4173/';
 
 const SEED = 'ugb-0000';
 const EPOCH = '2000-01-01T00:00:00.000Z';
-const ADDRESS = 'v1/0.3';
+const ADDRESS = 'v1/0.2.3'; // a disc star: sector 2, identity 3
 /** Relative tolerance for 10¹² m coordinates: a double's ulp there is ~0.001 m. */
 const REL = 1e-9;
 

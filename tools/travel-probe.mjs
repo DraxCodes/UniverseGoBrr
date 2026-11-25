@@ -28,7 +28,7 @@ const BASE = urlArg >= 0 ? process.argv[urlArg + 1] : 'http://127.0.0.1:4173/';
 const SEED = 'ugb-0000';
 const EPOCH = '2000-01-01T00:00:00.000Z';
 const DEPART = 'v1/0';
-const ARRIVE = 'v1/0.9'; // a local-field star, so the plan picks a warp
+const ARRIVE = 'v1/0.0.9'; // a local-field star (identity 9), so the plan picks a warp
 
 const checks = [];
 function check(name, ok, detail) {

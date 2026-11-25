@@ -196,10 +196,10 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
   (1–6) is derived from that same draw so size and count cannot contradict each other.
 - **A level's kind comes from the generator at that depth, not the address** (owner, 2026-11-25). This
   was the fork ADR-0008 left open. The address stays a pure integer path; the ladder is fixed per
-  address version. Item 2 (sectors actually inserted) re-keys depth 2 and deeper, which moves a
-  *star* from depth 2 to 3 but leaves an address that was already a **system** at depth 3 — Sol
-  (`v1/0.0.0`) and the layer-2 orrery (`v1/4.-2.7`) — on its rung. Smaller than "every address
-  re-keys", and pinned by tests.
+  address version. Item 2 (sectors actually inserted) re-keys depth 2 and deeper. A *star* moves from
+  depth 2 to 3 and keeps its integer, and an address that was already a **system** at depth 3 keeps
+  its depth — but the rung is **inserted**, so `v1/4.-2.7` becomes `v1/4.<sector>.-2.7`, still
+  "star −2, body 7". Smaller than "every address re-keys", and pinned by tests.
 - **Galaxies have a root position, and galaxy-to-galaxy travel works** (2026-11-25). `layout.ts` gives
   every galaxy a position in the root frame, total for any address and unbounded — "effectively
   infinite, not merely large". Galaxy 0 is the origin because Sol lives in it. `planTravel` no longer
@@ -212,6 +212,20 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
 - **`npm run probe:ladder` is the Slice A evidence** (2026-11-25): the rungs walked by address, one
   destination priced in every method, the wormhole's fixed cost measured near and across galaxies,
   and a galaxy-to-galaxy trip accepted. 10/10.
+
+- **The sector rung is inserted and the drawn galaxy did not move** (ticket 06 item 2, 2026-11-25;
+  ADR-0023). A star's address is `galaxy.sector.star`, where the sector is derived from the angle the
+  star is already drawn at and the star keeps its old identity integer: `v1/4.-2` is now
+  `v1/4.<sector>.-2`, not `v1/4.-2.<n>`. Position, appearance and system content key on
+  `withoutSectorRung(address)`, so nothing re-rolls; the whole population was diffed against
+  `4405c2d` (six galaxy/tier dumps, three systems) at a worst delta of **exactly zero**.
+  `GALAXY_VERSION` 8 → 9, `PLACEMENT_VERSION` stays 2, `APPEARANCE_VERSION` stays 8 (its own stream,
+  so an address change cannot re-roll a light). `capture/shots.json` and every probe address were
+  re-seated. A sector is now a **travel destination** with a real distance, which
+  `probe:ladder` asserts. Evidence: tests 329/329 (27 files), build clean, `probe:ladder` 11/11,
+  `probe:masks` 12/12, `probe:travel` 12/12, `probe:compass` 20/20, `probe:pan` 15/15, `capture`
+  20/20. **Not run:** a `perception` gate (deliberately — the picture is meant to be identical, so
+  the capture plus looking is the right evidence), the 1650-class proxy, any mobile loop.
 
 - **The product is Cairn and the repo is MIT-licensed** (owner, 2026-11-25; ADR-0016, ADR-0017).
   A cairn is a marker a traveller leaves for the next one — the same act as sending a coordinate.
@@ -226,8 +240,9 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
   ladder is **universe → galaxy → sector → system → body**; *quadrant* is a synonym in copy. A sector
   is an **angular slice** of the disc, and a galaxy has **1 to 6** of them by size — 1 for a very
   small galaxy, 4 for a Milky-Way-sized one, 6 for the largest. A sector is linkable, which is the
-  feature: "send me the link to that sector". Every address re-keys and Sol moves one level deeper —
-  accepted because nothing has shipped, expensive the moment a public link exists.
+  feature: "send me the link to that sector". **Inserted 2026-11-25** (ADR-0023): every depth-2-or-deeper
+  address re-keys and Sol's system keeps its rung but gains a sector level, accepted because nothing
+  has shipped, expensive the moment a public link exists.
 - **Travel method is the traveller's choice, and any method works for any trip** (ADR-0019, owner
   2026-11-25). Warp, transwarp, hyperspace and wormhole can all take you star-to-star, sector-to-sector
   or galaxy-to-galaxy; they differ in cost, not permission. The only range rule is **upward**: inside
@@ -479,7 +494,10 @@ The decision record is tracked, so a clone on another machine is enough to resum
 
 ## Open questions
 
-- **Sector angular offset** - the count is settled at 1-6 by size; where slice zero begins is not.
+- **Sector angular offset** — **Answered (2026-11-25):** slice zero is centred on the home star, so
+  the local neighbourhood is always sector 0 and `v1/0.0.0` keeps its reserved meaning in every
+  galaxy. The phase is *derived* from `homeAngle`, not drawn, so never a `GALAXY_STREAM_VERSION`
+  bump. See ADR-0023.
 - **Absolute travel speeds** — superseded in shape by ADR-0020 (speeds derive from time anchors), so
   the open question is the **short-trip anchor**, not the long one. A 5 ly hop is seconds at
   week-per-diameter.

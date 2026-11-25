@@ -190,8 +190,8 @@ export function planZoomOut(from: Address, depth: number): ZoomOutPlan {
     return {
       ok: false,
       reason:
-        'the galaxy is the only rung with a scene to zoom out to so far; a sector is a real ' +
-        'address level but its view is ticket 06 item 2, not built yet',
+        'the galaxy is the only rung with a scene to zoom out to so far; a sector is now a real ' +
+        'address and a real travel destination, but standing in its wedge is ticket 06 item 9',
     };
   }
   return { ok: true, address: ancestorAddress(from, depth) };

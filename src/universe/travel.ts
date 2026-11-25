@@ -42,7 +42,7 @@
 import { sameAddress, type Address } from '../frame/address';
 import { GALAXY_DEPTH, LY_M, galaxyAddressOf } from './disc';
 import { galaxyPosition } from './layout';
-import { SYSTEM_DEPTH } from './levels';
+import { SYSTEM_DEPTH, SECTOR_DEPTH } from './levels';
 import { placement, starKind } from './placement';
 
 const SECONDS_PER_DAY = 86_400;
@@ -116,8 +116,13 @@ function rootDistance(seed: string, from: Address, to: Address): number | null {
  */
 export function methodForPair(from: Address, to: Address): TravelMethod {
   if (sameSystem(from, to)) return 'impulse';
-  const inDisc = (address: Address): boolean =>
-    address.levels.length > GALAXY_DEPTH && starKind(address) === 'disc';
+  const inDisc = (address: Address): boolean => {
+    if (address.levels.length <= GALAXY_DEPTH) return false;
+    // A **sector** is a slice of the disc by construction (ADR-0018), so a trip that touches one
+    // crosses disc distance even though the sector node is not a star and has no star kind.
+    if (address.levels.length <= SECTOR_DEPTH) return true;
+    return starKind(address) === 'disc';
+  };
   return inDisc(from) || inDisc(to) ? 'transwarp' : 'warp';
 }
 

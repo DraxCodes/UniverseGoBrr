@@ -30,16 +30,23 @@
 
 import { fnv1a32 } from '../lib/hash';
 import { createRng, type Rng } from '../lib/random';
-import { childAddress, formatAddress, type Address } from '../frame/address';
+import { formatAddress, type Address } from '../frame/address';
 import {
   GALACTIC_PLANE_TILT_RAD,
   GALAXY_DEPTH,
+  discAzimuthOf,
   galaxyAddressOf,
   galaxyFrame,
   rotateAboutX,
   type Vec3,
 } from './disc';
-import { LOCAL_STAR_EVERY, placedStarIn, starKind } from './placement';
+import { sectorIndexForAngle, withoutSectorRung } from './levels';
+import {
+  LOCAL_STAR_EVERY,
+  placedStarForIndex,
+  starAddressAt,
+  starKindOfIndex,
+} from './placement';
 
 // The disc law and the galaxy-identity rule live in `disc.ts` (ADR-0011): the generator and
 // `placement(seed, address)` must lay stars out with the *same* function, or the picture and the
@@ -80,8 +87,14 @@ export type { Vec3 } from './disc';
  * rebalanced disc emission (`0.73 * base^0.42` in the disc, `0.72 * base` in the bulge, keeping
  * `base` for colour and size) so faint arm stars connect into continuous bands without blowing
  * out the core, losing hue separation, or filling inter-arm lanes (Layer 3 iteration 3).
+ *
+ * 8 → 9: **the sector rung is inserted** (ADR-0018, ADR-0023). A star's address is now
+ * `galaxy.sector.star` instead of `galaxy.star`, so every deeper link is a different address and
+ * must break loudly. The *picture* is deliberately unchanged: position and appearance key on the
+ * rung-stripped address, and the disc law is untouched, so the drawn galaxy is byte-identical to
+ * version 8. That is the whole point of the ADR, and `sector-rung.test.ts` pins it.
  */
-export const GALAXY_VERSION = 8;
+export const GALAXY_VERSION = 9;
 
 export type GalaxyTier = 'rich' | 'medium' | 'low';
 
@@ -164,6 +177,17 @@ const DISC_CORE_RADIUS = 0.14;
  * keeps the first N children of each kind, and appearance is keyed on the child's own address, so
  * dropping the quality does not redraw a single star that survives (issue 04 D4).
  *
+ * **The walk is over star identities, not addresses** (ADR-0023). The generator has to place a
+ * star before it can know which sector that star's angle falls in, so it walks `level` and asks
+ * `placedStarForIndex` for the position — which keys on `(galaxy, level)`, exactly the stream the
+ * star had before the sector existed. Only then is the sector derived from the drawn azimuth and
+ * the finished address built as `galaxy.sector.level`. Position, appearance and the disc law are
+ * all untouched, so the picture is the same galaxy with new labels; the sector is a filing
+ * cabinet, not a generator.
+ *
+ * The tier prefix therefore still holds: the walk is ordered by identity, and a sector is a pure
+ * function of a star's own position.
+ *
  * The home star is the exception: its address is the galaxy itself and its position is the frame
  * origin. It is not a child, so no child level is "the home star".
  */
@@ -217,10 +241,9 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
     level < maxLevels && (locals.length < counts.local || discs.length < counts.disc);
     level += 1
   ) {
-    const child = childAddress(galaxyAddress, level);
-    const kind = starKind(child);
+    const kind = starKindOfIndex(level);
 
-    // Skip a child whose field is already full: the walk can only stop once *both* fields are
+    // Skip an identity whose field is already full: the walk can only stop once *both* fields are
     // full, and the scan is ordered, so a skipped level leaves every kept address untouched.
     if (kind === 'local') {
       if (locals.length >= counts.local) continue;
@@ -228,7 +251,16 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
       continue;
     }
 
-    const placed = placedStarIn(frame, seed, child);
+    // Place the star first, then file it: the sector is derived from the angle the star is already
+    // drawn at (ADR-0023), never chosen before it. `placedStarForIndex` keys on `(galaxy, level)`,
+    // which is the stream the star had before the sector existed, so this cannot move a light.
+    const placed = placedStarForIndex(frame, seed, galaxyAddress, level);
+    const sector = sectorIndexForAngle(
+      discAzimuthOf(frame, placed.position),
+      frame.sectorCount,
+      frame.sectorPhaseRad,
+    );
+    const child = starAddressAt(galaxyAddress, sector, level);
     const appearance = createRng(fnv1a32(appearanceKey(seed, child)));
 
     if (placed.kind === 'local') {
@@ -277,13 +309,29 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
 }
 
 /**
+ * The appearance stream version, **frozen at 8**.
+ *
+ * `GALAXY_VERSION` used to be this number, because appearance is part of what a shared link pins.
+ * The sector insertion bumps that constant to 9 — an address changed — but **appearance must not
+ * re-roll**: the whole claim of ADR-0023 is that the gated galaxy is the same picture with a new
+ * set of labels. Folding the address version into this key would have contradicted that on the
+ * every-star-differs scale. So appearance has its own version again, exactly like
+ * `GALAXY_STREAM_VERSION` has its own: bump this when the *appearance law* changes, not when an
+ * address changes.
+ */
+const APPEARANCE_VERSION = 8;
+
+/**
  * The appearance stream key for one child: brightness, colour and size, drawn from the address
  * alone. Separate from `placementKey` so a change to how a star looks does not move where it is,
- * and vice versa. `GALAXY_VERSION` is in the key because appearance is part of what a shared link
- * pins.
+ * and vice versa.
+ *
+ * **Keyed on the address with the sector rung removed**, like `placementKey`: `v1/4.<sector>.-7`
+ * keys on `v1/4.-7`, the string this star had before the insertion. That is what keeps a star's
+ * light byte-identical across the re-key.
  */
-function appearanceKey(seed: string, address: Address): string {
-  return `${seed}|${formatAddress(address)}|appearance|v${GALAXY_VERSION}`;
+export function appearanceKey(seed: string, address: Address): string {
+  return `${seed}|${formatAddress(withoutSectorRung(address))}|appearance|v${APPEARANCE_VERSION}`;
 }
 
 /** Smooth Gaussian bulge profile: luminous warm core tapering smoothly to the outer edge. */

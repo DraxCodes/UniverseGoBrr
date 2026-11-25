@@ -15,6 +15,7 @@
 import { formatAddress, type Address } from '../frame/address';
 import { fnv1a32 } from '../lib/hash';
 import { createRng } from '../lib/random';
+import { withoutSectorRung } from './levels';
 
 /** Bumped whenever the generator's output would change. Old links must break loudly (ADR-0005). */
 export const SYSTEM_VERSION = 2;
@@ -104,7 +105,13 @@ export function orbitalPeriodSeconds(semiMajorAxisM: number): number {
  * same system, on any machine, in any order of evaluation.
  */
 export function generateSystem(seed: string, address: Address): StarSystem {
-  const key = `${seed}|${formatAddress(address)}|system|v${SYSTEM_VERSION}`;
+  // **The sector rung is transparent to content** (ADR-0023): `v1/4.<sector>.-2.7` keys on exactly
+  // the string the same system used before the insertion (`v1/4.-2.7`). Without this, every
+  // procedural system's planets and star would re-roll the moment sectors appeared in the address,
+  // and the layer-2 captures — which are of a system, not a galaxy — would all become invalid. It
+  // is the same mechanic as `placementKey`, one rung down: identity is the address *without* the
+  // sector, so a sector is a filing cabinet, not a parent that changes its contents.
+  const key = `${seed}|${formatAddress(withoutSectorRung(address))}|system|v${SYSTEM_VERSION}`;
   const rng = createRng(fnv1a32(key));
 
   const starClass = rng.pick<StarClass>(['M', 'M', 'M', 'M', 'K', 'K', 'K', 'G', 'G', 'F', 'A']);

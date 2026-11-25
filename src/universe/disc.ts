@@ -14,7 +14,7 @@ import { fnv1a32 } from '../lib/hash';
 import { createRng, type Rng } from '../lib/random';
 import { formatAddress, ancestorAddress, type Address } from '../frame/address';
 import { GALAXY_RADIUS_M } from '../render/scale';
-import { GALAXY_DEPTH as LEVEL_GALAXY_DEPTH } from './levels';
+import { GALAXY_DEPTH as LEVEL_GALAXY_DEPTH, sectorCount as sectorCountOf } from './levels';
 
 export interface Vec3 {
   readonly x: number;
@@ -172,6 +172,12 @@ export interface GalaxyFrame {
   readonly armOffsets: readonly number[];
   /** The stream key every other field in this galaxy must reuse. */
   readonly key: string;
+  /** How many sectors this galaxy has, 1..6 (ADR-0018, `sectorCount` in `levels.ts`). */
+  readonly sectorCount: number;
+  /**
+   * Where slice zero begins, radians in the disc plane. Derived, not drawn — see `galaxyFrame`.
+   */
+  readonly sectorPhaseRad: number;
 }
 
 /**
@@ -200,7 +206,89 @@ export function galaxyFrame(seed: string, galaxyAddress: Address): GalaxyFrame {
     GALACTIC_PLANE_TILT_RAD,
   );
 
-  return { radius, centre, armOffsets, key };
+  // **The sector phase is derived, not drawn**, and that is deliberate (ADR-0023).
+  //
+  // A new draw here would have been harmless only if appended: the frame stream is
+  // `homeAngle, homeRadius, homeHeight, firstArm`, so one more `rng.range` would leave every
+  // existing number untouched. But a *free* phase would put the home star at an arbitrary angle,
+  // and the home neighbourhood is exactly what `v1/0.0.0` reserves for Sol (ADR-0009). Sol's
+  // reserved address has to keep meaning "sector 0, star 0" in *every* galaxy, so slice zero is
+  // **centred on the home star**.
+  //
+  // The home star sits at the frame origin and the **centre is opposite it** (`-cos(homeAngle)`,
+  // `-sin(homeAngle)`), so the home star's azimuth about the centre is `homeAngle` itself — not
+  // `homeAngle + π`. Getting that sign wrong puts the place you start in on the far side of the
+  // galaxy from sector 0, which was true of the first cut of this function.
+  //
+  // The consequence is that the phase still varies per galaxy — it follows `homeAngle` — but the
+  // place you start in is always sector 0. That also gives the open question "where does slice
+  // zero begin" its least surprising answer: at home.
+  const sectorCount = sectorCountOf(seed, galaxyAddress);
+  const sectorPhaseRad = homeAngle - Math.PI / sectorCount;
+
+  return { radius, centre, armOffsets, key, sectorCount, sectorPhaseRad };
+}
+
+/**
+ * A point given relative to the **galactic centre**, expressed in the disc's own flat frame:
+ * `x`/`z` span the plane and `y` is height above it.
+ *
+ * Every disc measurement (radius, azimuth, arm strength) is defined here, because the plane is
+ * inclined to the orrery's and world `x`/`z` would read the disc as an ellipse.
+ */
+export function discPlanePoint(centre: Vec3, point: Vec3): Vec3 {
+  return rotateAboutX(
+    { x: point.x - centre.x, y: point.y - centre.y, z: point.z - centre.z },
+    -GALACTIC_PLANE_TILT_RAD,
+  );
+}
+
+/**
+ * The azimuth of `point` about the galactic centre, in the disc plane, radians.
+ *
+ * This is the angle a sector is derived from (ADR-0023): the star's *drawn* position, not a
+ * separate roll. It is computed from the same numbers the picture packs, so the sector a star is
+ * filed under and the wedge it is visibly inside cannot disagree.
+ */
+export function discAzimuthOf(frame: GalaxyFrame, point: Vec3): number {
+  const flat = discPlanePoint(frame.centre, point);
+  return Math.atan2(flat.z, flat.x);
+}
+
+/**
+ * Where a sector's own place sits: the **centre of its wedge**, at a fraction of the disc's radius.
+ *
+ * A sector owns the whole radial extent of its slice (ADR-0018), so it has no centroid in the
+ * literal sense; its position for travel is the middle of the slice at mid-radius. That makes a
+ * sector a real destination with a real distance and a real bearing, which is what `planTravel`
+ * and the compass need.
+ *
+ * The radius fraction is a **feel** constant: it is the one number that decides what a
+ * sector-to-sector hop costs. Half the radius is the plain reading of "mid-radius".
+ */
+export const SECTOR_POSITION_RADIUS_FRACTION = 0.5;
+
+/**
+ * The world-space position of sector `index`, relative to the home star.
+ *
+ * Total for any integer: a crafted link may name an ordinal the galaxy does not have, and refusing
+ * to place it would make `planTravel` invent a distance. Index `count` and index `0` are the same
+ * wedge, which is the ring's own arithmetic rather than a special case.
+ */
+export function sectorPosition(frame: GalaxyFrame, index: number): Vec3 {
+  const count = Math.max(1, Math.floor(frame.sectorCount));
+  const ordinal = Number.isFinite(index) ? Math.trunc(index) : 0;
+  const angle = frame.sectorPhaseRad + ((ordinal + 0.5) * Math.PI * 2) / count;
+  const radius = SECTOR_POSITION_RADIUS_FRACTION * frame.radius;
+  const offset = rotateAboutX(
+    { x: radius * Math.cos(angle), y: 0, z: radius * Math.sin(angle) },
+    GALACTIC_PLANE_TILT_RAD,
+  );
+  return {
+    x: offset.x + frame.centre.x,
+    y: offset.y + frame.centre.y,
+    z: offset.z + frame.centre.z,
+  };
 }
 
 /** One sampled star, in the galaxy frame: metres relative to the home star, already inclined. */

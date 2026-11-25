@@ -53,14 +53,18 @@ describe('the galaxy is a pure function of (seed, address)', () => {
 
   it('gives every star the address that produced it', () => {
     // The half of ADR-0011 that was missing: a drawn light carries an address, so "that star
-    // there" can be linked to and travelled to rather than only seen.
+    // there" can be linked to and travelled to rather than only seen. Since ADR-0023 that address
+    // is `galaxy.sector.star` — two levels below the galaxy, not one.
     const galaxy = generateGalaxy(SEED, HOME, 'low');
     const galaxyAddress = galaxyAddressOf(HOME);
     for (const star of galaxy.stars.slice(1)) {
       expect(galaxyAddressOf(star.address), JSON.stringify(star.address)).toEqual(galaxyAddress);
-      expect(star.address.levels.length).toBe(galaxyAddress.levels.length + 1);
+      expect(star.address.levels.length).toBe(galaxyAddress.levels.length + 2);
     }
   });
+
+  // The sector half of this — which sector a star is filed under, and that sector 0 is always the
+  // home star — lives in `sector-rung.test.ts`, next to the key-stripping it depends on.
 
   it('uses compile-time counts independent of the address', () => {
     const a = generateGalaxy(SEED, HOME, 'rich');

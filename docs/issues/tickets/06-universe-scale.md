@@ -114,12 +114,16 @@ is its evidence (10/10).
 1. **Level model — DONE.** `src/universe/levels.ts` names every rung and is the single authority;
    `GALAXY_DEPTH` re-exports it. Also carries the galaxy **size fraction** and the **1–6 sector
    count** derived from it. Non-breaking: nothing consumed the kinds yet when it landed. 21 tests.
-2. **Sectors as an address level** (decided, ADR-0018). **Partly done:** the law exists
-   (`sectorCount`, `sectorIndexForAngle`, total for the degenerate one-sector galaxy); the *insertion*
-   — sectors actually appearing in the address and `generateGalaxy` iterating them — is **not
-   done**. That is the re-key, and it is the next commit. Note it is narrower than once thought: a
-   **system** was already depth 3, so Sol (`v1/0.0.0`) and the orrery (`v1/4.-2.7`) keep their
-   rung; what moves is depth 2, a star → a sector.
+2. **Sectors as an address level — DONE for insertion; the *view* is item 9** (ADR-0018,
+   ADR-0023). A star's address is `galaxy.sector.star`: the sector is derived from the angle the
+   star is already drawn at and the star keeps its old identity integer, so `v1/4.-2` is now
+   `v1/4.<sector>.-2`. The rung is **inserted**, not appended: the orrery that was `v1/4.-2.7` is now
+   `v1/4.<sector>.-2.7`, still "star −2, body 7". Position, appearance and system content key on the
+   rung-stripped address, so the gated galaxy is byte-identical; the whole population was diffed
+   against `4405c2d` at a worst delta of exactly zero. `GALAXY_VERSION` 8 → 9;
+   `PLACEMENT_VERSION`/`APPEARANCE_VERSION` unchanged. A sector is a real travel destination (mid
+   radius, its own wedge) but standing *inside* it has no scene: that is item 9, and
+   `planZoomOut` still refuses it by name.
 3. **Root layout — DONE.** `src/universe/layout.ts`, `galaxyPosition`. Total and unbounded, so
    "further out" always has something; `cbrt(|g|)` gives roughly constant density instead of a
    shell. Galaxy 0 is the origin (Sol). 10 tests.

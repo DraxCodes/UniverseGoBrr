@@ -31,10 +31,11 @@
  * | 4+ (`v1/0.3.1.2`) | body | a planet, moon, station — anything below a system |
  *
  * Inserting the sector rung is what makes this a change rather than a comment: **every address at
- * depth 2 or deeper re-keys**. Depth 2 was a star and is now a sector, so a star that was
- * `v1/4.-2` is now `v1/4.-2.<n>` and the system that was `v1/4.-2.7` keeps its rung but now reads
- * as "sector -2, system 7" rather than "star -2, body 7". The module exists first so the re-key
- * has one authority to move rather than four independent guesses.
+ * depth 2 or deeper re-keys**. Depth 2 was a star and is now a sector, so a star that was `v1/4.-2`
+ * is now `v1/4.<sector>.-2` — the rung is **inserted**, and the star identity keeps its value and
+ * its position in the path. The system that was `v1/4.-2.7` therefore now reads
+ * `v1/4.<sector>.-2.7`: still "star -2, body 7", not "sector -2, star 7". The module exists first so
+ * the re-key has one authority to move rather than four independent guesses.
  *
  * ## The version boundary
  *
@@ -177,6 +178,37 @@ export function sectorCount(seed: string, galaxyAddress: Address): number {
   // size, not an independent roll, so a galaxy cannot report one size and a contradictory count.
   // The test `derives the sector count from the same size it reports` pins that.
   return sectorCountForSize(galaxySizeFraction(seed, galaxyAddress));
+}
+
+/**
+ * The address a place has once the sector rung is **removed** — the address as it was written
+ * before sectors existed, and therefore the key for everything that must not re-roll (ADR-0023).
+ *
+ * This is the mechanic that keeps the promise. A drawn star's position and appearance are keyed on
+ * its star level, and a system's planets are keyed on this address, so inserting the sector rung
+ * changes a *link* without changing a single drawn number. With no sector rung there is nothing to
+ * remove and the address is returned unchanged.
+ *
+ * Only the rung at `SECTOR_DEPTH` is dropped; everything shallower and deeper keeps its order, so
+ * `v1/4.<sector>.-2.7` answers `v1/4.-2.7` — the string that named the same system before the
+ * re-key.
+ *
+ * **A two-level address is returned unchanged, and that is load-bearing.** `v1/4.-7` is both the
+ * pre-re-key address of a star (the identity `placedStarForIndex` keys on) and a well-formed
+ * `galaxy.sector` address under the new ladder. Those are literally the same string, and position
+ * and appearance *depend* on that: the star-identity path must produce the pre-re-key key, so a
+ * bare sector has to pass through untouched. The cost is that a sector's content key equals the
+ * star-identity key (a crafted `?addr=v1/4.3` resolves to the system of star 3), which ADR-0023
+ * accepts: the sector is redundant to content, so the link names a real place either way. A sector
+ * is never *drawn* as a system, so nothing user-facing depends on the collision.
+ */
+export function withoutSectorRung(address: Address): Address {
+  const levels = address.levels;
+  if (levels.length <= SECTOR_DEPTH) return address;
+  return {
+    version: address.version,
+    levels: [...levels.slice(0, SECTOR_DEPTH - 1), ...levels.slice(SECTOR_DEPTH)],
+  };
 }
 
 /**

@@ -52,22 +52,26 @@ cleaner law; until then it is not worth re-rolling the sky.
 
 - The re-key is **additive in meaning, not in position**: no star moves, every star's address gains
   one level.
-- A **system** was already depth 3 before this decision, so an address like `v1/4.-2.7` keeps its
-  rung; what changes is that depth 2 now means *a sector* rather than *a star*. See
+- A **system** was already depth 3 before this decision, so it keeps its depth; what changes is that
+  depth 2 now means *a sector* rather than *a star*. The star identity keeps its integer, so the
+  honest new address is `v1/4.<sector>.-2.7` — the rung is **inserted**, not appended. See
   `docs/notes/address-ladder-depths.md`.
 - `sectorCount` depends on galaxy size, so a small galaxy may have **one** sector — the degenerate
   case ADR-0018 names. Every angle maps to sector 0 and the level is transparent; `sectorIndexForAngle`
   is total for it.
-- The angular **phase** (where slice 0 begins) is sampled per galaxy, so sector boundaries are not
-  identical across galaxies. It is a frame-level draw like the arm phase, and follows the same rule:
-  a `GALAXY_STREAM_VERSION` change, not an address re-key.
+- The angular **phase** (where slice 0 begins) is **derived from `homeAngle`, not drawn**: slice 0 is
+  centred on the home star, so `v1/0.0.0` keeps meaning "sector 0, star 0" in every galaxy and the
+  local neighbourhood is always sector 0. A free per-galaxy draw would have made Sol's reserved
+  address mean a different slice in each galaxy. (This replaces the "sampled per galaxy" option
+  first written here; the field still varies, because `homeAngle` does.)
 
 ## The mechanic that must change for this to hold
 
-**This is load-bearing and easy to miss.** Today `placementKey` hashes the **full address string**
-(`src/universe/placement.ts`), so `v1/0.3` and `v1/0.3.1` produce different placement streams. If the
-re-key simply rewrote a star's address from `v1/0.3` to `v1/0.3.1`, **every star would move** and the
-"keeps the drawn galaxy" half of this decision would be false.
+**This is load-bearing and easy to miss.** Before the insertion, `placementKey` hashed the **full
+address string** (`src/universe/placement.ts`), so `v1/0.3` and `v1/0.3.1` produced different
+placement streams. If the re-key had simply rewritten a star's address from `v1/0.3` to
+`v1/0.3.1`, **every star would have moved** and the "keeps the drawn galaxy" half of this decision
+would be false.
 
 So the insertion must do *both*:
 
@@ -78,5 +82,9 @@ So the insertion must do *both*:
 
 Point 2 is the actual code change, and it must land **in the same commit** as point 1. Doing only
 point 1 silently re-rolls the sky while claiming it did not, which is the failure mode this ADR
-exists to prevent. A test should pin it: a star's position is unchanged across the re-key, and the
-sector of that position is derivable from its angle.
+exists to prevent.
+
+**Landed 2026-11-25** (`GALAXY_VERSION` 9, `PLACEMENT_VERSION` still 2). `withoutSectorRung` is the
+mechanic for both position and appearance; `sector-rung.test.ts` pins the key strings and the
+sector-from-angle invariant; the whole population was diffed against the pre-re-key tree (six
+galaxy/tier dumps, three systems) with a worst delta of exactly zero.

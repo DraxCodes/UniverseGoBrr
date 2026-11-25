@@ -28,8 +28,8 @@ const BASE = urlArg >= 0 ? process.argv[urlArg + 1] : 'http://127.0.0.1:4173/';
 const SEED = 'ugb-0000';
 const EPOCH = '2000-01-01T00:00:00.000Z';
 const DEPART = 'v1/0';
-const WARP_DEST = 'v1/0.9'; // local-field star -> warp
-const TRANSWARP_DEST = 'v1/0.1'; // disc star -> transwarp
+const WARP_DEST = 'v1/0.0.9'; // local-field star (identity 9) -> warp
+const TRANSWARP_DEST = 'v1/0.3.1'; // disc star (identity 1, sector 3) -> transwarp
 const HYPERSPACE_DEST = 'v1/1'; // different galaxy -> hyperspace (now travellable via the root layout)
 
 const checks = [];
@@ -212,7 +212,7 @@ const readAddressObserver = (page) =>
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 
-  // ---- 1. Warp crossing (v1/0 -> v1/0.9, 1600 ms) --------------------------
+  // ---- 1. Warp crossing (v1/0 -> v1/0.0.9, 1600 ms) --------------------------
   await page.goto(`${BASE}?seed=${SEED}&epoch=${EPOCH}&addr=${DEPART}&t=1200`, {
     waitUntil: 'domcontentloaded',
   });
@@ -290,12 +290,12 @@ try {
     'warp HUD address switched once silently from departure to destination',
     warpAddrLog.length === 2 &&
       warpAddrLog[0].text === 'v1/0' &&
-      warpAddrLog[1].text === 'v1/0/9' &&
+      warpAddrLog[1].text === 'v1/0/0/9' &&
       warpHistoryAfter === historyBeforeWarp + 1,
     JSON.stringify({ log: warpAddrLog, history: [historyBeforeWarp, warpHistoryAfter] }),
   );
 
-  // ---- 2. Transwarp crossing (v1/0 -> v1/0.1, 2200 ms) ---------------------
+  // ---- 2. Transwarp crossing (v1/0 -> v1/0.3.1, 2200 ms) ---------------------
   await page.goto(`${BASE}?seed=${SEED}&epoch=${EPOCH}&addr=${DEPART}&t=1200`, {
     waitUntil: 'domcontentloaded',
   });
@@ -373,7 +373,7 @@ try {
     'transwarp HUD address switched once silently from departure to destination',
     transAddrLog.length === 2 &&
       transAddrLog[0].text === 'v1/0' &&
-      transAddrLog[1].text === 'v1/0/1' &&
+      transAddrLog[1].text === 'v1/0/3/1' &&
       transHistoryAfter === historyBeforeTrans + 1,
     JSON.stringify({ log: transAddrLog, history: [historyBeforeTrans, transHistoryAfter] }),
   );
@@ -399,7 +399,7 @@ try {
 
   check(
     'Escape interrupt clamps immediately to static arrival without half-swapped frame',
-    escAddrText === 'v1/0/1' &&
+    escAddrText === 'v1/0/3/1' &&
       escVsLink.maxChannelDiff === 0 &&
       Math.abs(escSample.mean - transLinkSample.mean) < 1e-6,
     `addr=${escAddrText} maxDiff=${escVsLink.maxChannelDiff} sampleDiff=${Math.abs(escSample.mean - transLinkSample.mean).toExponential(2)}`,
@@ -445,7 +445,7 @@ try {
     `addr=${backAddrText} vsLinkMax=${backVsLink.maxChannelDiff} vsBootMax=${backVsDepart.maxChannelDiff}`,
   );
 
-  // 3c. Mid-crossing re-travel (v1/0.1 -> v1/0.9 touches the disc, so it is a 2200 ms transwarp)
+  // 3c. Mid-crossing re-travel (v1/0.3.1 -> v1/0.0.9 touches the disc, so it is a 2200 ms transwarp)
   await page.evaluate((to) => window.__ugb.travel(to), TRANSWARP_DEST);
   await ready(page, TRANSWARP_DEST);
   await page.waitForTimeout(400);
@@ -472,7 +472,7 @@ try {
     'mid-crossing re-travel settles cleanly on the second destination',
     retravelPlan.ok === true &&
       retravelPlan.method === 'transwarp' &&
-      retravelAddrText === 'v1/0/9' &&
+      retravelAddrText === 'v1/0/0/9' &&
       retravelVsLink.maxChannelDiff === 0,
     `addr=${retravelAddrText} maxDiff=${retravelVsLink.maxChannelDiff}`,
   );

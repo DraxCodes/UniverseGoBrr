@@ -349,3 +349,11 @@ wasted turns; keep it here so it survives a change of session.
 - **Port 4173 must be free before a probe.** A stale preview server fails the run
   with `Port 4173 is already in use`; find it with
   `Get-NetTCPConnection -LocalPort 4173 -State Listen` and stop that PID.
+- **Never junction `node_modules` into a scratch worktree.** `cmd /c mklink /J` makes a
+  directory junction, and `git worktree remove --force` then deletes *through* it into the real
+  tree: it stripped every package out of the project's `node_modules` while leaving 31 top-level
+  folders behind, so `npm run build` failed with `'tsc' is not recognized` and
+  `node_modules/.bin` was gone. To compare two trees, copy the file you need into the worktree and
+  run `npx vitest` there (it resolves through `.bin` in the parent project), or just stash/checkout
+  in one tree. If it has already happened, `npm install` restores it in seconds — the failure is
+  loud, not silent.

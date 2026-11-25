@@ -96,8 +96,9 @@ try {
     `ok=${galaxyRung.ok} address=${galaxyRung.address}`,
   );
 
-  // Sector and system are not zoom targets yet (the scene swap for a sector is ticket 06 item 2),
-  // so their refusal must name the *next* missing piece rather than pretend they work.
+  // Sector and system are not zoom targets yet: a sector is now a real address and a real travel
+  // destination (ADR-0023), but standing *inside* its wedge is a view that does not exist, so the
+  // refusal must name that next missing piece rather than pretend the rung is a label.
   const sectorRung = ladder.find((r) => r.depth === 2);
   check(
     'the sector rung is honest about not being a scene yet',
@@ -116,7 +117,10 @@ try {
     { timeout: 30_000 },
   );
 
-  const near = await page.evaluate(() => window.__ugb.planTravel('v1/0.0.1'));
+  // A **local-field** star (identity 9 is one in nine), so "near" really is near: a disc star
+  // would sit tens of thousands of light-years out and the near/far contrast would be about the
+  // galaxy's radius rather than about distance pricing.
+  const near = await page.evaluate(() => window.__ugb.planTravel('v1/0.0.9'));
   const far = await page.evaluate(() => window.__ugb.planTravel('v1/1'));
 
   check(
@@ -167,6 +171,20 @@ try {
       far.distanceM > 1e22 &&
       far.method === 'hyperspace',
     `ok=${far.ok} d=${far.distanceM} method=${far.method}`,
+  );
+
+  // -------------------------------------------------------------------------
+  // 4b. A **sector** is a real rung, not a label: it is a travel destination with its own distance
+  //     and a real method, which is what the insertion bought (ADR-0023).
+  // -------------------------------------------------------------------------
+  const sectorTrip = await page.evaluate(() => window.__ugb.planTravel('v1/0.2'));
+  check(
+    'a sector is a travel destination with a real distance',
+    sectorTrip.ok === true &&
+      typeof sectorTrip.distanceM === 'number' &&
+      sectorTrip.distanceM > 0 &&
+      sectorTrip.method === 'transwarp',
+    `ok=${sectorTrip.ok} d=${sectorTrip.distanceM} method=${sectorTrip.method}`,
   );
 
   // -------------------------------------------------------------------------

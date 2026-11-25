@@ -18,7 +18,8 @@
     "probe:watchdog": "node tools/watchdog-probe.mjs",
     "probe:travel": "node tools/travel-probe.mjs",
     "probe:compass": "node tools/compass-probe.mjs",
-    "probe:pan": "node tools/pan-probe.mjs"
+    "probe:pan": "node tools/pan-probe.mjs",
+    "probe:masks": "node tools/tier-mask-probe.mjs"
   },
   "devDependencies": {
     "@webgpu/types": "^0.1.74",

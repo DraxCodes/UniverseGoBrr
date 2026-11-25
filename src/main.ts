@@ -1,6 +1,6 @@
 import './styles.css';
 import { initDevice, type GpuContext } from './gpu/device';
-import { createRenderer, type RendererHandle } from './gpu/renderer';
+import { createRenderer, type FrameSnapshot, type RendererHandle } from './gpu/renderer';
 import { createPrecisionProbe } from './frame/precision-probe';
 import { formatAddress, parseAddress, sameAddress, type Address } from './frame/address';
 import { mountHud, showFatal, type CompassEntry } from './ui/hud';
@@ -8,6 +8,7 @@ import { attachOrbitControls, orbitDistance, orbitTo } from './input/orbit-contr
 import { defaultSystemCamera, displayScaleM } from './render/system-scene';
 import { GALAXY_MAX_DISTANCE_M } from './render/galaxy-scene';
 import { notchFactor } from './render/scale';
+import { maskMethodFor, type MaskMethod } from './render/tier-mask';
 import { AU_M, describeSystem } from './universe/system';
 import { resolveSystem } from './universe/authored';
 import { generateGalaxy, type Galaxy, type GalaxyTier } from './universe/galaxy';
@@ -49,6 +50,17 @@ let currentEntryAddress = '';
 let notice: (text: string) => void = () => {};
 /** The compass rows this boot is showing, so the debug surface can report them. */
 let currentCompass: readonly CompassEntry[] = [];
+/** Staged tier mask handoff from `commitTravel()` into the next `init()` rebuild. */
+let pendingMask: {
+  method: MaskMethod;
+  departureAddress: Address;
+  snapshot: FrameSnapshot | null;
+} | null = null;
+
+function clearPendingMask(): void {
+  pendingMask?.snapshot?.texture.destroy();
+  pendingMask = null;
+}
 
 /**
  * The impostor budget this build opens with. "Rich" is the desktop default; the renderer's
@@ -245,6 +257,20 @@ function commitTravel(toText: string): UniverseTravelResult {
     cameraExplicit: true,
   };
 
+  const maskMethod = maskMethodFor(plan.method);
+  if (maskMethod !== null) {
+    renderer?.interruptMask();
+    const snapshot = renderer?.captureSnapshot() ?? null;
+    clearPendingMask();
+    pendingMask = {
+      method: maskMethod,
+      departureAddress: state.address,
+      snapshot,
+    };
+  } else {
+    clearPendingMask();
+  }
+
   writeUrl(next);
   notice(
     `${plan.method} · ${describeDistanceM(plan.distanceM)} · ${describeDurationS(plan.elapsedS)}`,
@@ -368,6 +394,7 @@ function commitZoomOut(depth: number): UniverseNavigationResult {
 
   writeUrl(next);
   notice(`zoomed out to ${formatAddress(plan.address)} · no time passed`);
+  clearPendingMask();
   void start();
   return { ok: true, reason: null };
 }
@@ -379,195 +406,238 @@ function describeDurationS(seconds: number): string {
 }
 
 async function init(attempt: number): Promise<AppHandle> {
-  ready = false;
-  failure = null;
+  const travelMask = pendingMask;
+  pendingMask = null;
+  let maskAdopted = false;
 
-  const canvas = document.querySelector<HTMLCanvasElement>('#stage');
-  if (!canvas) throw new Error('Canvas #stage is missing from index.html.');
-
-  const parsed = parseUrlState(location.search);
-  state = parsed.state;
-  // The page is on this entry now. A travel from here compares against this address, which is
-  // what turns "consecutive same-address pushes" into a replace.
-  currentEntryAddress = formatAddress(state.address);
-
-  const hud = mountHud(state, parsed.issues, {
-    zoomOut: (depth) => {
-      commitZoomOut(depth);
-    },
-    travelTo: (address) => {
-      commitTravel(formatAddress(address));
-    },
-  });
-  notice = (text) => hud.notice(text);
-  hud.setStatus('acquiring GPU device');
-
-  // The probe is a debug scene, so it is built once at boot: its marker offsets never change.
-  const probe = state.precision ? createPrecisionProbe() : null;
-
-  // The system is resolved from the address alone (ADR-0005): an authored node (spec §3.6) wins,
-  // otherwise the generator does. A shared link reproduces either one exactly; nothing is cached.
-  const system = probe ? null : resolveSystem(state.seed, state.address);
-  // The galaxy is generated once, in real metres, and is the backdrop the home system sits in.
-  // It is keyed on the galaxy's own level rather than this address (ADR-0011), so every star in
-  // one galaxy gets the same sky; nothing about it is persisted or cached across loads (ADR-0005).
-  const galaxy = system ? generateGalaxy(state.seed, state.address, GALAXY_TIER) : null;
-  currentGalaxy = galaxy;
-
-  // A camera at the origin is inside the star. When the URL did not name one, the scene picks a
-  // framing that shows the system, and that framing is then written back to the URL.
-  if (system && !state.cameraExplicit) {
-    state.camera = defaultSystemCamera(system);
-    state.cameraExplicit = true;
-  }
-
-  // The compass is built from the population the picture already draws, so an anchor is a light
-  // you can see (ADR-0011) and the search costs one pass over an array that exists anyway. The
-  // `from` pin is appended only when the link carried one and it is not the place itself.
-  currentCompass = galaxy ? compassEntries(galaxy, state.address, state.from) : [];
-  if (galaxy) hud.setCompass(currentCompass);
-
-  gpu = await initDevice();
-  if (disposed || attempt !== bootGeneration) {
-    throw new Error('App was superseded while acquiring the GPU device.');
-  }
-  hud.setGpu(gpu);
-  hud.setStatus('creating pipeline');
-
-  const context = canvas.getContext('webgpu');
-  if (!context) throw new Error('Could not get a WebGPU context from the canvas.');
-
-  const format = navigator.gpu.getPreferredCanvasFormat();
-  context.configure({ device: gpu.device, format, alphaMode: 'opaque' });
-
-  const created = await createRenderer({
-    device: gpu.device,
-    context,
-    format,
-    canvas,
-    seed: state.seed,
-    camera: state.camera,
-    system,
-    galaxy,
-    galaxyTier: GALAXY_TIER,
-    precision: probe,
-    precisionMode: state.precision ?? 'fixed',
-    getTime: () => clockSeconds(state, Date.now()),
-    onFirstFrame: () => {
-      ready = true;
-      hud.setStatus('ready');
-      if (probe) hud.setPrecision(created.precisionReport(), state.precision);
-    },
-    onStats: (stats) => {
-      hud.setFps(stats.fps);
-      hud.setClock(stats.time, state.t !== null);
-      // The probe's pixel spread depends on the canvas size, so it is refreshed with the
-      // stats rather than set once: a resized window must not keep showing the old number.
-      if (probe) hud.setPrecision(created.precisionReport(), state.precision);
-
-      // Issue 04 D8: the existing scene row carries the galaxy factor; there is no second
-      // disclaimer and no new panel. Positions are never scaled, so the galaxy reads `×1 real`;
-      // the only distortion is traversal, and it is printed where it is active.
-      if (system) {
-        // The scene row states *where you are*, so it keys off `identity` (are we at galaxy
-        // scale?) rather than `lod`. `lod` also folds in the disc's inclination; a straight
-        // zoom-out from the default view is edge-on, and it would leave the row reading
-        // "K-type · 9 planets" at 45 000 ly while the whole galaxy fills the frame.
-        const identity = created.galaxyFrame()?.identity ?? 0;
-        // The zoom rate follows the orbit distance (eye to target), not the eye's distance from
-        // the frame origin: after a pan both move together, so the wheel keeps its feel.
-        const distance = orbitDistance(state.camera);
-        const boost = notchFactor(distance, WHEEL_BASE) / WHEEL_BASE;
-        if (identity > 0.5) {
-          hud.setScene('one galaxy · ×1 real');
-        } else if (boost > 1.02) {
-          hud.setScene(`${describeSystem(system)} · void ×${boost.toFixed(1)}`);
-        } else {
-          hud.setScene(describeSystem(system));
-        }
-      }
-    },
-    onPipeline: (generation, error) => hud.setPipeline(generation, error),
-    onTierDrop: (tier) => hud.notice(`quality: ${tier} · long frames`),
-  });
-
-  if (disposed || attempt !== bootGeneration) {
-    created.dispose();
-    throw new Error('App was superseded while creating the renderer.');
-  }
-  renderer = created;
-
-  persist();
-
-  hud.setCamera(state.camera);
-  if (system) hud.setScene(describeSystem(system));
-
-  // Framing controls. They mutate `state.camera` in place, so the renderer (which holds that
-  // reference) picks the change up on the next frame. The URL is rewritten only when a gesture
-  // settles: browsers rate-limit `history.replaceState`.
-  const controls = system
-    ? attachOrbitControls({
-        element: canvas,
-        camera: state.camera,
-        frameScaleM: displayScaleM(system),
-        maxDistanceM: GALAXY_MAX_DISTANCE_M,
-        onChange: () => hud.setCamera(state.camera),
-        onCommit: persist,
-        onZoomEdge: (edge) => hud.notice(edge === 'max' ? 'max zoom' : 'min zoom'),
-      })
-    : null;
-
-  const onKey = (event: KeyboardEvent): void => {
-    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
-
-    if (event.key.toLowerCase() === 'p') {
-      state.t = state.t === null ? clockSeconds(state, Date.now()) : null;
-      persist();
-      hud.setClock(clockSeconds(state, Date.now()), state.t !== null);
-    } else if (event.key.toLowerCase() === 'r') {
-      // Reset means "the framing this scene opens with", not "the origin" — the origin is
-      // inside the star.
-      const home = system
-        ? defaultSystemCamera(system)
-        : { ...DEFAULT_CAMERA, target: { ...DEFAULT_CAMERA.target } };
-      Object.assign(state.camera, home);
-      persist();
-      hud.setCamera(state.camera);
-    } else if (event.key.toLowerCase() === 'f') {
-      toggleFullscreen();
-    }
-  };
-
-  const onDeviceLost = (event: Event): void => {
-    const info = (event as CustomEvent<GPUDeviceLostInfo>).detail;
-    failure = `GPU device lost (${info.reason}): ${info.message}`;
+  try {
     ready = false;
-    showFatal(failure);
-    created.dispose();
-  };
+    failure = null;
 
-  // Back and Forward are real navigation: the URL is the coordinate, so the page has to enter
-  // the coordinate it now names. Rebuilding is honest rather than clever — the renderer is built
-  // from one address (see `docs/notes/reentering-a-coordinate.md`).
-  const onPopState = (): void => {
-    void start();
-  };
+    const canvas = document.querySelector<HTMLCanvasElement>('#stage');
+    if (!canvas) throw new Error('Canvas #stage is missing from index.html.');
 
-  window.addEventListener('keydown', onKey);
-  window.addEventListener('ugb:device-lost', onDeviceLost);
-  window.addEventListener('popstate', onPopState);
+    const parsed = parseUrlState(location.search);
+    state = parsed.state;
+    // The page is on this entry now. A travel from here compares against this address, which is
+    // what turns "consecutive same-address pushes" into a replace.
+    currentEntryAddress = formatAddress(state.address);
 
-  return {
-    dispose() {
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('ugb:device-lost', onDeviceLost);
-      window.removeEventListener('popstate', onPopState);
-      controls?.dispose();
+    const hud = mountHud(
+      state,
+      parsed.issues,
+      {
+        zoomOut: (depth) => {
+          commitZoomOut(depth);
+        },
+        travelTo: (address) => {
+          commitTravel(formatAddress(address));
+        },
+      },
+      travelMask?.departureAddress,
+    );
+    notice = (text) => hud.notice(text);
+    hud.setStatus('acquiring GPU device');
+
+    // The probe is a debug scene, so it is built once at boot: its marker offsets never change.
+    const probe = state.precision ? createPrecisionProbe() : null;
+
+    // The system is resolved from the address alone (ADR-0005): an authored node (spec §3.6) wins,
+    // otherwise the generator does. A shared link reproduces either one exactly; nothing is cached.
+    const system = probe ? null : resolveSystem(state.seed, state.address);
+    // The galaxy is generated once, in real metres, and is the backdrop the home system sits in.
+    // It is keyed on the galaxy's own level rather than this address (ADR-0011), so every star in
+    // one galaxy gets the same sky; nothing about it is persisted or cached across loads (ADR-0005).
+    const galaxy = system ? generateGalaxy(state.seed, state.address, GALAXY_TIER) : null;
+    currentGalaxy = galaxy;
+
+    // A camera at the origin is inside the star. When the URL did not name one, the scene picks a
+    // framing that shows the system, and that framing is then written back to the URL.
+    if (system && !state.cameraExplicit) {
+      state.camera = defaultSystemCamera(system);
+      state.cameraExplicit = true;
+    }
+
+    // The compass is built from the population the picture already draws, so an anchor is a light
+    // you can see (ADR-0011) and the search costs one pass over an array that exists anyway. The
+    // `from` pin is appended only when the link carried one and it is not the place itself.
+    currentCompass = galaxy ? compassEntries(galaxy, state.address, state.from) : [];
+    if (galaxy) hud.setCompass(currentCompass);
+
+    gpu = await initDevice();
+    if (disposed || attempt !== bootGeneration) {
+      throw new Error('App was superseded while acquiring the GPU device.');
+    }
+    hud.setGpu(gpu);
+    hud.setStatus('creating pipeline');
+
+    const validSnapshot =
+      travelMask?.snapshot && travelMask.snapshot.deviceId === gpu.deviceId
+        ? travelMask.snapshot
+        : null;
+    if (travelMask?.snapshot && !validSnapshot) {
+      travelMask.snapshot.texture.destroy();
+    }
+
+    const context = canvas.getContext('webgpu');
+    if (!context) throw new Error('Could not get a WebGPU context from the canvas.');
+
+    const format = navigator.gpu.getPreferredCanvasFormat();
+    context.configure({ device: gpu.device, format, alphaMode: 'opaque' });
+
+    const created = await createRenderer({
+      device: gpu.device,
+      deviceId: gpu.deviceId,
+      context,
+      format,
+      canvas,
+      seed: state.seed,
+      camera: state.camera,
+      system,
+      galaxy,
+      galaxyTier: GALAXY_TIER,
+      precision: probe,
+      precisionMode: state.precision ?? 'fixed',
+      travelMask: travelMask
+        ? {
+            method: travelMask.method,
+            departure: validSnapshot,
+            onMidpoint: () => hud.setAddress(state.address),
+          }
+        : null,
+      getTime: () => clockSeconds(state, Date.now()),
+      onFirstFrame: () => {
+        ready = true;
+        hud.setStatus('ready');
+        if (probe) hud.setPrecision(created.precisionReport(), state.precision);
+      },
+      onStats: (stats) => {
+        hud.setFps(stats.fps);
+        hud.setClock(stats.time, state.t !== null);
+        // The probe's pixel spread depends on the canvas size, so it is refreshed with the
+        // stats rather than set once: a resized window must not keep showing the old number.
+        if (probe) hud.setPrecision(created.precisionReport(), state.precision);
+
+        // Issue 04 D8: the existing scene row carries the galaxy factor; there is no second
+        // disclaimer and no new panel. Positions are never scaled, so the galaxy reads `×1 real`;
+        // the only distortion is traversal, and it is printed where it is active.
+        if (system) {
+          // The scene row states *where you are*, so it keys off `identity` (are we at galaxy
+          // scale?) rather than `lod`. `lod` also folds in the disc's inclination; a straight
+          // zoom-out from the default view is edge-on, and it would leave the row reading
+          // "K-type · 9 planets" at 45 000 ly while the whole galaxy fills the frame.
+          const identity = created.galaxyFrame()?.identity ?? 0;
+          // The zoom rate follows the orbit distance (eye to target), not the eye's distance from
+          // the frame origin: after a pan both move together, so the wheel keeps its feel.
+          const distance = orbitDistance(state.camera);
+          const boost = notchFactor(distance, WHEEL_BASE) / WHEEL_BASE;
+          if (identity > 0.5) {
+            hud.setScene('one galaxy · ×1 real');
+          } else if (boost > 1.02) {
+            hud.setScene(`${describeSystem(system)} · void ×${boost.toFixed(1)}`);
+          } else {
+            hud.setScene(describeSystem(system));
+          }
+        }
+      },
+      onPipeline: (generation, error) => hud.setPipeline(generation, error),
+      onTierDrop: (tier) => hud.notice(`quality: ${tier} · long frames`),
+    });
+
+    maskAdopted = true;
+
+    if (disposed || attempt !== bootGeneration) {
       created.dispose();
-      if (renderer === created) renderer = null;
+      throw new Error('App was superseded while creating the renderer.');
+    }
+    renderer = created;
+
+    if (urlForState(state, location.pathname) !== location.pathname + location.search) {
+      persist();
+    }
+
+    hud.setCamera(state.camera);
+    if (system) hud.setScene(describeSystem(system));
+
+    // Framing controls. They mutate `state.camera` in place, so the renderer (which holds that
+    // reference) picks the change up on the next frame. The URL is rewritten only when a gesture
+    // settles: browsers rate-limit `history.replaceState`.
+    const controls = system
+      ? attachOrbitControls({
+          element: canvas,
+          camera: state.camera,
+          frameScaleM: displayScaleM(system),
+          maxDistanceM: GALAXY_MAX_DISTANCE_M,
+          onChange: () => {
+            if (created.isMaskActive()) created.interruptMask();
+            hud.setCamera(state.camera);
+          },
+          onCommit: persist,
+          onZoomEdge: (edge) => hud.notice(edge === 'max' ? 'max zoom' : 'min zoom'),
+        })
+      : null;
+
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+
+      if (event.key === 'Escape') {
+        if (created.isMaskActive()) created.interruptMask();
+      } else if (event.key.toLowerCase() === 'p') {
+        state.t = state.t === null ? clockSeconds(state, Date.now()) : null;
+        persist();
+        hud.setClock(clockSeconds(state, Date.now()), state.t !== null);
+      } else if (event.key.toLowerCase() === 'r') {
+        if (created.isMaskActive()) created.interruptMask();
+        // Reset means "the framing this scene opens with", not "the origin" — the origin is
+        // inside the star.
+        const home = system
+          ? defaultSystemCamera(system)
+          : { ...DEFAULT_CAMERA, target: { ...DEFAULT_CAMERA.target } };
+        Object.assign(state.camera, home);
+        persist();
+        hud.setCamera(state.camera);
+      } else if (event.key.toLowerCase() === 'f') {
+        toggleFullscreen();
+      }
+    };
+
+    const onDeviceLost = (event: Event): void => {
+      const info = (event as CustomEvent<GPUDeviceLostInfo>).detail;
+      failure = `GPU device lost (${info.reason}): ${info.message}`;
       ready = false;
-    },
-  };
+      showFatal(failure);
+      created.dispose();
+    };
+
+    // Back and Forward are real navigation: the URL is the coordinate, so the page has to enter
+    // the coordinate it now names. Rebuilding is honest rather than clever — the renderer is built
+    // from one address (see `docs/notes/reentering-a-coordinate.md`).
+    const onPopState = (): void => {
+      hud.clearNotice();
+      clearPendingMask();
+      void start();
+    };
+
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('ugb:device-lost', onDeviceLost);
+    window.addEventListener('popstate', onPopState);
+
+    return {
+      dispose() {
+        window.removeEventListener('keydown', onKey);
+        window.removeEventListener('ugb:device-lost', onDeviceLost);
+        window.removeEventListener('popstate', onPopState);
+        controls?.dispose();
+        created.dispose();
+        if (renderer === created) renderer = null;
+        ready = false;
+      },
+    };
+  } finally {
+    if (!maskAdopted) {
+      travelMask?.snapshot?.texture.destroy();
+    }
+  }
 }
 
 /**
@@ -602,6 +672,7 @@ if (import.meta.hot) {
   import.meta.hot.accept();
   import.meta.hot.dispose(() => {
     disposed = true;
+    clearPendingMask();
     app?.dispose();
     app = null;
   });

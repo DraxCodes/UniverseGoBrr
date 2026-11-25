@@ -1,5 +1,5 @@
 import { describeAdapter, type GpuContext } from '../gpu/device';
-import { formatAddress, type Address } from '../frame/address';
+import { formatAddress, sameAddress, type Address } from '../frame/address';
 import type { Vec3 } from '../frame/position';
 import { AU_M } from '../universe/system';
 import { bearingOf } from '../universe/navigation';
@@ -36,6 +36,7 @@ export interface HudHandlers {
 export interface Hud {
   setStatus(text: string): void;
   setGpu(gpu: GpuContext): void;
+  setAddress(address: Address): void;
   setClock(timeSeconds: number, pinned: boolean): void;
   setCamera(camera: Camera): void;
   /** What the scene exaggerates, e.g. "M-type star · 8 planets · bodies drawn ×353–×1019". */
@@ -47,12 +48,15 @@ export interface Hud {
   setFps(fps: number): void;
   /** Transient control feedback (e.g. "max zoom"); auto-hides. */
   notice(text: string): void;
+  /** Hide any active transient notice immediately (e.g. on Back/Forward navigation). */
+  clearNotice(): void;
 }
 
 export function mountHud(
   state: UrlState,
   issues: readonly string[],
   handlers: HudHandlers,
+  initialAddress: Address = state.address,
 ): Hud {
   const statusEl = byId('hud-status');
   const seedEl = byId('hud-seed');
@@ -74,6 +78,7 @@ export function mountHud(
   const urlIssues = [...issues];
   let shaderError: string | null = null;
   let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+  let displayedAddress = initialAddress;
   let camera = state.camera;
   let entries: readonly CompassEntry[] = [];
   /** The rows whose bearing text is rewritten on every camera change. */
@@ -96,7 +101,7 @@ export function mountHud(
    */
   function renderAddress(): void {
     addressEl.textContent = '';
-    const atRoot = state.address.levels.length === 0;
+    const atRoot = displayedAddress.levels.length === 0;
     const segment = (text: string, depth: number | null): void => {
       if (addressEl.childElementCount > 0) {
         const slash = document.createElement('span');
@@ -116,7 +121,7 @@ export function mountHud(
       button.type = 'button';
       button.className = 'hud__crumb';
       button.textContent = text;
-      button.title = `zoom out to v${state.address.version}/${state.address.levels
+      button.title = `zoom out to v${displayedAddress.version}/${displayedAddress.levels
         .slice(0, depth)
         .join('.')}`;
       button.addEventListener('click', () => handlers.zoomOut(depth));
@@ -124,10 +129,10 @@ export function mountHud(
     };
 
     // At the root there is no level to be "here", so the version itself is the current place.
-    segment(`v${state.address.version}`, atRoot ? null : 0);
-    state.address.levels.forEach((level, index) => {
+    segment(`v${displayedAddress.version}`, atRoot ? null : 0);
+    displayedAddress.levels.forEach((level, index) => {
       const depth = index + 1;
-      const isCurrent = depth === state.address.levels.length;
+      const isCurrent = depth === displayedAddress.levels.length;
       segment(String(level), isCurrent ? null : depth);
     });
   }
@@ -275,6 +280,11 @@ ${mode === 'fixed' ? 'naive' : 'fixed'} · ${other.spreadPx.toFixed(0)} px · ${
     setGpu(gpu) {
       gpuEl.textContent = describeAdapter(gpu.info);
     },
+    setAddress(next) {
+      if (sameAddress(displayedAddress, next)) return;
+      displayedAddress = next;
+      renderAddress();
+    },
     setClock,
     setCamera,
     setScene,
@@ -295,6 +305,13 @@ ${mode === 'fixed' ? 'naive' : 'fixed'} · ${other.spreadPx.toFixed(0)} px · ${
         noticeTimer = null;
         noticeEl.hidden = true;
       }, 1200);
+    },
+    clearNotice() {
+      if (noticeTimer !== null) {
+        clearTimeout(noticeTimer);
+        noticeTimer = null;
+      }
+      noticeEl.hidden = true;
     },
   };
 }

@@ -2,7 +2,7 @@
 
 **Status:** draft for review (2026-11-23)
 **Directory:** `docs/issues/` (tracked: spec, tickets, gates)
-**Decisions:** see `docs/adr/0001`-`0019` (index: `docs/adr/README.md`)
+**Decisions:** see `docs/adr/0001`-`0020` (index: `docs/adr/README.md`)
 
 ## 1. What this is
 
@@ -96,29 +96,40 @@ Universe span ~10²⁶ m; human detail ~10⁰ m. No single float representation 
 ### 3.2 Travel (ADR-0003)
 
 Travel tiers are **frame rebases**, and the visual is the mask for the swap. A **tier** is the rung
-crossed; a **method** is what you ride across it, and it is **the traveller's choice** (ADR-0019) —
-a slower method is always allowed, it is simply slower:
+crossed; a **method** is what you ride across it, and it is **the traveller's choice** (ADR-0019).
+**Any method works for any trip** at or above the system rung — the column below says where each is
+the *sensible* choice, not where it is permitted:
 
-| Method | Natural rung | Effect | Time |
+| Method | Cheapest at (advice) | Effect | Time |
 | --- | --- | --- | --- |
-| Free flight | within a frame | continuous, no effect | real time; `t` follows the clock |
+| Free flight / sublight | inside one system | continuous, no effect | real time; `t` follows the clock |
 | Warp | system → system | star streaks | `Δt = d / v` |
 | Transwarp / slipstream | sector → sector | tunnel / slipstream | `Δt = d / v` |
 | Hyperspace | galaxy → different galaxy | aperture / hyperspace tunnel | `Δt = d / v` |
 | Wormhole | any → any | a mouth, then arrival | **fixed `Δt`**, then instant |
 
+The one hard range rule is **upward**: a trip between bodies of the same system is sublight. Warp is
+permitted there but is effectively instant, so it is a convenience rather than a tier.
+
 Vocabulary (and octree levels): **universe → galaxy → sector → system → body.** *Quadrant* is a
 synonym for sector in copy, not a separate rung. A sector is an address level, so it is linkable
-(ADR-0018).
+(ADR-0018); it is an **angular slice** of the disc, and a galaxy has **1–6** of them derived from its
+size.
 Free flight is preserved inside every frame. Warping to an arbitrary empty point is
 supported, and requires a **navigation compass** (bearing + distance to nearest anchors, a
 pin on where you came from, a return breadcrumb) or the void is simply disorienting.
 
 Travel advances `t` by **`Δt = d / v(method)`** (ADR-0010): the distance actually travelled in the
-parent frame, divided by the method's speed. A 5 ly warp and a 500 ly transwarp can therefore both
-take five days. Camera gestures are not travel and never advance the clock; effect duration (screen
-time) and elapsed time (universe time) are different numbers. A distance requires every node to have
-a position in its parent frame, so this also fixes `placement(seed, address)` as content.
+parent frame, divided by the method's speed. Camera gestures are not travel and never advance the
+clock; effect duration (screen time) and elapsed time (universe time) are different numbers. A
+distance requires every node to have a position in its parent frame, so this also fixes
+`placement(seed, address)` as content.
+
+**Speeds are derived from times, never chosen** (ADR-0020). The anchor is how long a crossing should
+take; `v = d / Δt_anchor` follows. Because `d` and `v` scale together, **making the universe bigger
+changes no crossing time** — so scale is free, and raising speed alone would make the universe feel
+*smaller*, not larger. The values in `travel.ts` today are superseded; the size law and the time
+anchors must be settled before a new table is written.
 
 **A wormhole is the one exception** (ADR-0019): it costs a fixed amount of universe time whatever the
 distance, because the cost is entering the mouth, not crossing the gap. Galaxy-to-galaxy is the first
@@ -300,10 +311,12 @@ population** by class (emission, reflection, planetary, dark) for abundance.
    loop"? The owner's stated priority is base structure first, which argues for including it. What a
    *sector* is geometrically, and how many a galaxy has, is also still open (ADR-0018 fixed the rung,
    not the shape). Brief: `tickets/06-universe-scale.md`.
-7. **Absolute travel speeds** - the owner's timescale anchors (warp: a quadrant in a week;
-   transwarp: the same in an hour; hyperspace: a galaxy in about an hour) do **not** fit the table
-   confirmed on 2026-11-24. Warp at 1 ly/day would take ~96 years to cross a quadrant, so the table
-   needs superseding, not extending. Derivation in `tickets/06-universe-scale.md`.
+7. **Absolute travel speeds** - **Answered in shape (ADR-0020): speeds are derived from time anchors,
+   not chosen**, so scale is free and the current `travel.ts` table is superseded. What remains open
+   is the **short-trip anchor**: at a week-per-diameter, a 5 ly hop costs seconds. Derivation in
+   `tickets/06-universe-scale.md`.
+8. **Galaxy names** - a curated real-name list, procedurally generated names, or a mix? Deterministic
+   either way, and never in the link (ADR-0008).
 
 ## 9. Idea backlog (captured, not committed)
 

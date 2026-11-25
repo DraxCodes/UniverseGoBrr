@@ -2,9 +2,9 @@
 
 Updated: 2026-11-25
 Name: **Cairn** (ADR-0016). Licence: MIT (ADR-0017). GitHub: `DraxCodes/cairn`.
-Update 12: the universe step is owned (`tickets/06-universe-scale.md`), a **sector is an address
-level** (ADR-0018) and **travel method is a choice** with a fixed-cost wormhole (ADR-0019). Roadmap
-row **4b** (many galaxies) sits before nebulae.
+Update 12: the universe step is owned (`tickets/06-universe-scale.md`); a **sector is an address
+level** and a 1–6 slice (ADR-0018); **any travel method works for any trip** (ADR-0019); and
+**scale and speed are decoupled** (ADR-0020). Roadmap row **4b** (many galaxies) sits before nebulae.
 Branch: `main` — the Layer 3 line, now including Sol, the shipped visual pass and the Layer 4 lanes
 so far. The `wip/layer-3` line, the two Neon handoff branches and the five review worktrees were
 merged and removed on 2026-11-25; `main` is the only branch on `origin`. Tag
@@ -199,14 +199,22 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
 
 - **A galaxy has sectors, and a sector is an address level** (ADR-0018, owner 2026-11-25). The
   ladder is **universe → galaxy → sector → system → body**; *quadrant* is a synonym in copy. A sector
-  is linkable, which is the feature: "send me the link to that sector". Every address re-keys and Sol
-  moves one level deeper — accepted because nothing has shipped, expensive the moment a public link
-  exists.
-- **Travel method is the traveller's choice, not a derived consequence** (ADR-0019, owner
-  2026-11-25). The ladder is free flight → warp → transwarp → hyperspace → wormhole; a coarser method
-  is always allowed and simply slower, and the UI prices one destination in every method.
-  `subspace` is retired as a method name in favour of **hyperspace**. **A wormhole costs a fixed `Δt`**
-  whatever the distance — the one carve-out to ADR-0010. Absolute speeds stay open (ticket 06).
+  is an **angular slice** of the disc, and a galaxy has **1 to 6** of them by size — 1 for a very
+  small galaxy, 4 for a Milky-Way-sized one, 6 for the largest. A sector is linkable, which is the
+  feature: "send me the link to that sector". Every address re-keys and Sol moves one level deeper —
+  accepted because nothing has shipped, expensive the moment a public link exists.
+- **Travel method is the traveller's choice, and any method works for any trip** (ADR-0019, owner
+  2026-11-25). Warp, transwarp, hyperspace and wormhole can all take you star-to-star, sector-to-sector
+  or galaxy-to-galaxy; they differ in cost, not permission. The only range rule is **upward**: inside
+  one system, sublight is the norm and warp there is effectively instant. `subspace` is retired as a
+  method name in favour of **hyperspace**. **A wormhole costs a fixed `Δt`** whatever the distance —
+  the one carve-out to ADR-0010.
+- **Scale and speed are decoupled; crossing *time* is the invariant** (ADR-0020, owner 2026-11-25).
+  Speeds are **derived** from time anchors (`v = d / Δt`), never chosen directly, so growing the
+  universe changes no experience. Corollary the owner asked for: raising speed does **not** stop a
+  universe feeling small — it makes it feel smaller. The 2026-11-24 speed table is **superseded**;
+  warp needs to be ~15,000× faster for "a diameter in a week". What remains open is the short-trip
+  anchor.
 - **The universe step was never owned; it is now** (owner 2026-11-25, `tickets/06-universe-scale.md`).
   Spec §3.2's vocabulary had no galaxy rung while `GALAXY_DEPTH = 1` invented one, so galaxy-to-galaxy
   travel existed only as a refusal reason ("no root layout") and never as a deliverable. A refused
@@ -400,9 +408,11 @@ The decision record is tracked, so a clone on another machine is enough to resum
 
 - **Does V1 include many galaxies (4b)?** The owner's stated priority is base structure first; the
   V1 statement still describes one galaxy. Owner's call, not a technical one.
-- **Sector geometry and count** (ADR-0018 fixed the rung, not the shape).
-- **Absolute travel speeds** — the owner's timescale anchors do not fit the table confirmed on
-  2026-11-24; warp would need to be ~5,000× faster. Derivation in `tickets/06-universe-scale.md`.
+- **Sector angular offset** — the count is settled at 1–6 by size; where slice zero begins is not.
+- **Absolute travel speeds** — superseded in shape by ADR-0020 (speeds derive from time anchors), so
+  the open question is the **short-trip anchor**, not the long one. A 5 ly hop is seconds at
+  week-per-diameter.
+- **Galaxy names** — curated real names, generated names, or a mix.
 - Should the galaxy shot go into the README now (captioned "in progress") or wait for the Layer 3
   commit? **Answered: shipped**, the README carries the previews.
 - Root `LICENSE`: **Answered** - MIT, `LICENSE` at the root (ADR-0017).

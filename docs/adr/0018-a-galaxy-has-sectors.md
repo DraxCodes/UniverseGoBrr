@@ -17,6 +17,11 @@ where a star sits inside the disc.
 The ladder is **universe → galaxy → sector → system → body**. *Quadrant* is a synonym in copy, not a
 separate rung. A sector is addressable and linkable, exactly like a galaxy or a star.
 
+**A sector is an angular slice of the disc**, and a galaxy has **between 1 and 6** of them, derived
+from its generated size rather than chosen per link: a very small galaxy gets 1 (there is nothing
+meaningful to split), a Milky-Way-sized one gets 4, and larger ones 5 or 6. Six is the ceiling, so the
+rung never needs more than one digit.
+
 ## Options considered
 
 | Option | Effect | Verdict |
@@ -38,5 +43,13 @@ separate rung. A sector is addressable and linkable, exactly like a galaxy or a 
   because a level could not say what it was (ADR-0008) — is retired when this lands.
 - **The unbounded property is unaffected.** ADR-0008's address stays unbounded and depth-free; this
   names one more rung, it does not impose a fixed depth.
-- **Nothing here decides a sector's shape or count.** The sector is a rung, not a geometry. How many
-  a galaxy has, and whether one is a wedge or a box, is the level model's work (ticket 06).
+- **The sector count is content, not a setting.** It is `f(seed, address)` like everything else, and
+  it must be **stable for a given galaxy**: if a generator change altered how many sectors a galaxy
+  has, every link into it would re-key. That makes it a `GALAXY_VERSION` event, not a free tweak.
+- **A one-sector galaxy is the degenerate case, and it must work.** The slice law has to be total at
+  `n = 1` — the sector *is* the disc — or small galaxies will be the thing that crashes the level
+  model.
+- **A sector spans the whole disc radially**, so the longest intra-galactic trip is roughly the
+  diameter, not a fraction of it. That is what the travel anchors are measured against.
+- **Nothing here decides the angular offset.** Where slice zero begins is part of the size law, not
+  of the rung, and it has to be deterministic or the same sector would have two names.

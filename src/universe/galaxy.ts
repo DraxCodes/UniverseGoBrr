@@ -75,15 +75,20 @@ export type { Vec3 } from './disc';
  * the bulge uses a smooth spherical radial falloff, disc luminosity weights toward arm tracers, and
  * stars span a warm amber-gold core/lane palette through warm cream arms to pale blue-white OB
  * tracers (driven by intrinsic `base` brightness rather than post-taper luminosity).
+ *
+ * 7 → 8: raised rich-tier disc population from 40,000 to 55,000 (within the 60,000 ceiling) and
+ * rebalanced disc emission (`0.73 * base^0.42` in the disc, `0.72 * base` in the bulge, keeping
+ * `base` for colour and size) so faint arm stars connect into continuous bands without blowing
+ * out the core, losing hue separation, or filling inter-arm lanes (Layer 3 iteration 3).
  */
-export const GALAXY_VERSION = 7;
+export const GALAXY_VERSION = 8;
 
 export type GalaxyTier = 'rich' | 'medium' | 'low';
 
 /** The renderer's star budget. Each tier is a prefix of the richer tier's address list. */
 export const GALAXY_TIER_STARS: Readonly<Record<GalaxyTier, { local: number; disc: number }>> =
   Object.freeze({
-    rich: Object.freeze({ local: 5000, disc: 40000 }),
+    rich: Object.freeze({ local: 5000, disc: 55000 }),
     medium: Object.freeze({ local: 2500, disc: 20000 }),
     low: Object.freeze({ local: 1600, disc: 12000 }),
   });
@@ -243,7 +248,8 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
       const radialFrac = placed.fromCentre / radius;
       const armLum = placed.inBulge ? 1 : 0.16 + 0.84 * placed.armMix ** 1.45;
       const radialScale = placed.inBulge ? bulgeProfile(radialFrac) : discCoreTaper(radialFrac);
-      const brightness = clampUnit(Math.max(0.008, base * radialScale * armLum));
+      const emitBase = placed.inBulge ? base * 0.72 : Math.pow(base, 0.42) * 0.73;
+      const brightness = clampUnit(Math.max(0.008, emitBase * radialScale * armLum));
       const size = placed.inBulge
         ? 0.85 + Math.min(1, base) * 0.65
         : 0.55 + base * (0.75 + 0.35 * placed.armMix);

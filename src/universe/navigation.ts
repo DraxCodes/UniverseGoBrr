@@ -35,9 +35,9 @@
  * with no motion, which is the worst of both. So v1 offers exactly one honest target: the galaxy
  * this address belongs to, which is where the picture genuinely is a different scale.
  *
- * The root is refused rather than approximated: nothing outside a galaxy is placed yet, so
- * "the whole universe" has no position to stand at (the same gap that refuses a cross-galaxy
- * travel).
+ * The root is refused rather than approximated: `galaxyPosition` now places each galaxy (ticket 06,
+ * item 3), so a cross-galaxy *travel* has a distance - but there is still no root **scene** to zoom
+ * out into, so "the whole universe" remains a destination without a view.
  *
  * Free is deliberate. A zoom-out changes the address but is not a journey: no universe time passes
  * (ADR-0013). It still gets a history entry, because Back retraces places and this is one.
@@ -190,8 +190,8 @@ export function planZoomOut(from: Address, depth: number): ZoomOutPlan {
     return {
       ok: false,
       reason:
-        'levels do not carry a scale yet, so dropping one would swap the scene without moving; ' +
-        'the galaxy is the only frame it is honest to zoom out to',
+        'the galaxy is the only rung with a scene to zoom out to so far; a sector is a real ' +
+        'address level but its view is ticket 06 item 2, not built yet',
     };
   }
   return { ok: true, address: ancestorAddress(from, depth) };

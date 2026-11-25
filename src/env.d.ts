@@ -37,6 +37,20 @@ interface UniverseTravelResult {
   elapsedS: number | null;
 }
 
+interface UniverseTravelPreview {
+  ok: boolean;
+  from: string;
+  to: string;
+  method: 'impulse' | 'warp' | 'transwarp' | 'hyperspace' | 'wormhole' | null;
+  distanceM: number | null;
+  elapsedS: number | null;
+  costs: ReadonlyArray<{
+    method: 'impulse' | 'warp' | 'transwarp' | 'hyperspace' | 'wormhole';
+    elapsedS: number | null;
+  }>;
+  reason: string | null;
+}
+
 interface UniverseNavigationResult {
   ok: boolean;
   reason: string | null;
@@ -77,6 +91,8 @@ interface UniverseDebug {
   forceSlowFrames(frames: number): void;
   /** Commit a travel to `to`; the compass rows call the same path. */
   travel(to: string): UniverseTravelResult;
+  /** Plan a travel without committing it, pricing every method (ADR-0019). */
+  planTravel(to: string, method?: string): UniverseTravelPreview;
   /** Follow an address line: free zoom-out to that ancestor depth (ADR-0013). */
   zoomOut(depth: number): UniverseNavigationResult;
   /** The compass rows the HUD is showing, in order. */

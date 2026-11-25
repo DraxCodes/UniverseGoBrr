@@ -42,6 +42,7 @@
 import { sameAddress, type Address } from '../frame/address';
 import { GALAXY_DEPTH, LY_M, galaxyAddressOf } from './disc';
 import { galaxyPosition } from './layout';
+import { SYSTEM_DEPTH } from './levels';
 import { placement, starKind } from './placement';
 
 const SECONDS_PER_DAY = 86_400;
@@ -105,14 +106,37 @@ function rootDistance(seed: string, from: Address, to: Address): number | null {
  * The recommended method for a crossing between two places in the same galaxy.
  *
  * Symmetric on purpose: a trip that touches the disc is a transwarp both ways, so going there and
- * coming back cannot pick two different speeds. Kept as the local-field-versus-disc heuristic until
- * the sector rung is actually populated; the ladder will replace it with the rung crossed, and the
- * change is one function body.
+ * coming back cannot pick two different speeds.
+ *
+ * **The one hard rule (ADR-0019 §3): inside one solar system, sublight.** Two addresses that agree
+ * down to the system rung are two bodies of one system, and the sensible choice there is impulse.
+ * Above that the recommendation falls back to the local-field-versus-disc heuristic until the sector
+ * rung is populated; the ladder will replace that fallback with the rung crossed, and only the body
+ * of the `else` branch changes.
  */
 export function methodForPair(from: Address, to: Address): TravelMethod {
+  if (sameSystem(from, to)) return 'impulse';
   const inDisc = (address: Address): boolean =>
     address.levels.length > GALAXY_DEPTH && starKind(address) === 'disc';
   return inDisc(from) || inDisc(to) ? 'transwarp' : 'warp';
+}
+
+/**
+ * Whether two addresses are bodies of the **same** system: they agree on every level down to and
+ * including `SYSTEM_DEPTH` (`v1/0.0.0.1` and `v1/0.0.0.2` are two bodies of system `v1/0.0.0`).
+ *
+ * Both must be at least a body for this to mean anything; a system compared with itself is not two
+ * bodies, so that case answers false and falls through to the galaxy-level advice.
+ */
+function sameSystem(from: Address, to: Address): boolean {
+  // Both must at least *be* a system; a star one rung up has no system to belong to.
+  if (from.levels.length < SYSTEM_DEPTH || to.levels.length < SYSTEM_DEPTH) return false;
+  // And at least one must be a body inside it, or these are the same node rather than two bodies.
+  if (from.levels.length === SYSTEM_DEPTH && to.levels.length === SYSTEM_DEPTH) return false;
+  for (let i = 0; i < SYSTEM_DEPTH; i += 1) {
+    if (from.levels[i] !== to.levels[i]) return false;
+  }
+  return true;
 }
 
 /** How long `method` takes over a crossing of `distanceM`, or `null` if it has no cost model. */

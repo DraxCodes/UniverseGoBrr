@@ -132,6 +132,24 @@ window.__ugb = {
   travel(to: string) {
     return commitTravel(to);
   },
+  /** Plan a travel without committing it, so a probe can price every method (ADR-0019). */
+  planTravel(to: string, method?: string) {
+    const parsed = parseAddress(to);
+    if (!parsed.address) {
+      return { ok: false, from: '', to, method: null, distanceM: null, elapsedS: null, costs: [], reason: parsed.issue ?? 'not an address' };
+    }
+    const plan = planTravel(state.seed, state.address, parsed.address, method);
+    return {
+      ok: plan.reason === null,
+      from: formatAddress(state.address),
+      to: formatAddress(parsed.address),
+      method: plan.method,
+      distanceM: plan.distanceM,
+      elapsedS: plan.elapsedS,
+      costs: plan.costs,
+      reason: plan.reason,
+    };
+  },
   /** Follow an address line: free zoom-out to the galaxy (ADR-0013). */
   zoomOut(depth: number) {
     return commitZoomOut(depth);

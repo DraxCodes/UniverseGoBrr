@@ -144,12 +144,12 @@ describe('planZoomOut', () => {
     expect(plan.reason).toContain('already are');
   });
 
-  it('refuses a finer level, because levels carry no scale yet', () => {
+  it('refuses a finer level, naming the sector view as not built', () => {
     const deep = parseAddressOrThrow('v1/0.3.1');
     const plan = planZoomOut(deep, 2);
     expect(plan.ok).toBe(false);
     if (plan.ok) return;
-    expect(plan.reason).toContain('scale');
+    expect(plan.reason).toContain('sector');
   });
 
   it('refuses a level an address does not have', () => {

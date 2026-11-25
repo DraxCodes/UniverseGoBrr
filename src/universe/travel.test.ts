@@ -46,6 +46,20 @@ describe('methodForPair', () => {
       'transwarp',
     );
   });
+  it('recommends sublight inside one system, because it is the one hard rule', () => {
+    // Bodies of system v1/0.0.0: two different planets (or a planet and a moon).
+    expect(methodForPair(parseAddressOrThrow('v1/0.0.0.1'), parseAddressOrThrow('v1/0.0.0.2'))).toBe(
+      'impulse',
+    );
+    // Still sublight between a body and its own system's star.
+    expect(methodForPair(parseAddressOrThrow('v1/0.0.0'), parseAddressOrThrow('v1/0.0.0.3'))).toBe(
+      'impulse',
+    );
+    // But a *different* system is not inside one system, so the galaxy advice applies.
+    expect(methodForPair(parseAddressOrThrow('v1/0.0.0.1'), parseAddressOrThrow('v1/0.0.5.1'))).not.toBe(
+      'impulse',
+    );
+  });
 });
 
 describe('planTravel', () => {

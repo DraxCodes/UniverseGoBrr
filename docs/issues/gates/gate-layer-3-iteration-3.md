@@ -2,7 +2,8 @@
 
 Recorded 2026-11-25. Scored by the `quality-gatekeeper` seat (read-only) against
 `council-layer-3.md` §10, spec §7 row 3 and issue 04 D1–D8. Brief:
-`gate-layer-3-iteration-3-brief.md`. Ledger: `base run show <id>` (score 8, evidence hashed).
+`gate-layer-3-iteration-3-brief.md`. Ledger: `base run show 20261125T021249-a62f2277`
+(score 8, evidence hashed).
 Branch scored: `agent/antigravity-layer3-density` at `e237545`, from `ae909ba` (iteration 2).
 Merged as `87ddcc1` (no-ff) once the score landed.
 

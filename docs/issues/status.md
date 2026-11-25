@@ -1,13 +1,14 @@
 # Status — Layer 3: star field and galaxy
 
 Updated: 2026-11-25
-Branch: `wip/layer-3` - the Layer 3 line, now including Sol and the shipped visual pass. `main`
-carries the docs reorg and is still Layer 2. Tag `pin/layer-3-assessment` marks `566a303`, the code
-state the first gate scored 6/10, and stays there; the merge changed no source file. The visual pass
-is merged on `wip/layer-3` as `87ddcc1` and scored 8/10.
+Branch: `main` — the Layer 3 line, now including Sol, the shipped visual pass and the Layer 4 lanes
+so far. The `wip/layer-3` line, the two Neon handoff branches and the five review worktrees were
+merged and removed on 2026-11-25; `main` is the only branch on `origin`. Tag
+`pin/layer-3-assessment` marks `566a303`, the code state the first gate scored 6/10, and stays there;
+the merge changed no source file. The visual pass is `87ddcc1` and scored 8/10.
 Working tree: clean except `opencode.json` (user work — do not commit, do not revert).
-Pushed: both `main` and `wip/layer-3` are on `origin`. The tag `pin/layer-3-assessment` is local
-only — it is the gate's fixed point, not a release.
+Pushed: `main` only. The tag `pin/layer-3-assessment` is local only — it is the gate's fixed point,
+not a release.
 For exact commit ids, read `git log --oneline -5`; this file deliberately does not pin them.
 
 **The owner's dashboard is `public/status.html`, linked from the HUD ("status ↗").** It is a
@@ -23,8 +24,8 @@ structure is checked by `src/status-page.test.ts`; its content is the owner's to
   rejection sampling into the arm, `INTER_ARM_FRACTION 0.08`, `ARM_FLOOR 0.05`, `GALAXY_VERSION 2`.
   Rendered m=2 is 0.334 / 0.313 / 0.302 at 2.6 / 3.0 / 3.4 R.
 - Local field now collapses into the home star (`LOCAL_CONVERGENCE_MIN_PX 1.5 → FULL_PX 8`); the
-  hard white disc at frame centre is gone. See `docs/notes/galaxy-local-field-collapse.md` (on
-`wip/layer-3`; the behaviour it describes is not on `main` yet).
+  hard white disc at frame centre is gone. See `docs/notes/galaxy-local-field-collapse.md` (the
+  behaviour it describes is on `main` since the 2026-11-25 merge).
 - Corona handoff: `STAR_MIN_PX 3.4`, `fs_star` boost `mix(1.0, 1.9)` over `smoothstep(0.45, 0.85,
   lod)`, exactly 1.0 at orrery scale so Layer 2 is untouched.
 - Evidence: 19/19 captures, 81-step live handoff (`decreases 0`, 2 notches, one scene-row swap),
@@ -318,7 +319,8 @@ The decision record is tracked, so a clone on another machine is enough to resum
 - `base doctor` — no errors; `docs.issues: docs/issues`, the doc tree and the ADR index check clean.
 - Doc path check — backticked refs that look like paths (one or more slashes plus a file extension),
   resolved against the repo root or the file's own directory, over the project markdown files (`docs/`
-  plus `AGENTS.md`, `README.md`, `GLOSSARY.md`). On `main`: 177 refs across 46 files, 10 unresolved
+  plus `AGENTS.md`, `README.md`, `GLOSSARY.md`). Checked **before the 2026-11-25 merge**, when the
+  branch names below were still current. On `main`: 177 refs across 46 files, 10 unresolved
   and all accounted for — 6 name Layer 3 files that exist only on `wip/layer-3`, 2 are `AGENTS.md`
   skill references rather than repo paths, 2 are version strings in a ticket that the pattern mistakes
   for paths. On `wip/layer-3`: 181 refs across 47 files, and the same 4 remain — the two skill

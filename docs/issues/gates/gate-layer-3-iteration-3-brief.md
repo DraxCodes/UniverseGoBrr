@@ -87,16 +87,18 @@ star and 0.7828 next-brightest at the nucleus, both inside the 0.93 channel clam
 
 ## Evidence
 
-Images (chair's build, `C:\Users\joelp\code\UniverseGoBrr-density\.scratch\captures\`):
+Images (chair's build, then at `C:\Users\joelp\code\UniverseGoBrr-density\.scratch\captures\`;
+the review worktrees were removed on 2026-11-25 and the set now lives at
+`.scratch/evidence/layer3-iter3/captures/` in the main tree):
 `layer3-galaxy-1080p.png`, `-1440p`, `-2160p`, `-2160p-scaled`, `layer3-arm-edge-2160p.png`
 (900×600 native 1:1, cut at (2061,736) of the 4K frame), `layer3-home-star-1080p.png` (600×380
 native 1:1, cut at (764,375); the star is at crop (196,164)), `layer2-orrery.png`,
 `layer3-sol-1080p.png`, `layer1-precision-fixed.png` / `-naive.png`.
 
 960 px review copies and native crops: `.scratch/visual-review/layer3-iter3/`.
-Measured 12-seed report: `.scratch/layer3-density/metrics.json`; before column
-`.scratch/before-check/metrics.json`, and `ae909ba`'s own captures remain in
-`..\UniverseGoBrr-review\.scratch\captures\`.
+Measured 12-seed report: `.scratch/evidence/layer3-iter3/layer3-density/metrics.json`; before column
+`.scratch/evidence/layer3-iter3/before-check/metrics.json`, derived from `ae909ba`'s captures (that
+build remains reachable in history at `ae909ba`, an ancestor of the shipped merge).
 
 ## Blindspot pass (untrusted; chair adjudicated)
 

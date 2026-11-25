@@ -12,7 +12,7 @@ checkout. Nothing isolates it: same filesystem, same Windows user, same `.git`.
    edits). A `git add -A` from a second agent commits it. Stage by path, or stash it before handover.
 3. **`.opencode/` is generated** (`agents/`, `commands/`, `skills/`, `packs/`, `tools/`). Edits there
    are drift and the next `base update` erases them. Same for the managed block in `AGENTS.md`.
-4. **Branches are per agent.** `wip/layer-3` is the owner's line. A second agent gets
+4. **Branches are per agent.** `main` is the owner's line. A second agent gets
    `agent/<tool>-<task>`, branched from the exact commit it was handed — never from `main` when the
    work belongs on top of an unmerged branch.
 5. **Ports:** 5173 is dev (iterate), 4173 serves `dist` for `npm run capture` and needs a build

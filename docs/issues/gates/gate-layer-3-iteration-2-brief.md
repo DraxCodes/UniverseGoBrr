@@ -59,7 +59,9 @@ same tool on a fresh `33166f6` build for the "before" column. Every number below
 
 ## Evidence
 
-Images (chair's build, `C:\Users\joelp\code\UniverseGoBrr-review\.scratch\captures\`):
+Images (chair's build, then at `C:\Users\joelp\code\UniverseGoBrr-review\.scratch\captures\`; that
+worktree was removed on 2026-11-25 — rebuild from `ae909ba`, which stays reachable as an ancestor of
+the shipped merge):
 `layer3-galaxy-1080p.png`, `-1440p`, `-2160p`, `-2160p-scaled`, `layer3-arm-edge-2160p.png`
 (900×600 native 1:1), `layer3-home-star-1080p.png` (600×380 native 1:1), `layer2-orrery.png`,
 `layer3-sol-1080p.png`, `layer1-precision-fixed.png` / `-naive.png`.

@@ -255,6 +255,12 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
   anchors. Consequence: crossing a galaxy at warp takes **7 real days** at ×1, so time acceleration is
   a dependency of the feature. The owner has parked it and accepted that a later implementation may be
   heavy to change; the reason it is recorded anyway is so nobody designs *against* it by accident.
+- **V1 includes multiple galaxies** (owner, 2026-11-25). V1 is roadmap rows 0–4 plus **4b**. The
+  product's claim is a universe, and "one galaxy" would meet the old statement's letter while missing
+  what it pointed at. Nebulae (5) and surfaces (6) stay after V1. This closes the last scope question
+  in ticket 06; what remains open there is sector geometry, not scope.
+- **Neon's tier masks have returned** (owner, 2026-11-25) and are on `agent/antigravity-tier-masks`.
+  Review is the next action; the gate has not run yet.
 - **A light you can resolve is a place you can go** (ADR-0022, owner 2026-11-25). Distant galaxies and
   stars share one appearance continuum — **resolved** (arms, a bar: unmistakably a galaxy), **smudge**,
   and **point** (a dot, indistinguishable from a star). The point tier is deliberately ambiguous and is
@@ -434,9 +440,7 @@ The decision record is tracked, so a clone on another machine is enough to resum
 
 ## Open questions
 
-- **Does V1 include many galaxies (4b)?** The owner's stated priority is base structure first; the
-  V1 statement still describes one galaxy. Owner's call, not a technical one.
-- **Sector angular offset** — the count is settled at 1–6 by size; where slice zero begins is not.
+- **Sector angular offset** - the count is settled at 1-6 by size; where slice zero begins is not.
 - **Absolute travel speeds** — superseded in shape by ADR-0020 (speeds derive from time anchors), so
   the open question is the **short-trip anchor**, not the long one. A 5 ly hop is seconds at
   week-per-diameter.

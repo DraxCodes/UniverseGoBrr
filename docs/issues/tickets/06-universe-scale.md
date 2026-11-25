@@ -145,9 +145,7 @@ permission. The only restriction is upward: inside one system, sublight is the n
 
 ## Open questions
 
-- **V1 scope.** Does V1 include this layer, or does V1 stay "one galaxy, complete loop"? The owner's
-  stated priority is base structure first, which argues for including it; that is a scope decision,
-  not a technical one.
+- **V1 scope.** **Answered: V1 includes this layer** (owner, 2026-11-25). Rows 0-4 plus 4b.
 - **Sector geometry and count.** ADR-0018 settled that a sector is *a rung*; it did not settle how
   many a galaxy has or whether one is a wedge, a box or a shell. This is the first thing the level
   model must answer, because travel selection depends on it.

@@ -291,6 +291,10 @@ Layer 2) can pick a model by whether it names the flaws a human eye sees.
 
 ## 7. Roadmap
 
+**V1 scope (owner, 2026-11-25): V1 includes multiple galaxies.** Rows 0-4 plus **4b** are V1. The
+product's own claim is a universe, and shipping "one galaxy" would meet the letter of the old statement
+while missing the thing it was pointing at. Nebulae (5) and surfaces (6) remain after V1.
+
 | Layer | Deliverable | Why this order |
 | --- | --- | --- |
 | 0 | **Dev loop** — Vite, HMR, shader hot reload, seed+epoch in URL, pinned `t`, capture harness; `open: false`, `strictPort: true`, no module-scope side effects (`docs/notes/vite-multiple-tabs.md`) | Multiplies everything after it |
@@ -298,7 +302,7 @@ Layer 2) can pick a model by whether it names the flaws a human eye sees.
 | 2 | **One procedural star system** — star shader, orbits, lit planets, atmospheres, rotation | First screenshot; proves the foundation |
 | 3 | **Star field + one galaxy** - instanced impostors; a cell-keyed local field plus a disc/bulge/arm population; `displayRadiusM` compresses emptiness, not structure; the crossfade order is rings → point → arm → disc, with the home star findable at 1:1. Council: `council-layer-3.md`; brief: `tickets/04-layer-3-star-field-and-galaxy.md`. **Sol (§3.6) is built** as the first authored node, at `v1/0.0.0` (ADR-0009), captured as `layer3-sol-1080p`. The address HUD **moved to Layer 4** - it is half of the navigation compass. | Scale made real |
 | 4 | **Travel tiers** - frame rebases, warp effects, navigation compass. Council **convened and decided 2026-11-24** at `014c312`: **A, address-origin frames, rebasing on tier crossings only**; a tier crossing is a **journey**; **time advances by `d / v(method)`** (ADR-0010), which entails `placement(seed, address)`; the focus rebase is gated on the approach probe. **The address grid is the world and the picture is a view of its occupied cells** (ADR-0011), so every drawn star is visitable and a galaxy is keyed on its own level. Thesis and dissent: `council-layer-4.md`; brief: `tickets/05-layer-4-travel.md`. | The core loop |
-| **4b** | **Universe scale** - the missing rung. Sectors become an address level (ADR-0018), galaxies get a **root layout** so a galaxy-to-galaxy distance exists, a **galaxy variation law** (arms, pitch, bar, bulge, halo, dust, colour) so a field of galaxies does not read as one law ten times, galaxy naming, and a multi-galaxy render set **selected by apparent brightness** while addressable density stays full. Travel becomes a choice priced per method (ADR-0019). Brief: `tickets/06-universe-scale.md`. | **The expansive-universe step, and the owner's stated priority.** It was never owned - see the ticket's opening section |
+| **4b** | **Universe scale** - the missing rung. Sectors become an address level (ADR-0018), galaxies get a **root layout** so a galaxy-to-galaxy distance exists, a **galaxy variation law** (arms, pitch, bar, bulge, halo, dust, colour) so a field of galaxies does not read as one law ten times, galaxy naming, and a multi-galaxy render set covering the **resolved / smudge / point** tiers (ADR-0022) while addressable density stays full. Travel becomes a choice priced per method (ADR-0019), and **coverage** - every address reachable - is the done-criterion. Brief: `tickets/06-universe-scale.md`. | **The expansive-universe step, in V1 by owner decision 2026-11-25.** It was never owned - see the ticket's opening section |
 | 5 | **Nebulae** - volumetric beauty pass, real + procedural populations | Where `perception` earns its keep |
 | 6 | **Planet surfaces** - cube-sphere, terrain LOD, ground atmosphere | Hardest; possibly never |
 
@@ -327,10 +331,9 @@ population** by class (emission, reflection, planetary, dark) for abundance.
    acceptable as the stability mechanism, rather than a frozen universe.
 4. **Landing** — confirmed super-long-term. Revisit only after Layer 5.
 5. **Naming** - **Answered: "Cairn"** (ADR-0016). The working title `UniverseGoBrr` is retired.
-6. **Universe scale** - does V1 include many galaxies (roadmap row 4b), or stay "one galaxy, complete
-   loop"? The owner's stated priority is base structure first, which argues for including it. What a
-   *sector* is geometrically, and how many a galaxy has, is also still open (ADR-0018 fixed the rung,
-   not the shape). Brief: `tickets/06-universe-scale.md`.
+6. **Universe scale** - **Answered: V1 includes it** (owner, 2026-11-25). V1 is rows 0-4 plus 4b.
+   What a *sector* is geometrically is partly answered (an angular slice, 1-6 by size, ADR-0018); where
+   slice zero begins is still open. Brief: `tickets/06-universe-scale.md`.
 7. **Absolute travel speeds** - **Answered in shape (ADR-0020): speeds are derived from time anchors,
    not chosen**, so scale is free and the current `travel.ts` table is superseded. What remains open
    is the **short-trip anchor**: at a week-per-diameter, a 5 ly hop costs seconds. Derivation in

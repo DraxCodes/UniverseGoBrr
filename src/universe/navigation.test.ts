@@ -176,10 +176,11 @@ describe('planZoomOut', () => {
 });
 
 describe('galaxyFraming', () => {
-  const CENTRE = { x: 0.55 * GALAXY_RADIUS_M, y: 0, z: 0 };
+  const RADIUS = GALAXY_RADIUS_M;
+  const CENTRE = { x: 0.55 * RADIUS, y: 0, z: 0 };
 
   it('looks face-on, down the disc axis rather than world up', () => {
-    const framing = galaxyFraming(CENTRE);
+    const framing = galaxyFraming(CENTRE, RADIUS);
     const basis = cameraBasis(framing.yaw, framing.pitch);
     // The view axis is the disc normal, so the disc projects as a disc. The first version kept
     // the star's yaw and the eye landed almost in the plane, which drew a band.
@@ -193,7 +194,7 @@ describe('galaxyFraming', () => {
   it('orbits from the side the boot camera is already above', () => {
     // Eye = -forward · d, so a positive y means the eye is above the plane, matching the boot
     // camera's ~36.6° downward look. Flipping the face would mirror the arms for no reason.
-    const framing = galaxyFraming(CENTRE);
+    const framing = galaxyFraming(CENTRE, RADIUS);
     expect(Math.sin(framing.yaw) * Math.cos(framing.pitch)).toBeCloseTo(
       GALACTIC_PLANE_NORMAL.x,
       12,
@@ -203,21 +204,36 @@ describe('galaxyFraming', () => {
   });
 
   it('is far enough that every part of the disc is in front of the camera', () => {
-    const framing = galaxyFraming(CENTRE);
-    expect(framing.distanceM).toBeCloseTo(galaxyFramingDistanceM(0.55 * GALAXY_RADIUS_M), 6);
+    const framing = galaxyFraming(CENTRE, RADIUS);
+    expect(framing.distanceM).toBeCloseTo(galaxyFramingDistanceM(0.55 * RADIUS, RADIUS), 6);
     // The nearest disc point to the eye is d - (|centre| + R) away: positive means nothing is
     // behind the camera or at a negative depth.
-    expect(framing.distanceM).toBeGreaterThan(0.55 * GALAXY_RADIUS_M + GALAXY_RADIUS_M);
+    expect(framing.distanceM).toBeGreaterThan(0.55 * RADIUS + RADIUS);
   });
 
   it('survives a centre at the origin (a galaxy with a centred disc)', () => {
-    const framing = galaxyFraming({ x: 0, y: 0, z: 0 });
+    const framing = galaxyFraming({ x: 0, y: 0, z: 0 }, RADIUS);
     expect(Number.isFinite(framing.yaw)).toBe(true);
-    expect(framing.distanceM).toBeCloseTo(galaxyFramingDistanceM(0), 6);
+    expect(framing.distanceM).toBeCloseTo(galaxyFramingDistanceM(0, RADIUS), 6);
+  });
+
+  it('frames a small galaxy from a small distance, so both read as a whole disc', () => {
+    // The point of the per-galaxy radius: the same view of a different-sized object. A small
+    // galaxy framed from a large one's distance is a dot, and a large one framed from a small
+    // one's distance is a crop.
+    const small = galaxyFraming({ x: 0.55 * 0.5e20, y: 0, z: 0 }, 0.5e20);
+    const large = galaxyFraming({ x: 0.55 * 9e20, y: 0, z: 0 }, 9e20);
+    expect(small.distanceM).toBeLessThan(large.distanceM);
+    expect(large.distanceM / small.distanceM).toBeCloseTo(18, 6);
+    // Both subtend the same angular radius, which is what "framed the same" means.
+    expect(Math.atan((1.55 * 0.5e20) / small.distanceM)).toBeCloseTo(
+      Math.atan((1.55 * 9e20) / large.distanceM),
+      6,
+    );
   });
 
   it('keeps the eye exactly on the orbit ray, so the next drag does not snap', () => {
-    const framing = galaxyFraming(CENTRE);
+    const framing = galaxyFraming(CENTRE, RADIUS);
     const camera = orbitTo(framing.yaw, framing.pitch, framing.distanceM);
     const rebuild = orbitTo(camera.yaw, camera.pitch, Math.hypot(camera.x, camera.y, camera.z));
     expect(rebuild.x).toBeCloseTo(camera.x, 3);
@@ -237,12 +253,14 @@ describe('a sector opens on the same frame it zooms out to', () => {
     for (const sectorText of ['v1/4.0', 'v1/4.1', 'v1/4.2']) {
       const sector = parseAddressOrThrow(sectorText);
       // Link-arrival path: from the sector address.
-      const fromSector = galaxyFraming(galaxyFrame(seed, galaxyAddressOf(sector)).centre);
+      const sectorFrame = galaxyFrame(seed, galaxyAddressOf(sector));
+      const fromSector = galaxyFraming(sectorFrame.centre, sectorFrame.radius);
       // Zoom-out path: from the galaxy ancestor the plan would return.
       const plan = planZoomOut(parseAddressOrThrow(`${sectorText}.-2.7`), 1);
       expect(plan.ok, sectorText).toBe(true);
       if (!plan.ok) continue;
-      const fromGalaxy = galaxyFraming(galaxyFrame(seed, plan.address).centre);
+      const galaxyFrameOf = galaxyFrame(seed, plan.address);
+      const fromGalaxy = galaxyFraming(galaxyFrameOf.centre, galaxyFrameOf.radius);
       expect(fromSector.yaw, sectorText).toBeCloseTo(fromGalaxy.yaw, 12);
       expect(fromSector.pitch, sectorText).toBeCloseTo(fromGalaxy.pitch, 12);
       expect(fromSector.distanceM, sectorText).toBeCloseTo(fromGalaxy.distanceM, 6);

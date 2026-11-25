@@ -8,11 +8,9 @@ import {
 } from '../universe/galaxy';
 import { generateSystem } from '../universe/system';
 import { orbitTo } from '../input/orbit-controls';
-import { GALAXY_RADIUS_M } from './scale';
 import { defaultSystemCamera, displayScaleM } from './system-scene';
 import {
   GALAXY_INSTANCE_FLOATS,
-  GALAXY_MAX_DISTANCE_M,
   GALAXY_MAX_INSTANCES,
   GALAXY_STAR_MAX_PX,
   GALAXY_STAR_MIN_PX,
@@ -21,6 +19,7 @@ import {
   f64Ulp,
   galaxyLegibility,
   galaxyLod,
+  galaxyMaxDistanceM,
   nextQualityTier,
   writeGalaxyFrame,
 } from './galaxy-scene';
@@ -30,6 +29,8 @@ const ADDRESS = parseAddressOrThrow('v1/4.-2.7');
 const SYSTEM = generateSystem(SEED, ADDRESS);
 const SCALE = displayScaleM(SYSTEM);
 const GALAXY = generateGalaxy(SEED, ADDRESS, 'rich');
+/** The ceiling for *this* galaxy: it is a drawn size now, not the module constant. */
+const MAX_DISTANCE = galaxyMaxDistanceM(GALAXY.radius);
 const HEIGHT = 1080;
 const ASPECT = 16 / 9;
 const PITCH = -0.6390168339184684;
@@ -41,7 +42,7 @@ const ORRERY = defaultSystemCamera(SYSTEM);
 // `orbitTo(0, PITCH + tilt)` gives lod 1.000. So the tilt belongs in the camera, and this is not
 // a workaround for the legibility test — `galaxyLegibility` reads the disc normal either way.
 const GALLERY_PITCH = PITCH + GALACTIC_PLANE_TILT_RAD;
-const GALAXY_CAMERA = orbitTo(0, GALLERY_PITCH, GALAXY_MAX_DISTANCE_M);
+const GALAXY_CAMERA = orbitTo(0, GALLERY_PITCH, MAX_DISTANCE);
 
 function frameAt(tier: 'rich' | 'low', camera: typeof ORRERY) {
   const out = new Float32Array(GALAXY_MAX_INSTANCES * GALAXY_INSTANCE_FLOATS);
@@ -65,7 +66,7 @@ describe('the crossfade is triggered by galaxy legibility, not by the system', (
     // pitch) is edge-on for its whole run: `lod` stays ~0.02 because the arms are not readable,
     // yet the whole galaxy fills the frame. The HUD's scene row keys off `identity`, which drops
     // `inclination` so it can still say "one galaxy" there.
-    const far = frameAt('rich', orbitTo(0, PITCH, GALAXY_MAX_DISTANCE_M));
+    const far = frameAt('rich', orbitTo(0, PITCH, MAX_DISTANCE));
     expect(far.frame.lod).toBeLessThan(0.1);
     expect(far.frame.identity).toBeGreaterThan(0.9);
     // The orrery is inside the disc; there is no galaxy to name yet.
@@ -79,7 +80,7 @@ describe('the crossfade is triggered by galaxy legibility, not by the system', (
   it('never decreases as the wheel retreats from the system to the galaxy', () => {
     let previous = -1;
     const start = Math.log10(Math.hypot(ORRERY.x, ORRERY.y, ORRERY.z));
-    const end = Math.log10(GALAXY_MAX_DISTANCE_M);
+    const end = Math.log10(MAX_DISTANCE);
     for (let log = start; log <= end; log += 0.02) {
       const camera = orbitTo(0, GALLERY_PITCH, 10 ** log);
       const lod = galaxyLod(GALAXY, camera, HEIGHT);
@@ -97,7 +98,7 @@ describe('the crossfade is triggered by galaxy legibility, not by the system', (
     let firstLod = 0;
     let firstDistance = 0;
     const start = Math.log10(Math.hypot(ORRERY.x, ORRERY.y, ORRERY.z));
-    for (let log = start; log <= Math.log10(GALAXY_MAX_DISTANCE_M); log += 0.01) {
+    for (let log = start; log <= Math.log10(MAX_DISTANCE); log += 0.01) {
       const camera = orbitTo(0, GALLERY_PITCH, 10 ** log);
       const lod = galaxyLod(GALAXY, camera, HEIGHT);
       if (lod > 0.05) {
@@ -110,7 +111,7 @@ describe('the crossfade is triggered by galaxy legibility, not by the system', (
     expect(firstLod).toBeGreaterThan(0.05);
     // The eye has to be outside the disc, and home is at 0.55 R, so the ramp cannot start before
     // ~0.45 R from home even when the camera looks from the centre's far side.
-    expect(firstDistance).toBeGreaterThan(0.4 * GALAXY_RADIUS_M);
+    expect(firstDistance).toBeGreaterThan(0.4 * GALAXY.radius);
 
     const focalPx = HEIGHT / (2 * Math.tan((50 * Math.PI) / 360));
     const orbitPx = (focalPx / (firstDistance / SCALE)) * 1; // outermost orbit = 1 display unit
@@ -131,10 +132,10 @@ describe('the crossfade is triggered by galaxy legibility, not by the system', (
 
     // Double subtraction happens before rounding, so the binding quantum is one double ulp at
     // the camera distance; the crossfade has ~eleven orders of margin at the far end.
-    expect(f64Ulp(GALAXY_MAX_DISTANCE_M)).toBeLessThan(meanSpacingM / 1e9);
+    expect(f64Ulp(MAX_DISTANCE)).toBeLessThan(meanSpacingM / 1e9);
 
     // And after the divide to display units, the f32 quantum is still far below the spacing.
-    const distanceUnits = GALAXY_MAX_DISTANCE_M / SCALE;
+    const distanceUnits = MAX_DISTANCE / SCALE;
     expect(f32Ulp(distanceUnits) * 10).toBeLessThan(meanSpacingM / SCALE);
   });
 });
@@ -314,7 +315,7 @@ describe('the impostor buffer', () => {
     // would pass on those few surviving impostors, which is exactly the failure mode.
     const local = GALAXY_TIER_STARS.rich.local;
     const samples: { log: number; lod: number; emitted: number; lit: number }[] = [];
-    for (let log = Math.log10(GALAXY_MAX_DISTANCE_M); log >= 19.5; log -= 0.05) {
+    for (let log = Math.log10(MAX_DISTANCE); log >= 19.5; log -= 0.05) {
       const camera = orbitTo(2.273020050191636, -0.75, 10 ** log);
       const { out, frame } = frameAt('rich', camera);
       let emitted = 0;
@@ -345,7 +346,7 @@ describe('the impostor buffer', () => {
     const local = GALAXY_TIER_STARS.rich.local;
     const samples: { pitch: number; lod: number; emitted: number; lit: number }[] = [];
     for (let pitch = -1.4; pitch <= 1.4; pitch += 0.05) {
-      const camera = orbitTo(2.273020050191636, pitch, GALAXY_MAX_DISTANCE_M);
+      const camera = orbitTo(2.273020050191636, pitch, MAX_DISTANCE);
       const { out, frame } = frameAt('rich', camera);
       let emitted = 0;
       let lit = 0;

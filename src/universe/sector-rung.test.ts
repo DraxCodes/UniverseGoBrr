@@ -64,12 +64,13 @@ describe('position and appearance did not move with the re-key', () => {
   });
 
   it('keys appearance the same way, so the version bump does not re-roll it', () => {
-    // `GALAXY_VERSION` is 9 and `APPEARANCE_VERSION` is deliberately still 8: a change to an
-    // *address* must not change how a light looks. These numbers are literals on purpose — bumping
-    // either re-rolls brightness, colour and size for every star in every galaxy, which is exactly
-    // the regression this test exists to catch.
+    // `GALAXY_VERSION` is 11 and `APPEARANCE_VERSION` is 9: a change to an *address* must not
+    // change how a light looks, and a change to the *appearance law* must. The literal `v9` here is
+    // deliberate — it moved from 8 when the galaxy variation law landed (ticket 06, item 4), and a
+    // future bump re-rolls brightness, colour and size for every star in every galaxy, which is
+    // exactly the regression this test exists to catch.
     expect(appearanceKey(SEED, parseAddressOrThrow('v1/4.3.-7'))).toBe(
-      `${SEED}|v1/4.-7|appearance|v8`,
+      `${SEED}|v1/4.-7|appearance|v9`,
     );
     expect(appearanceKey(SEED, parseAddressOrThrow('v1/4.3.-7'))).toBe(
       appearanceKey(SEED, parseAddressOrThrow('v1/4.0.-7')),
@@ -129,8 +130,14 @@ describe('the sector is derived from the angle the star is drawn at', () => {
   it('agrees with the sector the star’s address was written from', () => {
     // The re-key took the label from the drawn angle; `sectorOfStar` must still answer the same
     // number, or a regenerated address and the drawn star would disagree. Star -2 in `v1/4` is the
-    // one `capture/shots.json` pins as `v1/4.0.-2.7`, so that shot's honesty is this assertion.
-    expect(sectorOfStar(SEED, parseAddressOrThrow('v1/4'), -2)).toBe(0);
+    // one `capture/shots.json` frames, so that shot's honesty is this assertion.
+    //
+    // The value moved from 0 to 1 when the galaxy variation law landed (ticket 06, item 4): the
+    // drawn radius, winding and halo membership all change where that star sits, and its sector is
+    // *derived* from where it sits. That is the law working, not a regression — the manifest's
+    // address moved with it (`v1/4.1.-2.7`). Note the sector rung is transparent to content, so
+    // both addresses still draw the same star; only the label was ever wrong.
+    expect(sectorOfStar(SEED, parseAddressOrThrow('v1/4'), -2)).toBe(1);
     // And the address the generator hands out is the one this predicate predicts.
     const galaxy = generateGalaxy(SEED, parseAddressOrThrow('v1/4'), 'low');
     for (const star of galaxy.stars.slice(1)) {

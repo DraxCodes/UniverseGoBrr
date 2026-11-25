@@ -215,9 +215,10 @@ export interface GalaxyFraming {
 }
 
 /**
- * The camera for "zoom out to the galaxy", given the galactic centre's offset from the home star.
+ * The camera for "zoom out to the galaxy", given the galactic centre's offset from the home star
+ * and the galaxy's own radius.
  *
- * Two decisions, both forced by the scene:
+ * Three decisions, all forced by the scene:
  *
  * - **Face-on.** The view is down the disc's own axis, from its `+normal` side. World `+y` is not
  *   that axis after `GALACTIC_PLANE_TILT_RAD`, and the first version of this kept the star's yaw,
@@ -227,11 +228,14 @@ export interface GalaxyFraming {
  *   home star and not the galactic centre, so the disc is off-centre in the view. The distance
  *   comes from `galaxyFramingDistanceM`, which accounts for that offset instead of assuming the
  *   disc is centred.
+ * - **Scaled by this galaxy.** `radiusM` is the galaxy's own radius, so a small galaxy is framed
+ *   from a small distance and a large one from a large distance: both fill the frame, and the
+ *   numbers stay inside the orbit controls' ceiling for that galaxy.
  *
  * The position is left to `orbitTo(framing.yaw, framing.pitch, framing.distanceM)`, so the eye
  * stays on the ray its angles describe and the next drag does not snap (the orbit invariant).
  */
-export function galaxyFraming(centre: Vec3): GalaxyFraming {
+export function galaxyFraming(centre: Vec3, radiusM: number): GalaxyFraming {
   // Forward is the direction the camera looks: from the eye, on the +normal side, back at the
   // origin. `cameraBasis` inverts to yaw = atan2(−forward.x, −forward.z), pitch = asin(forward.y).
   const forward = {
@@ -242,6 +246,6 @@ export function galaxyFraming(centre: Vec3): GalaxyFraming {
   return {
     yaw: Math.atan2(-forward.x, -forward.z),
     pitch: Math.asin(Math.min(1, Math.max(-1, forward.y))),
-    distanceM: galaxyFramingDistanceM(Math.hypot(centre.x, centre.y, centre.z)),
+    distanceM: galaxyFramingDistanceM(Math.hypot(centre.x, centre.y, centre.z), radiusM),
   };
 }

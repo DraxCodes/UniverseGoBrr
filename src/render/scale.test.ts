@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { FOV_Y_RAD } from './camera';
-import { GALAXY_MAX_DISTANCE_M } from './galaxy-scene';
+import { galaxyMaxDistanceM } from './galaxy-scene';
 import {
   GALAXY_RADIUS_M,
+  GALAXY_RADIUS_MAX_M,
+  GALAXY_RADIUS_MIN_M,
   SYSTEM_EXTENT_M,
   VOID_ZOOM_BOOST,
   galaxyFramingDistanceM,
@@ -27,7 +29,13 @@ describe('the void is compressed in traversal, not in position', () => {
   });
 
   it('is faster than the base rate through the void, and bounded', () => {
-    const peak = notchFactor(1e17, BASE);
+    // The peak is where the schedule's two smoothsteps meet, which is no longer 1e17 now that the
+    // schedule ends before the *smallest* galaxy rather than at the reference radius. Find it
+    // instead of hard-coding a distance, so moving the schedule cannot silently stop testing it.
+    let peak = 0;
+    for (let log = 13; log <= 19; log += 0.01) {
+      peak = Math.max(peak, notchFactor(10 ** log, BASE));
+    }
     expect(peak).toBeGreaterThan(BASE * 1.5);
     expect(peak).toBeLessThanOrEqual(BASE ** (1 + VOID_ZOOM_BOOST) * (1 + 1e-12));
   });
@@ -76,32 +84,57 @@ describe('the void is compressed in traversal, not in position', () => {
     expect(voidCompression(GALAXY_RADIUS_M)).toBe(0);
     expect(voidCompression(1e17)).toBeGreaterThan(0.5);
   });
+
+  it('returns to the base rate before the smallest galaxy edge', () => {
+    // The schedule used to anchor on `GALAXY_RADIUS_M`, which was *the* radius. Now galaxies vary,
+    // and the constraint is the smallest one: if the fast void regime ran past a small galaxy's
+    // rim, the wheel would change rate underneath the viewer mid-disc. Every galaxy, so every
+    // radius the law draws, has to be navigated at the base rate.
+    for (const radius of [GALAXY_RADIUS_MIN_M, GALAXY_RADIUS_M, GALAXY_RADIUS_MAX_M]) {
+      expect(voidCompression(radius), `${radius}`).toBe(0);
+      expect(notchFactor(radius, BASE), `${radius}`).toBe(BASE);
+    }
+  });
 });
 describe('the galaxy framing distance', () => {
   it('fits the whole disc, which is off-centre from the star the camera orbits', () => {
-    // The orbit camera looks at the home star; the galactic centre is 0.55 R away from it, so
-    // the farthest disc point is 1.55 R from the origin. Framing on R alone (the first version)
-    // put the disc's far edge well outside the frame.
-    const centreOffsetM = 0.55 * GALAXY_RADIUS_M;
-    const distanceM = galaxyFramingDistanceM(centreOffsetM);
-    expect(Math.atan((centreOffsetM + GALAXY_RADIUS_M) / distanceM)).toBeCloseTo(
-      FOV_Y_RAD / 2,
-      12,
-    );
+    // The orbit camera looks at the home star; the galactic centre is a fraction of the galaxy's
+    // radius away from it, so the farthest disc point is `centre offset + radius` from the origin.
+    // Framing on the radius alone (the first version) put the disc's far edge outside the frame.
+    const radius = 5e20;
+    const centreOffsetM = 0.55 * radius;
+    const distanceM = galaxyFramingDistanceM(centreOffsetM, radius);
+    expect(Math.atan((centreOffsetM + radius) / distanceM)).toBeCloseTo(FOV_Y_RAD / 2, 12);
+  });
+
+  it('frames every galaxy the law can draw, not just the reference size', () => {
+    // A framing distance that ignored the galaxy's own radius would crop a large galaxy and put a
+    // small one at a dot. The seam is the size range, so test its ends.
+    for (const radius of [GALAXY_RADIUS_MIN_M, GALAXY_RADIUS_M, GALAXY_RADIUS_MAX_M]) {
+      const centreOffsetM = 0.55 * radius;
+      const distanceM = galaxyFramingDistanceM(centreOffsetM, radius);
+      expect(Math.atan((centreOffsetM + radius) / distanceM), `${radius}`).toBeCloseTo(
+        FOV_Y_RAD / 2,
+        12,
+      );
+    }
   });
 
   it('is inside the range the orbit controls allow the camera to reach', () => {
     // The zoom-out reframe writes this distance into the URL; a value the controls clamp would
     // snap on the next wheel notch, which is the class of bug the "position is derived" rule
-    // exists to prevent.
-    const distanceM = galaxyFramingDistanceM(0.55 * GALAXY_RADIUS_M);
-    expect(distanceM).toBeLessThan(GALAXY_MAX_DISTANCE_M);
-    expect(distanceM).toBeGreaterThan(GALAXY_RADIUS_M);
+    // exists to prevent. The ceiling is per galaxy now, so check every size the law draws.
+    for (const radius of [GALAXY_RADIUS_MIN_M, GALAXY_RADIUS_M, GALAXY_RADIUS_MAX_M]) {
+      const distanceM = galaxyFramingDistanceM(0.55 * radius, radius);
+      expect(distanceM, `${radius}`).toBeLessThan(galaxyMaxDistanceM(radius));
+      expect(distanceM, `${radius}`).toBeGreaterThan(radius);
+    }
   });
 
   it('moves the camera out when the centre is farther from the star', () => {
-    expect(galaxyFramingDistanceM(0.1 * GALAXY_RADIUS_M)).toBeLessThan(
-      galaxyFramingDistanceM(0.9 * GALAXY_RADIUS_M),
+    const radius = GALAXY_RADIUS_M;
+    expect(galaxyFramingDistanceM(0.1 * radius, radius)).toBeLessThan(
+      galaxyFramingDistanceM(0.9 * radius, radius),
     );
   });
 });

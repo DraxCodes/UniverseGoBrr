@@ -13,9 +13,10 @@
 import { fnv1a32 } from '../lib/hash';
 import { createRng, type Rng } from '../lib/random';
 import { formatAddress, ancestorAddress, type Address } from '../frame/address';
-import { GALAXY_RADIUS_M } from '../render/scale';
+import { GALAXY_RADIUS_MAX_M, GALAXY_RADIUS_MIN_M } from '../render/scale';
 import {
   GALAXY_DEPTH as LEVEL_GALAXY_DEPTH,
+  galaxySizeFraction,
   sectorCount as sectorCountOf,
   sectorIndexForAngle,
 } from './levels';
@@ -112,14 +113,24 @@ export const GALACTIC_PLANE_NORMAL: Vec3 = Object.freeze({
 
 /** Where the home star sits in the disc, as a fraction of the radius. */
 const HOME_RADIUS_FRACTION = 0.55;
-/** Disc scale length, as a fraction of the radius: an exponential disc falls off here. */
-const DISC_SCALE_LENGTH_FRACTION = 0.36;
-/** Two arms; the log-spiral pitch is this many radians of winding per scale length. */
-const ARM_WINDING = 2.4;
-/** Fraction of the disc budget in the bulge. */
-const BULGE_FRACTION = 0.06;
-/** Bulge radius, as a fraction of the radius: a compact nucleus, not a wash over the inner arms. */
-const BULGE_RADIUS_FRACTION = 0.13;
+/** The reference disc scale length, as a fraction of the radius. The shape law varies it. */
+export const DISC_SCALE_LENGTH_FRACTION = 0.36;
+/** The reference winding: the log-spiral pitch in radians per scale length. Varies now. */
+export const ARM_WINDING_REFERENCE = 2.4;
+/**
+ * How far an arm turns from the centre to the rim, radians. **This is the drawn shape axis; the
+ * pitch is derived from it and the scale length.**
+ *
+ * It is not a free aesthetic choice. Below roughly 300° of turn the arm's curvature is small enough
+ * that a lane between two arms becomes a wedge: the disc reads as radial spokes around a dark
+ * pinwheel, and the measured arm ridge/trough density ratio falls from ~10 to ~1.3 (ticket 06
+ * item 4, twelve galaxies). The old fixed design sat at `2.4 / 0.36` = 6.67 rad = 382°, and the
+ * range brackets that with room for a visibly looser or tighter spiral.
+ */
+export const ARM_SWEEP_MIN_RAD = 6.6;
+export const ARM_SWEEP_MAX_RAD = 9.6;
+/** The reference bulge radius, as a fraction of the radius. Varies now. */
+export const BULGE_RADIUS_FRACTION_REFERENCE = 0.13;
 /** Disc thickness, as a fraction of the radius. */
 const DISC_THICKNESS_FRACTION = 0.025;
 /**
@@ -168,12 +179,142 @@ export function galaxyKey(seed: string, galaxyAddress: Address): string {
   return `${seed}|${formatAddress(galaxyAddress)}|galaxy|v${GALAXY_STREAM_VERSION}`;
 }
 
+/**
+ * The shape law: how this galaxy's disc is built, drawn from its own stream.
+ *
+ * A galaxy used to be one fixed design at one fixed size, so every address drew the same object
+ * with a different rotation. This is the variation (ticket 06, work item 4): size, arm structure,
+ * bulge and bar, and the gas/colour state, all drawn once from `(seed, galaxyAddress)`.
+ *
+ * **The draws are on their own stream, `seed|addr|shape|v1`, deliberately.** The frame stream
+ * (`homeAngle, homeHeight, firstArm`) is what the layer-3 arm calibration was measured against,
+ * and keeping the shape elsewhere means `k = 2` still reproduces `firstArm, firstArm + π` exactly.
+ * A later reader can therefore still compare an arm measurement to the layer-3 captures.
+ *
+ * Draw order (append-only, like every stream here):
+ *
+ * | # | field | range | law |
+ * | --- | --- | --- | --- |
+ * | 0 | arm count | 2, 3, 4 (50/25/25%) | `armOffsets` spacing |
+ * | 1 | arm sweep | 6.6..9.6 rad (378°..550°) | the whole turn from centre to rim |
+ * | 2 | scale length | 0.28..0.45 R | exponential falloff; `winding = sweep · this` |
+ * | 3 | bulge fraction | 0.03..0.14 | share of disc-kind stars in the spheroid |
+ * | 4 | bulge radius | 0.09..0.20 R | spheroid extent, `bulgeProfile` normaliser |
+ * | 5 | bulge flattening | 0.45..0.85 | spheroid height squash |
+ * | 6 | bar strength | 0..0.35 | bulge elongation along the first arm |
+ * | 7 | halo fraction | 0..0.03 | share on the heavy radial tail |
+ * | 8 | dust depth | 0..0.35 | lane emission depression |
+ * | 9 | colour age | 0..1 | red/quenched .. blue/star-forming |
+ *
+ * **Sweep is drawn, pitch is derived — and that is a correction, not a preference.** The first cut
+ * of this law drew `winding` (radians per scale length) and `scaleLengthFraction` independently
+ * from the ranges the old fixed design implied. Their *ratio* is what shapes the spiral: the arm
+ * turns `winding / scaleLength` radians from centre to rim. Drawing both freely let that ratio fall
+ * anywhere from 217° to 561° across twelve seeds, and below ~300° the arms become near-radial spokes
+ * with a black wedge through the nucleus — measured ridge/trough 1.3, i.e. no arms at all
+ * (`v1/4`, `v1/6`). The physical variety axis is how far the arm *winds*, so the draw is the sweep
+ * and the pitch is computed to deliver it.
+ */
+export interface GalaxyShape {
+  readonly armCount: number;
+  /**
+   * The log-spiral pitch in radians per scale length, `armSweepRad · scaleLengthFraction`.
+   * **Derived, never drawn independently**: `armStrength` divides by the scale length, so drawing
+   * this on its own decouples the arm's openness from the disc it sits in and can produce spokes.
+   */
+  readonly winding: number;
+  /** The whole turn from galactic centre to rim, radians. The drawn shape axis. */
+  readonly armSweepRad: number;
+  readonly scaleLengthFraction: number;
+  readonly bulgeFraction: number;
+  readonly bulgeRadiusFraction: number;
+  readonly bulgeFlattening: number;
+  readonly barStrength: number;
+  readonly haloFraction: number;
+  readonly dustDepth: number;
+  readonly colourAge: number;
+}
+
+/** Bumped when the shape draw order or a range changes: this address is a different galaxy. */
+export const GALAXY_SHAPE_VERSION = 1;
+
+/**
+ * The design every galaxy had before the variation law: two arms at the old winding, a compact
+ * bulge, no bar, no halo, no dust, and the old warm palette.
+ *
+ * Two jobs: it is the `k = 2` special case the layer-3 calibration is comparable against, and it
+ * is what the root (which is not a galaxy) reports so the type stays total.
+ */
+export const REFERENCE_SHAPE: GalaxyShape = Object.freeze({
+  armCount: 2,
+  winding: ARM_WINDING_REFERENCE,
+  armSweepRad: ARM_WINDING_REFERENCE / DISC_SCALE_LENGTH_FRACTION,
+  scaleLengthFraction: DISC_SCALE_LENGTH_FRACTION,
+  bulgeFraction: 0.06,
+  bulgeRadiusFraction: BULGE_RADIUS_FRACTION_REFERENCE,
+  bulgeFlattening: 0.62,
+  barStrength: 0,
+  haloFraction: 0,
+  dustDepth: 0,
+  colourAge: 0.5,
+});
+
+/** The shape stream. Separate from the frame stream on purpose; see `GalaxyShape`. */
+export function galaxyShapeKey(seed: string, galaxyAddress: Address): string {
+  return `${seed}|${formatAddress(galaxyAddress)}|shape|v${GALAXY_SHAPE_VERSION}`;
+}
+
+export function galaxyShape(seed: string, galaxyAddress: Address): GalaxyShape {
+  const rng = createRng(fnv1a32(galaxyShapeKey(seed, galaxyAddress)));
+
+  // One draw for the arm count, weighted 2:2:1, so the common galaxy is a two-arm spiral and a
+  // four-arm one is a real minority rather than an equal partner.
+  const armRoll = rng.next();
+  const armCount = armRoll < 0.5 ? 2 : armRoll < 0.75 ? 3 : 4;
+
+  // Sweep first, pitch derived: see `GalaxyShape`. Drawing them independently is what produced
+  // 217°..561° of turn and, at the loose end, spokes rather than arms.
+  const armSweepRad = rng.range(ARM_SWEEP_MIN_RAD, ARM_SWEEP_MAX_RAD);
+  const scaleLengthFraction = rng.range(0.28, 0.45);
+
+  return {
+    armCount,
+    winding: armSweepRad * scaleLengthFraction,
+    armSweepRad,
+    scaleLengthFraction,
+    bulgeFraction: rng.range(0.03, 0.14),
+    bulgeRadiusFraction: rng.range(0.09, 0.2),
+    bulgeFlattening: rng.range(0.45, 0.85),
+    barStrength: rng.range(0, 0.35),
+    haloFraction: rng.range(0, 0.03),
+    dustDepth: rng.range(0, 0.35),
+    colourAge: rng.range(0, 1),
+  };
+}
+
+/**
+ * The galaxy's radius in metres, drawn from the size it already reports.
+ *
+ * `galaxySizeFraction` was written for the sector count and has always been the galaxy's size;
+ * until now nothing else read it, so every galaxy was `GALAXY_RADIUS_M` across. The mapping is
+ * linear on the fraction and spans `GALAXY_RADIUS_MIN_M..GALAXY_RADIUS_MAX_M` (18×), which is the
+ * visible spread the owner asked for. The *fraction* still decides the sector count, so a galaxy
+ * cannot be sized differently from the way it is sliced.
+ */
+export function galaxyRadiusM(seed: string, galaxyAddress: Address): number {
+  const fraction = galaxySizeFraction(seed, galaxyAddress);
+  return GALAXY_RADIUS_MIN_M + fraction * (GALAXY_RADIUS_MAX_M - GALAXY_RADIUS_MIN_M);
+}
+
 export interface GalaxyFrame {
+  /** This galaxy's own radius, metres. Everything that frames or measures it must use this. */
   readonly radius: number;
   /** Galactic centre, relative to the home star, metres. */
   readonly centre: Vec3;
-  /** The two arms' angular offsets at the scale radius. */
+  /** The arms' angular offsets at the scale radius. Two, three or four of them. */
   readonly armOffsets: readonly number[];
+  /** The drawn variation law (arms, pitch, bulge, bar, halo, dust, colour). */
+  readonly shape: GalaxyShape;
   /** The stream key every other field in this galaxy must reuse. */
   readonly key: string;
   /** How many sectors this galaxy has, 1..6 (ADR-0018, `sectorCount` in `levels.ts`). */
@@ -185,21 +326,26 @@ export interface GalaxyFrame {
 }
 
 /**
- * Lay out one galaxy's frame: where its centre is and where its arms start.
+ * Lay out one galaxy's frame: how big it is, where its centre is and where its arms start.
  *
  * `galaxyAddress` must already be the galaxy's **own** level (`galaxyAddressOf`), not a deeper
  * address. Normalising here instead would make this module depend on the identity rule; the
  * callers own that, and both of them do it.
  */
 export function galaxyFrame(seed: string, galaxyAddress: Address): GalaxyFrame {
-  const radius = GALAXY_RADIUS_M;
+  const radius = galaxyRadiusM(seed, galaxyAddress);
+  const shape = galaxyShape(seed, galaxyAddress);
   const key = galaxyKey(seed, galaxyAddress);
   const frameRng = createRng(fnv1a32(`${key}|frame`));
   const homeAngle = frameRng.range(0, Math.PI * 2);
   const homeRadius = HOME_RADIUS_FRACTION * radius;
   const homeHeight = frameRng.range(-0.02, 0.02) * radius;
   const firstArm = frameRng.range(0, Math.PI * 2);
-  const armOffsets: readonly number[] = Object.freeze([firstArm, firstArm + Math.PI]);
+  // `i = 0` and `i = k/2` reproduce the old two-arm pair exactly when `k = 2`, so the frame's
+  // arm phase still lines up with the layer-3 measurement for those galaxies.
+  const armOffsets: readonly number[] = Object.freeze(
+    Array.from({ length: shape.armCount }, (_, index) => firstArm + (index * Math.PI * 2) / shape.armCount),
+  );
 
   const centre: Vec3 = rotateAboutX(
     {
@@ -213,10 +359,10 @@ export function galaxyFrame(seed: string, galaxyAddress: Address): GalaxyFrame {
   // **The sector phase is derived, not drawn**, and that is deliberate (ADR-0023).
   //
   // A new draw here would have been harmless only if appended: the frame stream is
-  // `homeAngle, homeRadius, homeHeight, firstArm`, so one more `rng.range` would leave every
-  // existing number untouched. But a *free* phase would put the home star at an arbitrary angle,
-  // and the home neighbourhood is exactly what `v1/0.0.0` reserves for Sol (ADR-0009). Sol's
-  // reserved address has to keep meaning "sector 0, star 0" in *every* galaxy, so slice zero is
+  // `homeAngle, homeHeight, firstArm`, so one more `rng.range` would leave every existing number
+  // untouched. But a *free* phase would put the home star at an arbitrary angle, and the home
+  // neighbourhood is exactly what `v1/0.0.0` reserves for Sol (ADR-0009). Sol's reserved address
+  // has to keep meaning "sector 0, star 0" in *every* galaxy, so slice zero is
   // **centred on the home star**.
   //
   // The home star sits at the frame origin and the **centre is opposite it** (`-cos(homeAngle)`,
@@ -230,7 +376,7 @@ export function galaxyFrame(seed: string, galaxyAddress: Address): GalaxyFrame {
   const sectorCount = sectorCountOf(seed, galaxyAddress);
   const sectorPhaseRad = homeAngle - Math.PI / sectorCount;
 
-  return { radius, centre, armOffsets, key, sectorCount, sectorPhaseRad };
+  return { radius, centre, armOffsets, shape, key, sectorCount, sectorPhaseRad };
 }
 
 /**
@@ -317,6 +463,8 @@ export interface DiscSample {
   readonly z: number;
   /** True if the sample came from the bulge rather than the disc. */
   readonly inBulge: boolean;
+  /** True if the sample is on the halo tail: thick, smooth, and tinted old. */
+  readonly inHalo: boolean;
   /** Distance from the galactic centre in the disc plane; drives the nucleus gradient. */
   readonly fromCentre: number;
   /** 0 in the lane, 1 on an arm; drives the arm/lane hue split. */
@@ -331,9 +479,12 @@ export interface DiscSample {
  * re-roll every star in every galaxy. There is a test that replays the stream and compares.
  */
 export function sampleDiscStar(rng: Rng, frame: GalaxyFrame): DiscSample {
-  const { radius, armOffsets, centre } = frame;
+  const { radius, armOffsets, centre, shape } = frame;
   // Drawn per star, not from the index: the tier counts must keep a prefix of one stream.
-  const inBulge = rng.chance(BULGE_FRACTION);
+  const inBulge = rng.chance(shape.bulgeFraction);
+  // Halo membership is drawn for every disc-kind star, before its radius, so the mixture is a
+  // stable property of the population rather than a per-seed surprise.
+  const inHalo = !inBulge && rng.chance(shape.haloFraction);
   let x: number;
   let y: number;
   let z: number;
@@ -344,44 +495,73 @@ export function sampleDiscStar(rng: Rng, frame: GalaxyFrame): DiscSample {
 
   if (inBulge) {
     // A flattened spheroid: radius ∝ u^(1/3) keeps it solid, not a shell.
-    const r = BULGE_RADIUS_FRACTION * radius * Math.cbrt(rng.next());
+    const r = shape.bulgeRadiusFraction * radius * Math.cbrt(rng.next());
     const cosPolar = rng.range(-1, 1);
     const sinPolar = Math.sqrt(1 - cosPolar * cosPolar);
     const azimuth = rng.range(0, Math.PI * 2);
-    x = r * sinPolar * Math.cos(azimuth);
-    y = r * cosPolar * 0.62;
-    z = r * sinPolar * Math.sin(azimuth);
-    fromCentre = r;
+    let bulgeX = r * sinPolar * Math.cos(azimuth);
+    let bulgeZ = r * sinPolar * Math.sin(azimuth);
+    // The bar: the bulge is the inner galaxy, so elongating it along the first arm's angle *is*
+    // a bar — there is no second population to add. `barStrength = 0` leaves the old spheroid
+    // exactly, which is what keeps this a variation of the law rather than a new one.
+    if (shape.barStrength > 0) {
+      const barAngle = armOffsets[0]!;
+      const cosBar = Math.cos(barAngle);
+      const sinBar = Math.sin(barAngle);
+      const along = bulgeX * cosBar + bulgeZ * sinBar;
+      const across = -bulgeX * sinBar + bulgeZ * cosBar;
+      const long = along * (1 + 2.2 * shape.barStrength);
+      const short = across * (1 - 0.55 * shape.barStrength);
+      bulgeX = long * cosBar - short * sinBar;
+      bulgeZ = long * sinBar + short * cosBar;
+    }
+    x = bulgeX;
+    z = bulgeZ;
+    y = r * cosPolar * shape.bulgeFlattening;
+    fromCentre = Math.hypot(bulgeX, bulgeZ);
   } else {
-    // Truncated exponential disc: r = -scale·ln(1-u), rejected beyond the radius.
-    const scale = DISC_SCALE_LENGTH_FRACTION * radius;
+    // Truncated exponential disc: r = -scale·ln(1-u), rejected beyond the radius. Halo stars use
+    // the same law at 2.2× the scale length: a heavier radial tail, not a second population.
+    const scale = shape.scaleLengthFraction * radius;
+    const radialScale = inHalo ? scale * 2.2 : scale;
     let r = 0;
     for (let attempt = 0; attempt < 8; attempt += 1) {
-      r = -scale * Math.log(1 - rng.next() * 0.999_999);
+      r = -radialScale * Math.log(1 - rng.next() * 0.999_999);
       if (r <= radius) break;
     }
+    // **Truncation is a bound, not a hope.** The loop above keeps its last draw when all eight
+    // attempts overshoot, which the old fixed 0.36 R scale made vanishingly rare and the drawn
+    // 0.45 R scale, with the halo's 2.2× tail, does not: a halo star can land at 1.7 R and would
+    // then be drawn outside the galaxy the frame says it is in. Clamping is the law's stated
+    // intent ("truncated"), and at a handful of stars per galaxy it is invisible.
+    r = Math.min(r, radius);
     const azimuth = rng.range(0, Math.PI * 2);
     // Density modulation, not a drawn curve: most stars are rejection-sampled onto the arm,
     // and a fixed fraction is placed uniformly so the inter-arm gaps stay populated.
     let finalAngle: number;
-    if (rng.chance(INTER_ARM_FRACTION)) {
+    if (inHalo) {
+      // No arm association: the halo is smooth and old, which is what makes it read as a halo
+      // rather than as more disc. It draws no arm-acceptance numbers at all.
+      finalAngle = azimuth;
+    } else if (rng.chance(INTER_ARM_FRACTION)) {
       finalAngle = rng.range(0, Math.PI * 2);
     } else {
       finalAngle = azimuth;
       for (let attempt = 0; attempt < ARM_ATTEMPTS; attempt += 1) {
-        const arm = armStrength(r, finalAngle, scale, armOffsets);
+        const arm = armStrength(r, finalAngle, scale, armOffsets, shape.winding);
         if (rng.next() <= ARM_FLOOR + (1 - ARM_FLOOR) * arm) break;
         finalAngle = rng.range(0, Math.PI * 2);
       }
     }
     x = r * Math.cos(finalAngle);
     z = r * Math.sin(finalAngle);
-    y = gaussian(rng) * DISC_THICKNESS_FRACTION * radius;
+    // Three times the disc's height for a halo star: the thick, puffy part of the galaxy.
+    y = gaussian(rng) * DISC_THICKNESS_FRACTION * radius * (inHalo ? 3 : 1);
     fromCentre = r;
     // How much of an arm this star actually sits on, for the hue split. Measured at the final
     // angle, so a star that exhausted the rejection loop and landed in the lane is not tinted
     // as an arm star.
-    armMix = armStrength(r, finalAngle, scale, armOffsets);
+    armMix = inHalo ? 0 : armStrength(r, finalAngle, scale, armOffsets, shape.winding);
   }
 
   // Keep the disc field out of the local field's sphere, or the same neighbourhood is drawn
@@ -404,7 +584,7 @@ export function sampleDiscStar(rng: Rng, frame: GalaxyFrame): DiscSample {
     homeZ *= factor;
   }
 
-  return { x: homeX, y: homeY, z: homeZ, inBulge, fromCentre, armMix };
+  return { x: homeX, y: homeY, z: homeZ, inBulge, inHalo, fromCentre, armMix };
 }
 
 /**
@@ -431,20 +611,44 @@ export function sampleLocalStar(rng: Rng): Vec3 {
   };
 }
 
-/** A log-spiral arm's density at `r`, in 0..1, as the max over the two arms. */
+/**
+ * A log-spiral arm's density at `r`, in 0..1, as the max over the galaxy's arms.
+ *
+ * `winding` is the galaxy's own pitch (radians of turn per scale length); it used to be the
+ * constant `ARM_WINDING`, which is why every galaxy's arms were twisted identically. `offsets`
+ * carries the arm count, so a three- or four-armed galaxy works the same way.
+ */
 export function armStrength(
   r: number,
   azimuth: number,
   scale: number,
   offsets: readonly number[],
+  winding: number = ARM_WINDING_REFERENCE,
 ): number {
-  const winding = (r / scale) * ARM_WINDING;
+  const turn = (r / scale) * winding;
+  // **The lobe has to narrow with the arm count, or the arms merge into a disc.**
+  //
+  // The profile is a one-sided `cos^p` on an angle that is compressed by `k/2`: its half-width is
+  // `π/k`, i.e. half of one arm spacing. Two things follow, both measured (12 seeds, ticket 06
+  // item 4):
+  //
+  // - At `k = 2` the compression is 1 and the profile is *exactly* the old `max(0, cos)²`, so the
+  //   layer-3 arm calibration is untouched.
+  // - `cos²` alone was π-periodic, so an odd count drew twice the lobes it claimed — a "three-arm"
+  //   galaxy at 0°, 120°, 240° repeated at 180°, 300°, 60° and measured 0.02 at m=3. And because the
+  //   half-width was a fixed ±90° while the spacing at `k = 4` is 90°, a four-arm galaxy's lobes
+  //   covered the whole disc and measured 0.11. Both were the same defect: width not tied to
+  //   spacing.
+  //
+  // The ridge is where this argument is zero, `azimuth = offset + turn`, so the pitch and the
+  // arm's *locus* are unchanged by the compression — only its width.
+  const compression = offsets.length / 2;
   let best = 0;
   for (const offset of offsets) {
-    // cos² gives a positive, smooth arm width and a genuine inter-arm gap; the exponent narrows
-    // that band without moving the arm's ridge, so the lane widens as the arm sharpens.
-    const squared = Math.cos(azimuth - offset - winding) ** 2;
-    best = Math.max(best, squared ** (ARM_PROFILE_EXPONENT / 2));
+    const cosine = Math.cos(compression * (azimuth - offset - turn));
+    if (cosine <= 0) continue;
+    const lobe = cosine ** ARM_PROFILE_EXPONENT;
+    if (lobe > best) best = lobe;
   }
   return best;
 }

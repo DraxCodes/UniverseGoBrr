@@ -33,10 +33,12 @@ import { createRng, type Rng } from '../lib/random';
 import { formatAddress, type Address } from '../frame/address';
 import {
   GALAXY_DEPTH,
+  REFERENCE_SHAPE,
   discPlanePoint,
   galaxyAddressOf,
   galaxyFrame,
   sectorOfPoint,
+  type GalaxyShape,
   type Vec3,
 } from './disc';
 import { contentKey } from './levels';
@@ -46,6 +48,7 @@ import {
   starAddressAt,
   starKindOfIndex,
 } from './placement';
+import { GALAXY_RADIUS_MIN_M } from '../render/scale';
 
 // The disc law and the galaxy-identity rule live in `disc.ts` (ADR-0011): the generator and
 // `placement(seed, address)` must lay stars out with the *same* function, or the picture and the
@@ -92,8 +95,19 @@ export type { Vec3 } from './disc';
  * must break loudly. The *picture* is deliberately unchanged: position and appearance key on the
  * rung-stripped address, and the disc law is untouched, so the drawn galaxy is byte-identical to
  * version 8. That is the whole point of the ADR, and `sector-rung.test.ts` pins it.
+ *
+ * 9 → 10: **galaxies vary** (ticket 06, work item 4). Radius is now per galaxy rather than the
+ * constant `GALAXY_RADIUS_M`; arm count is 2–4 with a drawn pitch; the bulge has drawn fraction,
+ * radius and flattening plus a bar; there is a halo tail and a dust-lane depression; and one
+ * colour-age axis shifts a galaxy from red/quenched to blue/star-forming. Every galaxy is a
+ * different sky — home included, which is now one sample of the law rather than a preset.
+ *
+ * Appearance is re-rolled by the shape change *on purpose*: brightness, colour and size now
+ * depend on the same galaxy's drawn law (bulge radius, flattening, dust, colour age), so a galaxy
+ * that is now visibly different must not keep a light profile fitted to the old fixed design.
+ * `APPEARANCE_VERSION` moves with it for that reason, not because an address changed.
  */
-export const GALAXY_VERSION = 9;
+export const GALAXY_VERSION = 10;
 
 export type GalaxyTier = 'rich' | 'medium' | 'low';
 
@@ -143,11 +157,13 @@ export interface Galaxy {
   readonly tier: GalaxyTier;
   /** Galactic centre, relative to the home star, metres. */
   readonly centre: Vec3;
+  /** This galaxy's radius, metres. Framing, legibility and travel all read this, not a constant. */
+  readonly radius: number;
+  /** The drawn variation law this population was built from (arms, pitch, bulge, bar, colour). */
+  readonly shape: GalaxyShape;
   readonly stars: readonly GalaxyStar[];
 }
 
-/** Bulge radius fraction, matching `BULGE_RADIUS_FRACTION` in `disc.ts`. */
-const BULGE_RADIUS_FRACTION = 0.13;
 /**
  * Core taper scale for the exponential disc. Because `disc.ts` samples 1D radius exponentially,
  * 2D surface density rises as `1/r` near the centre and pinches into a bright diagonal cusp.
@@ -210,13 +226,20 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
   // (or an ordinary zoom-out to the top) hung the tab. At the root there is no galaxy population to
   // draw — return the home star alone, which the renderer already handles as an empty field.
   if (galaxyAddress.levels.length < GALAXY_DEPTH) {
-    return { version: GALAXY_VERSION, tier, centre: { x: 0, y: 0, z: 0 }, stars: [home] };
+    return {
+      version: GALAXY_VERSION,
+      tier,
+      centre: { x: 0, y: 0, z: 0 },
+      radius: GALAXY_RADIUS_MIN_M,
+      shape: REFERENCE_SHAPE,
+      stars: [home],
+    };
   }
 
   // The frame and the disc law come from `disc.ts`, shared with `placement(seed, address)`. This
   // function owns the *population*: which children are drawn, how bright they are, what colour.
   const frame = galaxyFrame(seed, galaxyAddress);
-  const { centre, radius } = frame;
+  const { centre, radius, shape } = frame;
 
   const locals: GalaxyStar[] = [];
   const discs: GalaxyStar[] = [];
@@ -266,20 +289,44 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
     } else {
       const base = starBrightness(appearance);
       const radialFrac = placed.fromCentre / radius;
-      const armLum = placed.inBulge ? 1 : 0.16 + 0.84 * placed.armMix ** 1.45;
-      const radialScale = placed.inBulge ? bulgeProfile(radialFrac) : discCoreTaper(radialFrac);
+      const armLum = placed.inBulge
+        ? 1
+        : placed.inHalo
+          ? 0.42
+          : 0.16 + 0.84 * placed.armMix ** 1.45;
+      const radialScale = placed.inBulge
+        ? bulgeProfile(radialFrac, shape)
+        : discCoreTaper(radialFrac);
+      // Dust is a lane *depression*, not extinction: the pass is additive with no depth buffer, so
+      // it cannot occlude anything behind it. It is deepest where the star is furthest off an arm
+      // (`armMix` 0), which is where a real dust lane sits, so the lanes read as dust rather than
+      // as a global dimming.
+      const dust =
+        placed.inBulge || placed.inHalo
+          ? 1
+          : 1 - shape.dustDepth * (1 - placed.armMix) ** 2;
       const emitBase = placed.inBulge ? base * 0.72 : Math.pow(base, 0.42) * 0.73;
-      const brightness = clampUnit(Math.max(0.008, emitBase * radialScale * armLum));
+      const brightness = clampUnit(Math.max(0.008, emitBase * radialScale * armLum * dust));
       const size = placed.inBulge
         ? 0.85 + Math.min(1, base) * 0.65
-        : 0.55 + base * (0.75 + 0.35 * placed.armMix);
+        : placed.inHalo
+          ? 0.5 + base * 0.5
+          : 0.55 + base * (0.75 + 0.35 * placed.armMix);
       discs.push({
         address: child,
         x: placed.position.x,
         y: placed.position.y,
         z: placed.position.z,
         brightness,
-        color: starColor(base, appearance, placed.armMix, placed.inBulge, radialFrac),
+        color: starColor(
+          base,
+          appearance,
+          placed.armMix,
+          placed.inBulge,
+          placed.inHalo,
+          radialFrac,
+          shape,
+        ),
         size,
         home: false,
       });
@@ -293,21 +340,23 @@ export function generateGalaxy(seed: string, address: Address, tier: GalaxyTier)
     );
   }
 
-  return { version: GALAXY_VERSION, tier, centre, stars: [home, ...locals, ...discs] };
+  return { version: GALAXY_VERSION, tier, centre, radius, shape, stars: [home, ...locals, ...discs] };
 }
 
 /**
- * The appearance stream version, **frozen at 8**.
+ * The appearance stream version.
  *
  * `GALAXY_VERSION` used to be this number, because appearance is part of what a shared link pins.
- * The sector insertion bumps that constant to 9 — an address changed — but **appearance must not
- * re-roll**: the whole claim of ADR-0023 is that the gated galaxy is the same picture with a new
- * set of labels. Folding the address version into this key would have contradicted that on the
- * every-star-differs scale. So appearance has its own version again, exactly like
- * `GALAXY_STREAM_VERSION` has its own: bump this when the *appearance law* changes, not when an
- * address changes.
+ * The sector insertion bumped that constant to 9 while keeping this at 8: an *address* changed and
+ * appearance did not, and the whole claim of ADR-0023 was that the gated galaxy stayed the same
+ * picture with new labels.
+ *
+ * 8 → 9: the galaxy variation law (ticket 06, item 4) changes the appearance law itself. Bulge
+ * radius and flattening now come from the galaxy, dust depresses the lanes, the halo tail is
+ * tinted old, and one colour-age axis moves the whole palette. A galaxy that is a different object
+ * must not keep a light profile fitted to the old fixed design, so this moves with it.
  */
-const APPEARANCE_VERSION = 8;
+const APPEARANCE_VERSION = 9;
 
 /**
  * The appearance stream key for one child: brightness, colour and size, drawn from the address
@@ -323,8 +372,8 @@ export function appearanceKey(seed: string, address: Address): string {
 }
 
 /** Smooth Gaussian bulge profile: luminous warm core tapering smoothly to the outer edge. */
-function bulgeProfile(fraction: number): number {
-  const u = clampUnit(fraction / BULGE_RADIUS_FRACTION);
+function bulgeProfile(fraction: number, shape: GalaxyShape): number {
+  const u = clampUnit(fraction / shape.bulgeRadiusFraction);
   return 0.15 + 0.85 * Math.exp(-3.8 * u * u);
 }
 
@@ -354,40 +403,57 @@ function starColorLocal(brightness: number, rng: Rng): readonly [number, number,
 }
 
 /**
- * Intrinsic brightness + population → tint:
- * - Bulge: warm golden-amber transitioning to warm ivory-gold at the core.
- * - Lane / inner old disc: warm amber-gold (`R > G > B`).
- * - Arm: warm cream-gold bulk, with luminous young OB stars (`base` high) cooling toward pale
- *   blue-white outside the inner core.
+ * Intrinsic brightness + population + the galaxy's colour age → tint.
+ *
+ * `colourAge` is one axis for the whole galaxy: 0 is red and quenched, 1 is blue and
+ * star-forming. It moves the lane warmth, how blue the arm's OB tracers can get, and how warm the
+ * bulge reads, so two galaxies differ in *colour* as well as in shape and size — one palette per
+ * galaxy rather than one palette per app.
  */
 function starColor(
   baseBrightness: number,
   rng: Rng,
   armMix: number,
   inBulge: boolean,
+  inHalo: boolean,
   radialFrac: number,
+  shape: GalaxyShape,
 ): readonly [number, number, number] {
   const jitter = rng.range(-0.03, 0.03);
   const t = clampUnit(baseBrightness);
+  const age = clampUnit(shape.colourAge);
 
   if (inBulge) {
-    const u = clampUnit(radialFrac / BULGE_RADIUS_FRACTION);
+    const u = clampUnit(radialFrac / shape.bulgeRadiusFraction);
+    // Old galaxies get a deeper, redder nucleus; young ones stay closer to warm ivory.
     return [
       clampUnit(1.0 + jitter),
-      clampUnit(0.68 + 0.20 * (1 - u) + 0.06 * t + jitter),
-      clampUnit(0.32 + 0.26 * (1 - u) + 0.08 * t + jitter),
+      clampUnit(0.68 + 0.20 * (1 - u) + 0.06 * t - 0.08 * age + jitter),
+      clampUnit(0.32 + 0.26 * (1 - u) + 0.08 * t - 0.12 * age + jitter),
+    ] as const;
+  }
+
+  if (inHalo) {
+    // The halo tail is old stars: warm and dim, and it must not read as another arm.
+    return [
+      clampUnit(0.98 + jitter),
+      clampUnit(0.66 + 0.10 * t - 0.06 * age + jitter),
+      clampUnit(0.34 + 0.12 * t - 0.10 * age + jitter),
     ] as const;
   }
 
   const innerWarm = 1 - smoothstepUnit(0.08, 0.36, radialFrac);
+  // The lane is where dust and old stars sit, so the age axis moves it first and most.
   const laneR = 1.0;
-  const laneG = 0.64 + 0.12 * t;
-  const laneB = 0.26 + 0.14 * t;
+  const laneG = 0.58 + 0.12 * t + 0.10 * age;
+  const laneB = 0.20 + 0.14 * t + 0.16 * age;
 
-  const ob = smoothstepUnit(0.18, 0.72, t) * (1 - 0.75 * innerWarm);
-  const armR = 0.96 - 0.30 * ob;
-  const armG = 0.88 + 0.02 * ob;
-  const armB = 0.72 + 0.28 * ob;
+  // Young galaxies allow a much bluer OB tracer; old ones stop near pale cream.
+  const obEnvelope = 0.45 + 0.55 * age;
+  const ob = smoothstepUnit(0.18, 0.72, t) * (1 - 0.75 * innerWarm) * obEnvelope;
+  const armR = 0.96 - 0.34 * ob;
+  const armG = 0.88 - 0.02 * ob;
+  const armB = 0.72 + 0.30 * ob;
 
   const armWeight = clampUnit(armMix ** 1.15) * (1 - 0.65 * innerWarm);
   return [

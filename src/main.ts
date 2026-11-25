@@ -6,14 +6,14 @@ import { formatAddress, parseAddress, sameAddress, type Address } from './frame/
 import { mountHud, showFatal, type CompassEntry } from './ui/hud';
 import { attachOrbitControls, orbitDistance, orbitTo } from './input/orbit-controls';
 import { defaultSystemCamera, displayScaleM } from './render/system-scene';
-import { GALAXY_MAX_DISTANCE_M } from './render/galaxy-scene';
+import { GALAXY_MAX_DISTANCE_M, galaxyMaxDistanceM } from './render/galaxy-scene';
 import { notchFactor, SYSTEM_EXTENT_M } from './render/scale';
 import { maskMethodFor, type MaskMethod } from './render/tier-mask';
 import { AU_M, describeSystem, type StarSystem } from './universe/system';
 import { resolveSystem } from './universe/authored';
 import { generateGalaxy, type Galaxy, type GalaxyTier } from './universe/galaxy';
 import { LY_M, galaxyAddressOf, galaxyFrame } from './universe/disc';
-import { GALAXY_DEPTH, hasSystemScene } from './universe/levels';
+import { GALAXY_DEPTH, galaxySizeFraction, hasSystemScene } from './universe/levels';
 import { placement } from './universe/placement';
 import { galaxyFraming, nearestAnchors, planZoomOut } from './universe/navigation';
 import { planTravel, type TravelPlan } from './universe/travel';
@@ -121,10 +121,15 @@ window.__ugb = {
           count: frame.count,
           tier: renderer?.galaxyTier ?? 'rich',
           // The disc's centre relative to the home star, in metres: capture framing needs it,
-          // and it makes the population's geometry checkable from a browser session.
+          // and it makes the population's geometry checkable from a browser session. `radius`,
+          // `armCount` and `sizeFraction` are the variation law's visible identity — a capture
+          // or a probe can assert that a galaxy is small or large and how many arms it has.
           centre: currentGalaxy
             ? ([currentGalaxy.centre.x, currentGalaxy.centre.y, currentGalaxy.centre.z] as const)
             : null,
+          radius: currentGalaxy?.radius ?? null,
+          armCount: currentGalaxy?.shape.armCount ?? null,
+          sizeFraction: currentGalaxy ? galaxySizeFraction(state.seed, galaxyAddressOf(state.address)) : null,
         }
       : null;
   },
@@ -402,9 +407,11 @@ function commitZoomOut(depth: number): UniverseNavigationResult {
     return { ok: false, reason: plan.reason };
   }
 
-  // The centre comes from the galaxy's frame, not from the generated population: the frame is the
-  // cheap part, and a zoom-out must not pay for a whole galaxy just to place the camera.
-  const framing = galaxyFraming(galaxyFrame(state.seed, plan.address).centre);
+  // The frame comes from the galaxy, not from the generated population: it is the cheap part, and
+  // a zoom-out must not pay for a whole galaxy just to place the camera. The radius is this
+  // galaxy's own, so the framing distance scales with what is actually there.
+  const frame = galaxyFrame(state.seed, plan.address);
+  const framing = galaxyFraming(frame.centre, frame.radius);
 
   const next: UrlState = {
     ...state,
@@ -448,7 +455,8 @@ function openingCamera(
 ): Camera | null {
   if (system) return defaultSystemCamera(system);
   if (address.levels.length < GALAXY_DEPTH) return null;
-  const framing = galaxyFraming(galaxyFrame(seed, galaxyAddressOf(address)).centre);
+  const frame = galaxyFrame(seed, galaxyAddressOf(address));
+  const framing = galaxyFraming(frame.centre, frame.radius);
   return orbitTo(framing.yaw, framing.pitch, framing.distanceM);
 }
 
@@ -649,16 +657,19 @@ async function init(attempt: number): Promise<AppHandle> {
     // settles: browsers rate-limit `history.replaceState`.
     //
     // The controls are attached whenever the address has a scene to frame — a sector's scene is
-    // the galaxy, so it gets the same orbit/pan/zoom. Its zoom limits are the galaxy's own: the
-    // frame scale is a system's extent (the smallest reachable scale), because a sector frame has
-    // no system to borrow one from, and `GALAXY_MAX_DISTANCE_M` already bounds the far end.
+    // the galaxy, so it gets the same orbit/pan/zoom. The zoom ceiling is the **current galaxy's**
+    // own (`galaxyMaxDistanceM(radius)`): a small galaxy's wheel would otherwise retreat four
+    // decades past anything it can show, and a large one's ceiling would be inside its own disc.
     const frameScaleM = system ? displayScaleM(system) : SYSTEM_EXTENT_M;
+    const maxDistanceM = galaxy
+      ? galaxyMaxDistanceM(galaxy.radius)
+      : GALAXY_MAX_DISTANCE_M;
     const controls = system || galaxy
       ? attachOrbitControls({
           element: canvas,
           camera: state.camera,
           frameScaleM,
-          maxDistanceM: GALAXY_MAX_DISTANCE_M,
+          maxDistanceM,
           onChange: () => {
             if (created.isMaskActive()) created.interruptMask();
             hud.setCamera(state.camera);

@@ -16,16 +16,22 @@ import { createServer, preview } from 'vite';
 const root = path.resolve(import.meta.dirname, '..');
 const DEFAULT_BASE_URL = 'http://127.0.0.1:4173/';
 const SEEDS = Array.from({ length: 12 }, (_, i) => `ugb-${String(i).padStart(4, '0')}`);
-const ADDRESS_STR = 'v1/4.0.-2.7'; // star -2 (sector 0), which is the orrery system
+const ADDRESS_STR = 'v1/4.1.-2.7'; // star -2 (sector 1), which is the orrery system
 const EPOCH_STR = '2000-01-01T00:00:00.000Z';
 const T_VAL = 1200;
-const GALAXY_CAM = {
-  x: 726150025192868500000,
-  y: 886130388030334300000,
-  z: -614393258688281300000,
-  yaw: 2.273020050191636,
-  pitch: -0.75,
-};
+/**
+ * The gallery camera's *composition* — an oblique look with the centre behind the home star — as
+ * angles and a multiple of the galaxy's own radius.
+ *
+ * It used to be three pinned metres (`1.3e21` from the origin), which is `2.6 R` only while every
+ * galaxy was `GALAXY_RADIUS_M` across. Now that radius is drawn per galaxy, a pinned metric camera
+ * frames one galaxy and nothing else: `v1/4` is 2.39e20 across, so `2.6 · 5e20` puts the eye 6 R
+ * away and the disc becomes a dot. Deriving through `orbitTo` at `2.6 · radius` reproduces the old
+ * triple exactly for a 5e20 galaxy and keeps this the same picture at any size.
+ */
+const GALAXY_CAM_YAW = 2.273020050191636;
+const GALAXY_CAM_PITCH = -0.75;
+const GALAXY_CAM_DISTANCE_R = 2.6;
 const LAYER12_SHOTS = [
   'desktop-1080p',
   'desktop-1440p',
@@ -67,7 +73,6 @@ try {
     { generateSystem },
     { displayScaleM },
     { cameraBasis, FOV_Y_RAD },
-    { GALAXY_RADIUS_M },
     { parseAddressOrThrow },
   ] = await Promise.all([
     vite.ssrLoadModule('/src/universe/galaxy.ts'),
@@ -75,12 +80,24 @@ try {
     vite.ssrLoadModule('/src/universe/system.ts'),
     vite.ssrLoadModule('/src/render/system-scene.ts'),
     vite.ssrLoadModule('/src/render/camera.ts'),
-    vite.ssrLoadModule('/src/render/scale.ts'),
     vite.ssrLoadModule('/src/frame/address.ts'),
   ]);
 
   const address = parseAddressOrThrow(ADDRESS_STR);
-  const basis = cameraBasis(GALAXY_CAM.yaw, GALAXY_CAM.pitch);
+  const basis = cameraBasis(GALAXY_CAM_YAW, GALAXY_CAM_PITCH);
+
+  /** The gallery camera for one galaxy: the fixed composition at that galaxy's own size. */
+  const galaxyCam = (galaxy) => {
+    const distance = GALAXY_CAM_DISTANCE_R * galaxy.radius;
+    const cosPitch = Math.cos(GALAXY_CAM_PITCH);
+    return {
+      x: Math.sin(GALAXY_CAM_YAW) * cosPitch * distance,
+      y: -Math.sin(GALAXY_CAM_PITCH) * distance,
+      z: Math.cos(GALAXY_CAM_YAW) * cosPitch * distance,
+      yaw: GALAXY_CAM_YAW,
+      pitch: GALAXY_CAM_PITCH,
+    };
+  };
 
   if (!args.skipCapture) {
     await access(path.join(root, 'dist', 'index.html'));
@@ -97,12 +114,23 @@ try {
 
     for (const seed of SEEDS) {
       const file = path.join(outDir, `seed-${seed}.png`);
-      await captureUrl(browser, DEFAULT_BASE_URL, seed, 1920, 1080, file, null);
+      const galaxy = generateGalaxy(seed, address, 'rich');
+      await captureUrl(
+        browser,
+        DEFAULT_BASE_URL,
+        seed,
+        1920,
+        1080,
+        file,
+        null,
+        galaxyCam(galaxy),
+      );
     }
 
     const g0 = generateGalaxy('ugb-0000', address, 'rich');
+    const cam0 = galaxyCam(g0);
     const s0 = displayScaleM(generateSystem('ugb-0000', address));
-    const nuc1080 = projectPoint(g0.centre, GALAXY_CAM, s0, basis, 1920, 1080, FOV_Y_RAD);
+    const nuc1080 = projectPoint(g0.centre, cam0, s0, basis, 1920, 1080, FOV_Y_RAD);
     const crop1080 = clampCrop(nuc1080.x - 120, nuc1080.y - 120, 240, 240, 1920, 1080);
     await captureUrl(
       browser,
@@ -112,9 +140,10 @@ try {
       1080,
       path.join(outDir, 'nucleus-crop-1080p.png'),
       crop1080,
+      cam0,
     );
 
-    const nuc2160 = projectPoint(g0.centre, GALAXY_CAM, s0, basis, 3840, 2160, FOV_Y_RAD);
+    const nuc2160 = projectPoint(g0.centre, cam0, s0, basis, 3840, 2160, FOV_Y_RAD);
     const crop2160 = clampCrop(nuc2160.x - 240, nuc2160.y - 240, 480, 480, 3840, 2160);
     await captureUrl(
       browser,
@@ -124,6 +153,7 @@ try {
       2160,
       path.join(outDir, 'nucleus-crop-2160p.png'),
       crop2160,
+      cam0,
     );
 
     await browser.close();
@@ -137,18 +167,25 @@ try {
     const file = path.join(outDir, `seed-${seed}.png`);
     const image = decodePng(await readFile(file));
     const galaxy = generateGalaxy(seed, address, 'rich');
+    const cam = galaxyCam(galaxy);
     const scaleM = displayScaleM(generateSystem(seed, address));
     const mod = armModulation(galaxy);
     const centreDistR =
-      Math.hypot(
-        galaxy.centre.x - GALAXY_CAM.x,
-        galaxy.centre.y - GALAXY_CAM.y,
-        galaxy.centre.z - GALAXY_CAM.z,
-      ) / GALAXY_RADIUS_M;
+      Math.hypot(galaxy.centre.x - cam.x, galaxy.centre.y - cam.y, galaxy.centre.z - cam.z) /
+      galaxy.radius;
 
     const nuc = measureNucleus(image);
     const disc = measureDiscTone(image);
-    const arm = measureArmProfile(image, galaxy, scaleM, basis, GALAXY_RADIUS_M, FOV_Y_RAD, toDiscFrame);
+    const arm = measureArmProfile(
+      image,
+      galaxy,
+      scaleM,
+      basis,
+      galaxy.radius,
+      FOV_Y_RAD,
+      toDiscFrame,
+      cam,
+    );
 
     seedMetrics.push({
       seed,
@@ -182,9 +219,19 @@ try {
   if (await exists(gal2160Path)) {
     const img2160 = decodePng(await readFile(gal2160Path));
     const g0 = generateGalaxy('ugb-0000', address, 'rich');
+    const cam0 = galaxyCam(g0);
     const s0 = displayScaleM(generateSystem('ugb-0000', address));
     const nuc2160 = measureNucleus(img2160);
-    const arm2160 = measureArmProfile(img2160, g0, s0, basis, GALAXY_RADIUS_M, FOV_Y_RAD, toDiscFrame);
+    const arm2160 = measureArmProfile(
+      img2160,
+      g0,
+      s0,
+      basis,
+      g0.radius,
+      FOV_Y_RAD,
+      toDiscFrame,
+      cam0,
+    );
     guardrails.galaxy2160p = {
       ...nuc2160,
       ridgeTrough4K: arm2160.ratio,
@@ -254,7 +301,7 @@ try {
   await vite.close().catch(() => {});
 }
 
-async function captureUrl(browserInstance, baseUrl, seed, width, height, file, clip) {
+async function captureUrl(browserInstance, baseUrl, seed, width, height, file, clip, cam) {
   const context = await browserInstance.newContext({
     viewport: { width, height },
     deviceScaleFactor: 1,
@@ -269,7 +316,7 @@ async function captureUrl(browserInstance, baseUrl, seed, width, height, file, c
       epoch: EPOCH_STR,
       addr: ADDRESS_STR,
       t: String(T_VAL),
-      cam: [GALAXY_CAM.x, GALAXY_CAM.y, GALAXY_CAM.z, GALAXY_CAM.yaw, GALAXY_CAM.pitch].join(','),
+      cam: [cam.x, cam.y, cam.z, cam.yaw, cam.pitch].join(','),
     }).toString();
 
     await page.goto(target.href, { waitUntil: 'domcontentloaded' });
@@ -541,7 +588,7 @@ function measureDiscTone(image) {
   };
 }
 
-function measureArmProfile(image, galaxy, scaleM, basis, galaxyRadiusM, fovYRad, toDiscFrame) {
+function measureArmProfile(image, galaxy, scaleM, basis, galaxyRadiusM, fovYRad, toDiscFrame, cam) {
   const { width: W, height: H, pixels } = image;
   const focalPx = H / (2 * Math.tan(fovYRad / 2));
   const sampleRgb = (x, y) => {
@@ -576,9 +623,9 @@ function measureArmProfile(image, galaxy, scaleM, basis, galaxyRadiusM, fovYRad,
       binA - 1,
       Math.floor(((Math.atan2(d.z, d.x) + Math.PI) / (2 * Math.PI)) * binA),
     );
-    const dx = (star.x - GALAXY_CAM.x) / scaleM;
-    const dy = (star.y - GALAXY_CAM.y) / scaleM;
-    const dz = (star.z - GALAXY_CAM.z) / scaleM;
+    const dx = (star.x - cam.x) / scaleM;
+    const dy = (star.y - cam.y) / scaleM;
+    const dz = (star.z - cam.z) / scaleM;
     const rx = dx * basis.right.x + dy * basis.right.y + dz * basis.right.z;
     const uy = dx * basis.up.x + dy * basis.up.y + dz * basis.up.z;
     const fz = dx * basis.forward.x + dy * basis.forward.y + dz * basis.forward.z;

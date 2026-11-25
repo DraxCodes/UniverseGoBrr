@@ -61,8 +61,14 @@ import {
  * **Stays 2 through the sector insertion, deliberately.** The insertion moves no star, so bumping
  * this would be a claim that positions changed when the whole point is that they did not. The key
  * below reproduces the pre-re-key string exactly for every star, which is what makes that true.
+ *
+ * 2 → 3: **the galaxy variation law moves every placed star** (ticket 06, item 4). The radius is
+ * drawn per galaxy rather than a constant, so every radial draw is a different number of metres;
+ * and a disc-kind star now draws halo membership before its radius. Both are changes to the disc
+ * *law*, which is exactly the case this comment says bumps the version. Unlike the sector
+ * insertion, this one really does move positions, so the key has to say so.
  */
-export const PLACEMENT_VERSION = 2;
+export const PLACEMENT_VERSION = 3;
 
 /** One galaxy child in this many is a local-field star. Kept in step with the rich tier's ratio. */
 export const LOCAL_STAR_EVERY = 9;
@@ -113,6 +119,8 @@ export interface PlacedStar {
   readonly kind: StarKind;
   /** Disc-only; false for local stars. */
   readonly inBulge: boolean;
+  /** Disc-only; true for a star on the galaxy's halo tail. */
+  readonly inHalo: boolean;
   /** Disc-only, metres from the galactic centre; 0 for local stars (their nucleus falloff is 1). */
   readonly fromCentre: number;
   /** Disc-only, 0..1; 0 for local stars. */
@@ -158,6 +166,7 @@ function sampleStar(
       position: sampleLocalStar(rng),
       kind,
       inBulge: false,
+      inHalo: false,
       fromCentre: 0,
       armMix: 0,
     };
@@ -168,6 +177,7 @@ function sampleStar(
     position: { x: sample.x, y: sample.y, z: sample.z },
     kind,
     inBulge: sample.inBulge,
+    inHalo: sample.inHalo,
     fromCentre: sample.fromCentre,
     armMix: sample.armMix,
   };

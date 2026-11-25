@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { childAddress, formatAddress, parseAddress, type Address } from '../frame/address';
 import { createRng } from '../lib/random';
 import { fnv1a32 } from '../lib/hash';
-import { GALAXY_RADIUS_M } from '../render/scale';
 import { LOCAL_RADIUS_M, galaxyAddressOf, generateGalaxy, toDiscFrame } from './galaxy';
 import { galaxyFrame, sampleDiscStar, sectorPosition, discPlanePoint } from './disc';
 import {
@@ -45,7 +44,7 @@ describe('placement is a pure function of (seed, address)', () => {
 
   it('is versioned', () => {
     // A position is content: a shared link re-pins when it changes, like `SYSTEM_VERSION`.
-    expect(PLACEMENT_VERSION).toBe(2);
+    expect(PLACEMENT_VERSION).toBe(3);
     expect(placementKey(SEED, address('v1/4.3'))).toContain(`|placement|v${PLACEMENT_VERSION}`);
   });
 });
@@ -58,8 +57,8 @@ describe('a sector is a real destination', () => {
     expect(here).toEqual(expected);
     // Mid-radius, tilted with the disc, so it is inside the disc and not at the centre.
     const flat = discPlanePoint(frame.centre, here);
-    expect(Math.hypot(flat.x, flat.z)).toBeGreaterThan(GALAXY_RADIUS_M * 0.1);
-    expect(Math.hypot(flat.x, flat.z)).toBeLessThanOrEqual(GALAXY_RADIUS_M);
+    expect(Math.hypot(flat.x, flat.z)).toBeGreaterThan(frame.radius * 0.1);
+    expect(Math.hypot(flat.x, flat.z)).toBeLessThanOrEqual(frame.radius);
   });
 });
 
@@ -72,7 +71,7 @@ describe('a placed star belongs to its galaxy', () => {
       const point = placement(SEED, star(GALAXY, index))!;
       const disc = toDiscFrame(galaxy, point);
       const radius = Math.hypot(disc.x, disc.z);
-      expect(radius, String(index)).toBeLessThanOrEqual(GALAXY_RADIUS_M * 1.001);
+      expect(radius, String(index)).toBeLessThanOrEqual(galaxy.radius * 1.001);
       // The disc field is deliberately never drawn inside the local field's sphere, so a placed
       // disc star is never a duplicate of a neighbourhood light drawn by the local field.
       expect(Math.hypot(point.x, point.y, point.z), String(index)).toBeGreaterThanOrEqual(
@@ -192,7 +191,7 @@ describe('placement and the picture share one law', () => {
     const deep = placement(SEED, childAddress(childAddress(star(GALAXY, 1), 0), 0))!;
     for (const point of [near, deep]) {
       const disc = toDiscFrame(galaxy, point);
-      expect(Math.hypot(disc.x, disc.z)).toBeLessThanOrEqual(GALAXY_RADIUS_M * 1.001);
+      expect(Math.hypot(disc.x, disc.z)).toBeLessThanOrEqual(galaxy.radius * 1.001);
     }
   });
 });

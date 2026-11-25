@@ -21,24 +21,43 @@ import { FOV_Y_RAD } from './camera';
 
 /** At or below this, the controls behave exactly as Layer 2 did. */
 export const SYSTEM_EXTENT_M = 1e13;
-/** The galaxy's radius; at and beyond it the constant Layer 2 rate resumes. */
+/**
+ * The **reference** galaxy radius, not "the" radius.
+ *
+ * Galaxies vary in size now (`galaxyRadiusM` in `disc.ts`, ticket 06 item 4), so a single radius
+ * cannot describe the population. This constant survives for two jobs that are deliberately
+ * population-level rather than per-galaxy:
+ *
+ * - it is where the zoom-rate schedule returns to the Layer 2 rate (`voidCompression`), so the
+ *   wheel feels the same on the way out of any system; and
+ * - it is the yardstick the size law is written against.
+ *
+ * Anything that frames or measures **one** galaxy must use that galaxy's own `radius`, never this.
+ */
 export const GALAXY_RADIUS_M = 5e20;
+/** The smallest and largest galaxies the size law draws. The spread is the variety. */
+export const GALAXY_RADIUS_MIN_M = 0.5e20;
+export const GALAXY_RADIUS_MAX_M = 9e20;
 /** Bumped when the schedule changes. Like `SYSTEM_VERSION`: changing it changes the feel. */
 export const SCALE_VERSION = 1;
 
 /**
- * The camera distance at which a disc of radius `R`, centred `centreOffsetM` from the frame
+ * The camera distance at which a disc of radius `radiusM`, centred `centreOffsetM` from the frame
  * origin, just fits the vertical field of view.
  *
  * Derived, not tuned. Because the orbit camera always looks at the **frame origin** (the home
- * star) and the galactic centre is `HOME_RADIUS_FRACTION · R` away from it, the farthest point in
- * the disc is `centreOffsetM + R` from the origin. A point at that distance in the view plane
- * subtends `atan((centreOffsetM + R) / d)`, so `d = (centreOffsetM + R) / tan(FOV/2)` puts the
- * whole disc inside the frame. Using `R` alone — the first version — framed a disc that was not
- * centred and cropped its far side.
+ * star) and the galactic centre is a fraction of the galaxy's own radius from it, the farthest
+ * point in the disc is `centreOffsetM + radiusM` from the origin. A point at that distance in the
+ * view plane subtends `atan((centreOffsetM + radiusM) / d)`, so
+ * `d = (centreOffsetM + radiusM) / tan(FOV/2)` puts the whole disc inside the frame. Using the
+ * radius alone — the first version — framed a disc that was not centred and cropped its far side.
+ *
+ * `radiusM` is the **galaxy's own** radius, not `GALAXY_RADIUS_M`: a galaxy reads as a galaxy when
+ * it fills the frame, at any size, which is the whole reason the framing distance is a multiple of
+ * the galaxy rather than a number of metres.
  */
-export function galaxyFramingDistanceM(centreOffsetM: number): number {
-  return (centreOffsetM + GALAXY_RADIUS_M) / Math.tan(FOV_Y_RAD / 2);
+export function galaxyFramingDistanceM(centreOffsetM: number, radiusM: number): number {
+  return (centreOffsetM + radiusM) / Math.tan(FOV_Y_RAD / 2);
 }
 
 /**
@@ -49,7 +68,17 @@ export function galaxyFramingDistanceM(centreOffsetM: number): number {
 export const VOID_ZOOM_BOOST = 4;
 
 const LOG_START = Math.log10(SYSTEM_EXTENT_M); // 13
-const LOG_END = Math.log10(GALAXY_RADIUS_M); // ≈20.70
+/**
+ * The schedule is anchored on the **smallest** galaxy, not on a typical one.
+ *
+ * It has to return to the Layer 2 rate before the nearest possible galaxy edge, or the wheel is
+ * still in its fast void regime *inside* a small galaxy — the rate would change under the viewer
+ * mid-disc. The smallest galaxy is `GALAXY_RADIUS_MIN_M`, so its edge is the constraint; anchoring
+ * on `GALAXY_RADIUS_M` (a 10× larger reference) would put the end of the fast regime a decade past
+ * every small galaxy's rim. The cost is that a 9e20 galaxy is crossed at the base rate for its
+ * outer decades, which is the honest behaviour of one camera with one schedule.
+ */
+const LOG_END = Math.log10(GALAXY_RADIUS_MIN_M); // ≈19.70
 /** Leave the last decade at the base rate, so the galaxy edge is not the fast part. */
 const LOG_VOID_END = LOG_END - 1;
 const LOG_VOID_PEAK = (LOG_START + LOG_VOID_END) / 2;

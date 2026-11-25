@@ -30,6 +30,12 @@ works once that budget is raised.
   manifest** returned 6 findings at `--max-tokens 16000 --timeout 240000`. The same eight failed at
   the default budget; a 4-shot manifest failed at 1500 and a **single** 1280 px shot failed at 1200
   but answered at 16000. So budget is the axis, and shot count only raises the budget needed.
+- **32000 is not a ceiling, and a short answer is a silent truncation** (2026-11-25, same day,
+  a second pass). Six 1280 px shots at `--max-tokens 32000` returned **`findings: []`**; split into
+  3 + 3 they returned **2 and 4**. The empty array was the model running out of budget before it
+  finished reasoning, not a clean frame. **A `0` from a multi-shot manifest means "re-run smaller",
+  not "no defects"** unless a capability probe on that exact shape passed. Budget needed scales with
+  both image count and image density, and 32000 is enough for 3 dense 1280 px shots but not 6.
 - **The endpoint caps a request at 8 images.** Nine or more returns HTTP 400
   `Total number of images exceeds the maximum allowed of 8` — it fails loudly, not by silently
   reviewing a subset. Trim the manifest to the eight most informative states rather than splitting
@@ -47,6 +53,18 @@ works once that budget is raised.
   `nan · manual scale1` and `64deg108.4 ly` where the frame says `normal scene` and
   `76754.1 ly, 93664.1 ly, -64941.4 ly`. Treat any finding that depends on reading a label at
   960 px as noise; check the native frame before acting on it.
+  **Measured rate (2026-11-25):** of 12 findings from a 960 px pass, **9 were HUD-text misreads** —
+  every one a digit or separator invented by the downscale (`36627.6` → `56997.6`, `+1200` → `+1280`,
+  `v1/8.0.5229` → `v1/0.0.5239`, `117267.3` → `1137267.3`, `.` → `,`). The reviewer treats the HUD as
+  evidence and will report a "defect" from a corrupted digit with high confidence. Budget the
+  adjudication for this: crop the HUD at 2x native before believing any finding that quotes text.
+- **A finding can be true and still be your brief's fault.** The same pass reported, correctly and at
+  `major/high`, that the galactic nucleus was 237 px from the frame centre. It was: the camera targets
+  the **home star**, a random point in the disc. But the brief I wrote said "the centre sits behind
+  the home star", so the reviewer measured the picture against a false premise and reported the
+  picture as broken. **A state-only brief must describe what the build does, not what you meant it to
+  do** — the reviewer has no way to tell a wrong expectation from a defect, and it will trust your
+  prose over the pixels.
 - **Never trust a 0 without a probe on the same input shape.** Paint a magenta rectangle on a copy
   of a real shot and check the reviewer reports it (`.scratch/probe-shot.mjs` writes
   `.scratch/visual-review/layer3/probe.png` with a matching manifest and brief). A probe that

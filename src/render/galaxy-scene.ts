@@ -37,8 +37,23 @@ import {
   type GalaxyTier,
 } from '../universe/galaxy';
 
-/** Furthest the wheel may retreat. Far enough to frame the whole disc with the home star in it. */
-export const GALAXY_MAX_DISTANCE_M = GALAXY_RADIUS_M * 12;
+/**
+ * The furthest the wheel may retreat for a galaxy of radius `radius`, metres.
+ *
+ * Twelve radii frames the whole disc with the home star inside it and leaves room to look at the
+ * surroundings. It follows the galaxy's own size: a 0.5e20 galaxy and a 9e20 one cannot share a
+ * ceiling, or the small one's ceiling is a meaningless four decades beyond anything it can show and
+ * the large one's is inside its own disc.
+ */
+export function galaxyMaxDistanceM(radius: number): number {
+  return radius * 12;
+}
+
+/**
+ * The reference ceiling, for callers that have no galaxy (a test, a default). One galaxy's own
+ * limit is `galaxyMaxDistanceM(galaxy.radius)`; use that wherever the galaxy is known.
+ */
+export const GALAXY_MAX_DISTANCE_M = galaxyMaxDistanceM(GALAXY_RADIUS_M);
 
 /**
  * The smallest a galaxy impostor may get, in device pixels **at 1080p**. A point that shrinks
@@ -101,16 +116,37 @@ export const GALAXY_MAX_INSTANCES =
 const NEAR_UNITS = 0.002;
 
 /**
- * The measured arm modulation that counts as a *strong* two-arm field. The generator's rejection
- * sampling leaves a real but seed-dependent m=2 amplitude; this constant normalises it for the
- * reported contrast, so a weak field reads weaker without ever failing to resolve.
+ * The measured arm-contrast normaliser, per arm count.
  *
- * Measured on the v4 population after the arm narrowing and per-star hue split: 0.427 for the
- * shipped seed, 0.422-0.441 across 12 seeds. The previous 0.16 was calibrated to the pre-narrowing
- * field (m=2 ~0.17) and, left in place, saturated every seed to 1.0 — the score stopped
- * discriminating. This is a HUD diagnostic only; it never reaches the shader.
+ * The measurement is a DFT at the galaxy's **own** arm count (`m = armCount`), which is what makes
+ * a three- or four-armed galaxy measurable at all: the old code measured `cos(2·azimuth)`, so a
+ * four-armed field reported the beat between its two pairs (near zero) and the HUD called a
+ * perfectly legible galaxy unresolvable. The normaliser has to move with it, because the same star
+ * budget spread over more arms fills more azimuth uniformly and measures lower at any fixed bin
+ * count.
+ *
+ * These are **measured**, 12 seeds × 12 galaxies per arm count, on the shipped population. The
+ * harness is `src/render/arm-measure.test.ts`, opt-in via `UGB_MEASURE=1`; rerun it after any
+ * disc-law change. The table is indexed by arm count and falls back to the two-arm value.
+ *
+ * Last measured after the sweep fix (75 / 34 / 35 galaxies): m=2 mean 0.4116, m=3 0.4060,
+ * m=4 0.3889, all with p10 above 0.369. The values below are those means rounded.
+ *
+ * The three numbers are close together on purpose. Before the arm profile was tied to the arm
+ * *spacing* (see `armStrength`), a four-armed galaxy measured 0.11 and a three-armed one 0.02 — a
+ * perfectly readable galaxy that the HUD called unresolvable. With one lobe per arm at half the
+ * spacing, all three counts measure the same field strength, so this calibrates *strength* rather
+ * than fudging a shape.
  */
-const ARM_CONTRAST_FULL = 0.42;
+const ARM_CONTRAST_FULL_BY_ARMS: Readonly<Record<number, number>> = Object.freeze({
+  2: 0.412,
+  3: 0.406,
+  4: 0.389,
+});
+
+function armContrastFull(armCount: number): number {
+  return ARM_CONTRAST_FULL_BY_ARMS[armCount] ?? ARM_CONTRAST_FULL_BY_ARMS[2]!;
+}
 
 /** An arm band narrower than this many pixels cannot be read; wider than the second is full. */
 const ARM_RESOLVED_MIN_PX = 5;
@@ -172,9 +208,10 @@ export interface GalaxyFrame {
 }
 
 /**
- * The static, measured arm modulation: the m=2 Fourier amplitude of the disc's azimuthal density
- * around the galactic centre. This is read off the actual population, not a constant, so a seed
- * whose arms are weak says so; it is computed once per galaxy.
+ * The static, measured arm modulation: the Fourier amplitude of the disc's azimuthal density at
+ * the galaxy's **own** arm count, around the galactic centre. This is read off the actual
+ * population, not a constant, so a seed whose arms are weak says so; it is computed once per
+ * galaxy.
  */
 const modulationCache = new WeakMap<Galaxy, number>();
 
@@ -182,12 +219,16 @@ export function armModulation(galaxy: Galaxy): number {
   const cached = modulationCache.get(galaxy);
   if (cached !== undefined) return cached;
 
-  // The spiral winds with radius (the generator's `winding = r/scale · 2.4`), so one DFT over
-  // the whole annulus would cancel its own arms. Measure per radial slice and average, weighted
-  // by how many stars each slice holds.
+  // The spiral winds with radius, so one DFT over the whole annulus would cancel its own arms.
+  // Measure per radial slice and average, weighted by how many stars each slice holds.
+  //
+  // The harmonic is the galaxy's own arm count. Measuring m=2 on a four-armed field reports the
+  // beat between the two pairs, which is near zero for a good galaxy — the failure the ticket
+  // names ("the reported contrast and the trigger both go false").
+  const m = Math.max(2, Math.round(galaxy.shape.armCount));
   const bins = 20;
-  const inner = 0.2 * GALAXY_RADIUS_M;
-  const outer = 1.0 * GALAXY_RADIUS_M;
+  const inner = 0.2 * galaxy.radius;
+  const outer = 1.0 * galaxy.radius;
   const cosine = new Float64Array(bins);
   const sine = new Float64Array(bins);
   const counts = new Float64Array(bins);
@@ -205,8 +246,8 @@ export function armModulation(galaxy: Galaxy): number {
 
     const bin = Math.min(bins - 1, Math.floor(((radius - inner) / (outer - inner)) * bins));
     const azimuth = Math.atan2(relative.z, relative.x);
-    cosine[bin]! += Math.cos(2 * azimuth);
-    sine[bin]! += Math.sin(2 * azimuth);
+    cosine[bin]! += Math.cos(m * azimuth);
+    sine[bin]! += Math.sin(m * azimuth);
     counts[bin]! += 1;
   }
 
@@ -253,28 +294,29 @@ export function galaxyLegibility(
     z: galaxy.centre.z - camera.z,
   };
   const centreDistance = Math.hypot(toCentre.x, toCentre.y, toCentre.z);
+  const radius = galaxy.radius;
 
   // The disc has to be outside the eye (a compact object in front) and not so close that it
-  // overfills the frame into a wall of stars.
+  // overfills the frame into a wall of stars. Both edges are multiples of **this** galaxy's
+  // radius: a small galaxy becomes a compact object much sooner than a large one, and one
+  // threshold for the population would call a 0.5e20 galaxy a wall while a 9e20 one is still a
+  // speck.
   const outside = smoothstep(
-    DISC_OUTSIDE_START * GALAXY_RADIUS_M,
-    DISC_OUTSIDE_FULL * GALAXY_RADIUS_M,
+    DISC_OUTSIDE_START * radius,
+    DISC_OUTSIDE_FULL * radius,
     centreDistance,
   );
-  const angularRadius =
-    centreDistance > 0 ? GALAXY_RADIUS_M / centreDistance : Number.POSITIVE_INFINITY;
+  const angularRadius = centreDistance > 0 ? radius / centreDistance : Number.POSITIVE_INFINITY;
   const notOverfilled = 1 - smoothstep(DISC_OVERFILL_START, DISC_OVERFILL_END, angularRadius);
   const fit = outside * notOverfilled;
 
   // An arm's linear width is roughly half the radius it sits at; below a few pixels the
   // modulation survives in the population but not in the image.
   const armBandPx =
-    centreDistance > 0
-      ? 0.5 * (GALAXY_RADIUS_M / centreDistance) * focalPx
-      : Number.POSITIVE_INFINITY;
+    centreDistance > 0 ? 0.5 * (radius / centreDistance) * focalPx : Number.POSITIVE_INFINITY;
   const resolved = smoothstep(ARM_RESOLVED_MIN_PX, ARM_RESOLVED_FULL_PX, armBandPx);
 
-  const modulation = clamp01(armModulation(galaxy) / ARM_CONTRAST_FULL);
+  const modulation = clamp01(armModulation(galaxy) / armContrastFull(galaxy.shape.armCount));
   const lod = clamp01(fit * resolved * inclination);
   const contrast = clamp01(lod * modulation);
 
@@ -344,15 +386,18 @@ export function writeGalaxyFrame(
   // orrery and carving a hole in it would be a change to Layer 2's frame for no reason.
   const homeGapPx = HOME_GAP_PX * legibility.lod;
 
-  // Balance apparent surface brightness across seeds whose galactic centres sit at slightly
-  // different distances from the fixed camera (`centreDistance / 2.6 R` varies ~2.3..3.0 R).
-  // Blended in by `legibility.lod` so Layer 2 / boot-frame `exposure` stays exactly 1.0.
+  // Balance apparent surface brightness across galaxies whose centres sit at slightly different
+  // distances from the camera. The reference framing distance is `2.6 R` **of this galaxy**, so a
+  // large and a small galaxy are both compared against the distance that frames them; using the
+  // old global radius would drive a small galaxy's exposure to its ceiling and a large one's to
+  // its floor for no visual reason. Blended in by `legibility.lod` so Layer 2 / boot-frame
+  // `exposure` stays exactly 1.0.
   const centreDistance = Math.hypot(
     galaxy.centre.x - camera.x,
     galaxy.centre.y - camera.y,
     galaxy.centre.z - camera.z,
   );
-  const distRatio = centreDistance / (2.6 * GALAXY_RADIUS_M);
+  const distRatio = centreDistance / (2.6 * galaxy.radius);
   const rawExposure = Math.min(1.55, Math.max(0.80, Math.pow(Math.max(distRatio, 0.35), -0.40)));
   const exposure = 1 + (rawExposure - 1) * legibility.lod;
   const sizeBias = 0.15 * legibility.lod;

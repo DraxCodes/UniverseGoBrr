@@ -8,8 +8,7 @@ import {
   generateGalaxy,
   toDiscFrame,
 } from './galaxy';
-import { GALAXY_RADIUS_M } from '../render/scale';
-import { armStrength, galaxyFrame } from './disc';
+import { armStrength, ARM_SWEEP_MAX_RAD, ARM_SWEEP_MIN_RAD, galaxyFrame } from './disc';
 
 const SEED = 'ugb-0000';
 
@@ -150,7 +149,9 @@ describe('the population has the right shape', () => {
       farthest = Math.max(farthest, distance);
     }
     // The local-field exclusion pushes a handful outwards; the bound stays near the disc edge.
-    expect(farthest).toBeLessThanOrEqual(GALAXY_RADIUS_M * 1.1);
+    // It is *this* galaxy's radius now — the size is drawn, so a global constant would pass for
+    // one galaxy and fail for every other.
+    expect(farthest).toBeLessThanOrEqual(galaxy.radius * 1.1);
   });
 
   it('never emits NaN, a zero brightness, or an out-of-range colour', () => {
@@ -170,8 +171,8 @@ describe('the population has the right shape', () => {
 
   it('sits the home star inside the disc, not at its centre', () => {
     const distance = Math.hypot(galaxy.centre.x, galaxy.centre.y, galaxy.centre.z);
-    expect(distance).toBeGreaterThan(GALAXY_RADIUS_M * 0.4);
-    expect(distance).toBeLessThan(GALAXY_RADIUS_M * 0.7);
+    expect(distance).toBeGreaterThan(galaxy.radius * 0.4);
+    expect(distance).toBeLessThan(galaxy.radius * 0.7);
   });
 
   it('stays under the floor budget', () => {
@@ -179,13 +180,15 @@ describe('the population has the right shape', () => {
     expect(counts.local + counts.disc).toBeLessThanOrEqual(60_000);
   });
 
-  it('puts the disc on a readable two-arm spiral', () => {
-    // The m=2 wave is measured per radial slice: the spiral's phase moves with radius, so one
-    // DFT over the whole disc would cancel its own arms. This is the acceptance the renderer's
-    // crossfade depends on: a broad, uniform haze measures low here and reads as an oval.
+  it('puts the disc on a readable spiral at its own arm count', () => {
+    // The arm wave is measured per radial slice at the galaxy's **own** harmonic: the spiral's
+    // phase moves with radius, so one DFT over the whole disc would cancel its own arms. This is
+    // the acceptance the renderer's crossfade depends on, and it is measured at `m = armCount`
+    // because a four-armed galaxy measures near zero at m=2 (its own two-and-two beat).
     const bins = 20;
-    const inner = 0.2 * GALAXY_RADIUS_M;
-    const outer = 1.0 * GALAXY_RADIUS_M;
+    const m = galaxy.shape.armCount;
+    const inner = 0.2 * galaxy.radius;
+    const outer = 1.0 * galaxy.radius;
     const cosine = new Float64Array(bins);
     const sine = new Float64Array(bins);
     const counts = new Float64Array(bins);
@@ -197,8 +200,8 @@ describe('the population has the right shape', () => {
       if (radius < inner || radius > outer) continue;
       const bin = Math.min(bins - 1, Math.floor(((radius - inner) / (outer - inner)) * bins));
       const azimuth = Math.atan2(z, x);
-      cosine[bin]! += Math.cos(2 * azimuth);
-      sine[bin]! += Math.sin(2 * azimuth);
+      cosine[bin]! += Math.cos(m * azimuth);
+      sine[bin]! += Math.sin(m * azimuth);
       counts[bin]! += 1;
     }
 
@@ -210,20 +213,19 @@ describe('the population has the right shape', () => {
       weighted += (Math.hypot(cosine[bin]!, sine[bin]!) / n) * n;
       total += n;
     }
-    // Re-aimed rejects measured ~0.175 under the old keying; sampling onto the arms lifts it to
-    // ~0.29 historically and 0.43 on `v1/4` as now keyed (ADR-0011 re-rolled which galaxy `HOME`
-    // resolves to). The bar stays at 0.25: it is the "reads as arms, not as an oval" threshold,
-    // not a record of one roll.
+    // The bar stays at 0.25: it is the "reads as arms, not as an oval" threshold, not a record of
+    // one roll. The normaliser and the harmonic both follow the galaxy now, so this is comparable
+    // across arm counts instead of only valid at m=2.
     expect(weighted / total).toBeGreaterThan(0.25);
 
-    // And the arms are not filaments over black: the uniform inter-arm fraction keeps a
-    // visible floor, so the gaps do not close. Measured in one thin radial slice, because a
-    // thick annulus averages the spiral's own phase change back into a uniform ring.
+    // And the arms are not filaments over black: the uniform inter-arm fraction keeps a visible
+    // floor, so the gaps do not close. Measured in one thin radial slice, because a thick annulus
+    // averages the spiral's own phase change back into a uniform ring.
     const binsAzimuth = 36;
     const slice = disc.filter((star) => {
       const { x, z } = toDiscFrame(galaxy, star);
       const radius = Math.hypot(x, z);
-      return radius > 0.47 * GALAXY_RADIUS_M && radius < 0.53 * GALAXY_RADIUS_M;
+      return radius > 0.47 * galaxy.radius && radius < 0.53 * galaxy.radius;
     });
     const cells = new Float64Array(binsAzimuth);
     for (const star of slice) {
@@ -235,14 +237,16 @@ describe('the population has the right shape', () => {
     const trough = sorted[Math.floor(binsAzimuth * 0.05)]!;
     const crest = sorted[Math.floor(binsAzimuth * 0.95)]!;
     // A 3:1 density ratio leaves the trough at ~20% of the mean; a floor that never empties
-    // keeps the disc a disc rather than two drawn curves.
-    expect(trough).toBeGreaterThan((slice.length / binsAzimuth) * 0.1);
+    // keeps the disc a disc rather than drawn curves. Loosened from 0.1 to 0.05 because a
+    // four-armed slice at this radius is sparser in every cell, and the source of truth for "not
+    // filaments" is the ratio below, which stays strict.
+    expect(trough).toBeGreaterThan((slice.length / binsAzimuth) * 0.05);
     expect(crest / trough).toBeGreaterThan(2.5);
   });
 
   it('weights luminosity toward arms and keeps the core warm', () => {
     const frame = galaxyFrame(SEED, galaxyAddressOf(HOME));
-    const scale = 0.36 * GALAXY_RADIUS_M;
+    const scale = frame.shape.scaleLengthFraction * galaxy.radius;
     let armSum = 0;
     let armCount = 0;
     let laneSum = 0;
@@ -255,13 +259,13 @@ describe('the population has the right shape', () => {
     for (const star of disc) {
       const { x, z } = toDiscFrame(galaxy, star);
       const r = Math.hypot(x, z);
-      if (r < 0.12 * GALAXY_RADIUS_M) {
+      if (r < 0.12 * galaxy.radius) {
         coreR += star.color[0];
         coreG += star.color[1];
         coreB += star.color[2];
         coreCount += 1;
-      } else if (r > 0.25 * GALAXY_RADIUS_M) {
-        const strength = armStrength(r, Math.atan2(z, x), scale, frame.armOffsets);
+      } else if (r > 0.25 * galaxy.radius) {
+        const strength = armStrength(r, Math.atan2(z, x), scale, frame.armOffsets, frame.shape.winding);
         if (strength > 0.8) {
           armSum += star.brightness;
           armCount += 1;
@@ -278,5 +282,69 @@ describe('the population has the right shape', () => {
     expect(armCount).toBeGreaterThan(0);
     expect(laneCount).toBeGreaterThan(0);
     expect(armSum / armCount).toBeGreaterThan((laneSum / laneCount) * 1.5);
+  });
+
+  it('draws a real spiral at every arm count and pitch, not a pinwheel of spokes', () => {
+    // **This is the shape law's acceptance test, and it exists because the first cut of the law
+    // shipped spokes.** `winding` (radians per scale length) and `scaleLengthFraction` were drawn
+    // independently, and their *ratio* — the arm's total turn from centre to rim — is what makes a
+    // spiral. Drawn freely, that turn ranged 217°..561° across twelve galaxies; at the loose end
+    // the swoop through the nucleus is shallow enough that the lanes between arms read as radial
+    // wedges and the galaxy looks like a dark pinwheel (measured ridge/trough 1.3, i.e. no arms).
+    // The law now draws the sweep and derives the pitch, so this asserts the invariant directly
+    // rather than trusting whichever roll happens to be in `HOME`.
+    //
+    // The check is the harmonic amplitude at the galaxy's *own* arm count, because a four-armed
+    // galaxy measures near zero at m=2. It is a per-slice measurement for the same reason the
+    // spiral test above is: the phase moves with radius.
+    const armCounts = new Set<number>();
+    for (let galaxyIndex = 0; galaxyIndex < 12; galaxyIndex += 1) {
+      const seed = `ugb-${String(galaxyIndex).padStart(4, '0')}`;
+      const candidate = address(`v1/${galaxyIndex}`);
+      const frame = galaxyFrame(seed, galaxyAddressOf(candidate));
+      const built = generateGalaxy(seed, galaxyAddressOf(candidate), 'rich');
+      const localEnd = 1 + GALAXY_TIER_STARS.rich.local;
+      const stars = built.stars.slice(localEnd);
+      const m = frame.shape.armCount;
+      armCounts.add(m);
+
+      // Sweep is what the law draws, and it is bounded. This is the failing assertion if anyone
+      // re-introduces a free `winding` draw: the product would drift outside the range again.
+      expect(frame.shape.armSweepRad).toBeGreaterThanOrEqual(ARM_SWEEP_MIN_RAD);
+      expect(frame.shape.armSweepRad).toBeLessThanOrEqual(ARM_SWEEP_MAX_RAD);
+      expect(frame.shape.winding).toBeCloseTo(frame.shape.armSweepRad * frame.shape.scaleLengthFraction, 12);
+
+      // And the drawn field actually has arms at that count. A fixed floor per galaxy: the loose
+      // end of the sweep still measures ~0.30, the tight end ~0.45, so 0.25 is the spoke boundary
+      // this test is about (the old failing galaxies measured ~0.02-0.11).
+      const bins = 16;
+      const inner = 0.25 * frame.radius;
+      const outer = 0.95 * frame.radius;
+      const cosine = new Float64Array(bins);
+      const sine = new Float64Array(bins);
+      const counts = new Float64Array(bins);
+      for (const star of stars) {
+        const { x, z } = toDiscFrame(built, star);
+        const radius = Math.hypot(x, z);
+        if (radius < inner || radius > outer) continue;
+        const bin = Math.min(bins - 1, Math.floor(((radius - inner) / (outer - inner)) * bins));
+        const azimuth = Math.atan2(z, x);
+        cosine[bin]! += Math.cos(m * azimuth);
+        sine[bin]! += Math.sin(m * azimuth);
+        counts[bin]! += 1;
+      }
+      let weighted = 0;
+      let total = 0;
+      for (let bin = 0; bin < bins; bin += 1) {
+        const n = counts[bin]!;
+        if (n === 0) continue;
+        weighted += Math.hypot(cosine[bin]!, sine[bin]!);
+        total += n;
+      }
+      expect(weighted / total, `galaxy v1/${galaxyIndex} (arms=${m}) has no arm wave`).toBeGreaterThan(0.25);
+    }
+
+    // The law actually varies the axis it claims to vary.
+    expect(armCounts.size).toBeGreaterThan(1);
   });
 });

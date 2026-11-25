@@ -130,9 +130,52 @@ is its evidence (10/10).
 3. **Root layout — DONE.** `src/universe/layout.ts`, `galaxyPosition`. Total and unbounded, so
    "further out" always has something; `cbrt(|g|)` gives roughly constant density instead of a
    shell. Galaxy 0 is the origin (Sol). 10 tests.
-4. **Galaxy variation law.** A parameter space sampled from the address: arms, pitch, bar, bulge,
-   halo, dust, colour. Informed by `celestial-lab` references, implemented independently.
-   *Slice B. Not started.*
+4. **Galaxy variation law - DONE (2026-11-25), `perception` gate pending.** A parameter space
+   sampled from the address: arms, pitch, bar, bulge, halo, dust, colour, size. Informed by
+   `celestial-lab` references, implemented independently.
+
+   **The law is `galaxyShape` + `galaxyRadiusM` in `src/universe/disc.ts`, on its own stream
+   `seed|addr|shape|v1`.** Every field is drawn from `(seed, galaxyAddress)` only, so it is content:
+   travel to `v1/7` and you get that galaxy's arms, not a re-rolled one.
+
+   | Axis | Range | Where |
+   | --- | --- | --- |
+   | size | 0.5e20..9.0e20 m (18×), linear on the size fraction | `galaxyRadiusM` |
+   | arms | 2, 3, 4 (50/25/25) | `armCount`, `armOffsets` |
+   | arm sweep | 378°..550° of turn, centre to rim | `armSweepRad` |
+   | pitch | `sweep · scaleLengthFraction` (**derived**) | `winding` |
+   | scale length | 0.28..0.45 R | `scaleLengthFraction` |
+   | bulge | 3-14% of stars, 0.09-0.20 R, flattened 0.45-0.85 | `bulgeFraction` etc. |
+   | bar | 0..0.35, bulge elongated on the first arm | `barStrength` |
+   | halo | 0..3% on a 2.2× radial tail, 3× height, old-red | `haloFraction` |
+   | dust | 0..0.35 lane emission depression | `dustDepth` |
+   | colour age | 0..1, red/quenched .. blue/star-forming | `colourAge` |
+
+   **Sweep is drawn and pitch is derived because drawing both freely produced spokes.** Their ratio
+   is the arm's total turn, and a free ratio ranged 217°..561° across twelve galaxies; below ~300°
+   the lanes between arms read as radial wedges around a dark pinwheel (measured ridge/trough 1.3,
+   against 10–16 on the tight ones). Drawing the sweep pins it, and a test now holds the invariant
+   (`galaxy.test.ts`, "draws a real spiral at every arm count and pitch").
+
+   **Size is real everywhere it matters**, not a display number: radius drives framing distance, the
+   zoom ceiling, legibility thresholds, exposure correction and every star distance, so each galaxy
+   is a different object, not the same one scaled. Because framing scales with radius, size is
+   visible at a *fixed* absolute camera (boot/orrery band), not in a per-galaxy shot.
+
+   **Halo and dust are honest minimal** (owner's call): a halo is a heavier radial tail on the same
+   star kind, not a new one, and dust darkens lane emission rather than occluding stars.
+
+   **The home galaxy is one sample of the law** (owner's call): `v1/0` is not pinned, so the boot
+   frame, the galaxy-layer captures and the Sol backdrop all changed with the law.
+
+   Version bumps: `GALAXY_VERSION` 9→10, `APPEARANCE_VERSION` 8→9, `PLACEMENT_VERSION` 2→3, new
+   `GALAXY_SHAPE_VERSION` 1. `GALAXY_STREAM_VERSION` 3 and `SCALE_VERSION` 1 unchanged.
+
+   **Evidence:** `tools/galaxy-gallery.mjs` (12 galaxies at the manifest composition, 2.6× each
+   galaxy's own radius) is the instrument for judging the law — it is what caught the spoke defect.
+   `npm run capture` 20/20, `measure-layer3` 12-seed report, and the full probe set. Tests: 337
+   passed. Caveats: the harness `arm-measure.test.ts` is opt-in (`UGB_MEASURE=1`) and asserts
+   nothing — its numbers are a calibration to paste into `galaxy-scene.ts`.
 5. **Galaxy naming.** A deterministic name per galaxy address, presentation-only, shown on hover.
 6. **Multi-galaxy rendering.** Instanced galaxy impostors with LOD, selected by apparent brightness.
    Addressable density stays full; the *render* set is a selection — that is how "infinite feel,

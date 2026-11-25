@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "kind": "hillclimb",
+  "status": "passed",
+  "startedAt": "2026-11-24T23:10:00.000Z",
+  "endedAt": "2026-11-25T00:20:00.000Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Layer 3 perception gate, iteration 2: score the galaxy visual pass handed back by Neon (HDR accumulation, soft-shoulder tone curve, re-authored core/arms/palette, cross-seed exposure) on the perception rubric, against the iteration-1 scorecard",
+  "commit": "ae909ba (origin/agent/antigravity-layer3-visual-pass), branched from 33166f6 (wip/layer-3)",
+  "models": [
+    "surplus30/deepseek-v4.1-flash-1017#high (chair)",
+    "surplus30/deepseek-v4.1-flash-1017#high (experience gate, quality-gatekeeper)",
+    "surplus/glm-5.3 (security audit)",
+    "surplus/glm-5.3-flash (blindspot, visual-review seat)"
+  ],
+  "rubric": "perception",
+  "verdict": "7/10, ITERATE (target 8). All four iteration-1 flaws are measurably fixed; one main-path rough edge remains and it is the same one on every seed: the disc reads as a visible scatter of soft points rather than a band of light, worst in the outer arm at 1080p. Do not ship at 7.",
+  "notes": "Gate named one main-path flaw (F1). Disc coverage in a 240x160 arm window at 1080p is 38% at threshold 0.06 across 332 blob components; the 1:1 4K arm crop is 21.6% lit at 0.08 with hard black gaps and 104 isolated blobs >=80 px. The pass is 19.4% sparser than the baseline (lit px mean 132523 vs 164443), which is what exposes the grain. Everything else on the main path is met: 0 px above 0.97 at 1080p and 4K (baseline 122 px in a 170x196 bbox, max 1.000), nucleus max 0.781 with a graded radial falloff 0.716/0.56/0.46/0.38/0.15, ridge/trough 4.56-14.43 mean 7.65 (baseline mean 4.83), home star 0.887 at (960,539) over a local ring peak 0.672 with gap mean 0.0202, boot dust band 2.40 with 150399 faint px, Sol max 0.951 with no clipping, ocean closeup unchanged. Rough edges recorded but not driving the score: the dense disc edge is traceable over a ~60 px annulus transition (62%->20% lit density), seed 0002 is the weakest read (ridge/trough 4.82), and the debug HUD is in every frame (out of scope). The gate flagged two of its own evidence checks as blockers; both were the chair's labelling/evidence defects, not code: (1) the live-probe frames it hashed were byte-identical to the baseline because a vite dev server rooted at the 33166f6 tree had been listening on 5173 since 06:51, so both chair runs measured the baseline - re-run on dedicated ports (5199 review, 5198 base) with each build's own server, the frames differ, the after step-80 has 0 px above 0.97 and max 0.887 (inside the 0.93 clamp), and the handoff reads decreases 0, ramp step-64, full step-68, 4 steps on BOTH builds, so the 4-step ramp is not a regression; (2) the blindspot pass it saw as empty was the first five-shot manifest, which returned empty response - the chair split it into one shot per call, got findings, and adjudicated them (three rejected as downscale artefacts after native crops, one sprite-footprint finding upheld as real-but-expected, one home-star finding resting on the chair's own wrong crop-centre label). The gate's third objection, that the home-star crop is not centred on the star, was correct and was the chair's error: the star is at (196,164) of the 600x380 crop, and the manifest and brief are corrected. Floor on the chair's own build of ae909ba: tsc clean, npm test 23 files/269 tests, build clean 97.31 kB / 34.46 kB gzip, capture 20/20, probe:live pass, 12-seed metrics reproduced exactly, and a fresh 33166f6 build re-measured with the same tool for the before column. Layer 1 precision shots are bit-identical (maxDeltaScene 0); Layer 2/Sol differ only in galaxy points and HUD text, confirmed by amplified diff images that contain no planet, orbit or solar disc.",
+  "scores": {
+    "perception": 7,
+    "baseline": 6,
+    "previous": 6
+  },
+  "evidence": [
+    ".scratch/layer3-check/metrics.json",
+    "C:/Users/joelp/code/UniverseGoBrr-base/.scratch/base-check/metrics.json",
+    ".scratch/captures/layer3-galaxy-1080p.png",
+    ".scratch/captures/layer3-arm-edge-2160p.png",
+    ".scratch/captures/layer3-home-star-1080p.png",
+    ".scratch/captures/layer2-orrery.png",
+    ".scratch/captures/summary.json",
+    ".scratch/live-probe/summary.json",
+    ".scratch/visual-review/layer3-iter2/adjudication.md",
+    ".scratch/diffs/diff-layer2-orrery.png",
+    "docs/issues/gates/gate-layer-3-iteration-2-brief.md"
+  ]
+}

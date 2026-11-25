@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "kind": "security",
+  "status": "passed",
+  "startedAt": "2026-11-24T23:38:00.000Z",
+  "endedAt": "2026-11-25T00:04:00.000Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Security lens on the Layer 3 visual pass: galaxy HDR accumulation into rgba16float plus a soft-shoulder composite pass, a re-authored galaxy population (GALAXY_VERSION 6 -> 7), per-frame exposure and boot lift, and a new 943-line measurement tool",
+  "commit": "33166f6..ae909ba (origin/agent/antigravity-layer3-visual-pass)",
+  "models": [
+    "surplus/glm-5.3 (audit)"
+  ],
+  "verdict": "PASS. Six claims confirmed with file:line evidence: no GPU resource leak in the HDR path; HDR size bounded by canvas, no stale bind group; composite reads in bounds with no div-by-zero; no new network, storage, DOM sink or secret; the measurement tool's URL construction is inert and loopback-only; the shader cannot produce NaN/Inf. rgba16float is core-valid as a render target and for unfiltered textureLoad, no feature request. npm test 23 files / 269 tests pass in the review worktree.",
+  "notes": "One LOW: sampleFrame creates its four sample resources (texture, sampleDepth, sampleGalaxyHdr, readback) before the try/finally at renderer.ts:773, so an exception in writeGalaxy/encodePass/queue.submit skips all four destroys. Pre-existing shape for the first three objects, extended by this change; WebGPU GC releases them, so it is deferred release, not a hard leak. Fix is to move the creations inside the try. One INFO: the measurement tool resolves operator-supplied --out/--captures/--baseline anywhere; local tooling, documented under gitignored .scratch, no fix required. Audit widened twice, each for a named question (can URL input reach canvas sizing; does the branch outside the scoped paths carry secrets), and found no secret in the whole branch diff. Not checked: the WGSL tone curve's visual quality (gate mandate), execution of the measurement tool (statically reviewed), and the iteration report document beyond a secret-pattern scan.",
+  "scores": {},
+  "evidence": [
+    "src/gpu/galaxy.wgsl",
+    "src/gpu/renderer.ts",
+    "src/render/galaxy-scene.ts",
+    "src/universe/galaxy.ts",
+    "tools/measure-layer3.mjs",
+    "src/render/galaxy-scene.test.ts",
+    "src/universe/galaxy.test.ts",
+    "package.json"
+  ]
+}

@@ -14,6 +14,7 @@ import { fnv1a32 } from '../lib/hash';
 import { createRng, type Rng } from '../lib/random';
 import { formatAddress, ancestorAddress, type Address } from '../frame/address';
 import { GALAXY_RADIUS_M } from '../render/scale';
+import { GALAXY_DEPTH as LEVEL_GALAXY_DEPTH } from './levels';
 
 export interface Vec3 {
   readonly x: number;
@@ -49,19 +50,14 @@ export const LOCAL_RADIUS_M = 100 * LY_M;
 export const GALAXY_STREAM_VERSION = 3;
 
 /**
- * The level at which a galaxy is identified: the address's outermost level.
+ * The level at which a galaxy is identified: the address's outermost real rung.
  *
- * **A shortcut, and it says so.** ADR-0008 keeps a level's *kind* out of the address — it comes
- * from the generator at that depth, not from the string — so in principle "which galaxy am I in"
- * is a walk up the levels until one answers "galaxy". That walk needs the per-depth kinds the
- * address HUD is going to introduce. Until it exists, one fixed depth is the honest stand-in:
- * it is the only depth the app currently names (`v1/0` in the capture manifest), and it is the
- * depth Sol sits one level below (`v1/0.0.0`).
- *
- * The day levels carry kinds, this constant becomes the walk and nothing else changes: callers
- * ask `galaxyAddressOf`, not the depth.
+ * **No longer a shortcut.** This used to be a fixed constant documented as a stand-in until levels
+ * carried kinds; `levels.ts` now carries them, and this re-exports that answer so there is one
+ * authority rather than a constant and a ladder that could disagree. Callers still ask
+ * `galaxyAddressOf`, never the depth.
  */
-export const GALAXY_DEPTH = 1;
+export const GALAXY_DEPTH = LEVEL_GALAXY_DEPTH;
 
 /**
  * The address a galaxy is keyed by: the ancestor of `address` at `GALAXY_DEPTH`.

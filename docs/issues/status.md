@@ -107,7 +107,9 @@ structure is checked by `src/status-page.test.ts`; its content is the owner's to
 
 ## Doing
 
-**Lane 4 is down to the tier masks.** Lane 2 shipped a committed travel as one atomic state change
+**Lane 4 is down to the tier masks.** The repo is one line now: the Layer 3 line and the Layer 4
+travel lanes are on `main`, and the handoff branches plus review worktrees were removed on
+2026-11-25. Lane 2 shipped a committed travel as one atomic state change
 (ADR-0012): `planTravel` in `src/universe/travel.ts` returns the method, the distance in the shared
 galaxy frame and `Δt = d / v(method)` — or a plain reason it refuses, never an invented number. The
 arrival camera is the destination's opening view, the clock's mode is preserved (pinned `t` moves; a

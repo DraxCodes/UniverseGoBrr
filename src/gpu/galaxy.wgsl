@@ -63,14 +63,14 @@ fn fs_star(in: StarOut) -> @location(0) vec4f {
   }
 
   // Compact Gaussian-like luminous core with a C¹ smooth tail reaching zero slope at r = 1.
-  // Compared to the linear-halo sprite, this keeps individual stars crisp and stops wide halos
-  // from veiling the inter-arm lanes shut while avoiding tile boundaries.
+  // Moderately broadened mid-body (`3.2` core + `0.28` tail) lets neighbouring arm impostors
+  // merge into a band of light while keeping individual bright stars crisp and lanes open.
   let r = clamp(d, 0.0, 1.0);
   let edge = 1.0 - r * r;
   let w = edge * edge;
-  let core = exp(-r * r * 6.5) * w;
-  let glow = w * edge * 0.18;
-  let shape = core * 0.82 + glow;
+  let core = exp(-r * r * 3.2) * w;
+  let glow = w * 0.28;
+  let shape = core * 0.72 + glow;
 
   // Additive into rgba16float HDR: alpha is the reveal, not opacity.
   let intensity = in.color.a * galaxy.frame_info.y * galaxy.frame_info.z;
@@ -100,7 +100,7 @@ fn fs_composite(@builtin(position) frag: vec4f) -> @location(0) vec4f {
   // - C¹-continuous rational roll-off above `knee` toward `ceil_lum`, grading the nucleus without
   //   a flat white plateau while leaving headroom for the home star above the field.
   let knee = 0.38;
-  let ceil_lum = 0.90;
+  let ceil_lum = 0.79;
   var mapped_lum = lum;
   if (lum > knee) {
     let excess = lum - knee;
@@ -125,6 +125,6 @@ fn fs_composite(@builtin(position) frag: vec4f) -> @location(0) vec4f {
   // Premultiplied-alpha optical depth gated by lod: at lod 0 or in dark lanes, alpha is 0
   // (pure additive over sky); in the dense luminous core at lod 1, background infinity stars
   // are occluded behind the bulge so they never poke clipped 1 px pinpricks through it.
-  let core_alpha = smoothstep(0.10, 0.65, mapped_lum) * galaxy.frame_info.x;
+  let core_alpha = smoothstep(0.08, 0.48, mapped_lum) * galaxy.frame_info.x;
   return vec4f(color, core_alpha);
 }

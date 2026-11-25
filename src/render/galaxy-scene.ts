@@ -47,16 +47,16 @@ export const GALAXY_MAX_DISTANCE_M = GALAXY_RADIUS_M * 12;
  * turns (issue 04 D6), and it is scaled by the viewport height in `writeGalaxyFrame` so 4K and
  * 1080p keep the same visual density instead of 4K becoming a sparser field.
  */
-export const GALAXY_STAR_MIN_PX = 3.0;
+export const GALAXY_STAR_MIN_PX = 4.65;
 /** The largest a dim impostor gets, before `size` spreads the brighter stars out further. */
-export const GALAXY_STAR_MAX_PX = 5.0;
+export const GALAXY_STAR_MAX_PX = 5.05;
 /**
  * Overall additive gain. The band is visible from the orrery (the thesis's "faint dust band")
- * but has to stay behind the orrery, not compete with it. Calibrated against the compact
- * Gaussian-core impostor PSF (~0.68x integrated energy of the earlier linear-halo sprite) so the
- * boot-frame dust band keeps its faint luminance while HDR galaxy arms stay rich.
+ * but has to stay behind the orrery, not compete with it. Re-calibrated for the 55,000-star rich
+ * disc and wider mid-body impostor overlap so arms stay continuous without blowing out mean
+ * luminance or filling the inter-arm lanes.
  */
-export const GALAXY_GAIN = 0.56;
+export const GALAXY_GAIN = 0.194;
 
 /**
  * The local field's collapse window, in projected pixels. Five thousand stars sit inside 100 ly
@@ -353,15 +353,14 @@ export function writeGalaxyFrame(
     galaxy.centre.z - camera.z,
   );
   const distRatio = centreDistance / (2.6 * GALAXY_RADIUS_M);
-  const rawExposure = Math.min(1.55, Math.max(0.68, Math.pow(Math.max(distRatio, 0.35), -1.25)));
+  const rawExposure = Math.min(1.55, Math.max(0.80, Math.pow(Math.max(distRatio, 0.35), -0.40)));
   const exposure = 1 + (rawExposure - 1) * legibility.lod;
-  const sizeBias =
-    (distRatio < 1 ? (1 - distRatio) * 0.6 : -(distRatio - 1) * 0.45) * legibility.lod;
+  const sizeBias = 0.15 * legibility.lod;
 
   // At lod 0 (boot/orrery view), the disc forms the faint sky dust band behind the isotropic
-  // local field. Compensate for the arm-luminosity weighting at lod 0 so the band's anisotropy
-  // does not dip, blending cleanly to 1.0 by lod 1 so galaxy-scale frames are untouched.
-  const discBootLift = 1 + 0.25 * (1 - legibility.lod);
+  // local field. Compensate for the denser 55k disc and wider impostor PSF at lod 0 so the dust
+  // band keeps its anisotropy behind the orrery (axisRatio >= 2.2), blending cleanly to 1.0 by lod 1.
+  const discBootLift = 1 - 0.12 * (1 - legibility.lod);
 
   const pack = (star: GalaxyStar, fieldReveal = 1, emissionScale = 1): void => {
     // The system's own star is the identity impostor: the orrery's glare quad keeps a minimum

@@ -188,6 +188,31 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
 
 ## Decisions
 
+- **The address ladder has one authority, and galaxy size exists** (slice A of ticket 06, 2026-11-25).
+  `src/universe/levels.ts` names every rung — universe → galaxy → sector → system → body — so
+  `GALAXY_DEPTH` is no longer "a shortcut, and it says so"; it re-exports the ladder. A galaxy's
+  **size fraction** is a real per-galaxy quantity for the first time (`galaxySizeFraction`), which is
+  what `GALAXY_RADIUS_M` being one global constant made impossible, and a galaxy's **sector count**
+  (1–6) is derived from that same draw so size and count cannot contradict each other.
+- **A level's kind comes from the generator at that depth, not the address** (owner, 2026-11-25). This
+  was the fork ADR-0008 left open. The address stays a pure integer path; the ladder is fixed per
+  address version. Item 2 (sectors actually inserted) re-keys depth 2 and deeper, which moves a
+  *star* from depth 2 to 3 but leaves an address that was already a **system** at depth 3 — Sol
+  (`v1/0.0.0`) and the layer-2 orrery (`v1/4.-2.7`) — on its rung. Smaller than "every address
+  re-keys", and pinned by tests.
+- **Galaxies have a root position, and galaxy-to-galaxy travel works** (2026-11-25). `layout.ts` gives
+  every galaxy a position in the root frame, total for any address and unbounded — "effectively
+  infinite, not merely large". Galaxy 0 is the origin because Sol lives in it. `planTravel` no longer
+  refuses a cross-galaxy jump for "no root layout": it has a real distance, so the ADR-0022 coverage
+  defect is closed. **ADR-0019's method rules are now in the code:** method is an input, `subspace`
+  is `hyperspace`, every method is legal for any trip above the system rung, and a wormhole costs a
+  fixed `WORMHOLE_ELAPSED_S` (3600 s, a feel constant and an open question). A plan prices **every**
+  method in `costs`. Inside one system, sublight is the recommendation (ADR-0019 §3) — advice, not a
+  gate: a jump method is still accepted there.
+- **`npm run probe:ladder` is the Slice A evidence** (2026-11-25): the rungs walked by address, one
+  destination priced in every method, the wormhole's fixed cost measured near and across galaxies,
+  and a galaxy-to-galaxy trip accepted. 10/10.
+
 - **The product is Cairn and the repo is MIT-licensed** (owner, 2026-11-25; ADR-0016, ADR-0017).
   A cairn is a marker a traveller leaves for the next one — the same act as sending a coordinate.
   The obvious vocabulary was searched and nearly every candidate was taken, several by direct

@@ -107,15 +107,25 @@ permission. The only restriction is upward: inside one system, sublight is the n
 
 ## Work breakdown
 
-1. **Level model.** Settle what each address level *means* (ADR-0008 deliberately left levels
-   scale-free). This is the first piece and everything else depends on it.
-2. **Sectors as an address level** (decided, ADR-0018). Re-keys every address; nothing has shipped,
-   so the break is free now and expensive later.
-3. **Root layout.** Give galaxies a position in the root frame, procedurally — a population law that
-   can produce neighbours around *any* position, not a fixed catalog, so "further out" always has
-   something in it.
+**Slice A is done (2026-11-25): items 1, 3 and the travel-coverage half of 2.** The piece that
+actually removes the ADR-0022 coverage defect is item 3 plus `planTravel`, and `npm run probe:ladder`
+is its evidence (10/10).
+
+1. **Level model — DONE.** `src/universe/levels.ts` names every rung and is the single authority;
+   `GALAXY_DEPTH` re-exports it. Also carries the galaxy **size fraction** and the **1–6 sector
+   count** derived from it. Non-breaking: nothing consumed the kinds yet when it landed. 21 tests.
+2. **Sectors as an address level** (decided, ADR-0018). **Partly done:** the law exists
+   (`sectorCount`, `sectorIndexForAngle`, total for the degenerate one-sector galaxy); the *insertion*
+   — sectors actually appearing in the address and `generateGalaxy` iterating them — is **not
+   done**. That is the re-key, and it is the next commit. Note it is narrower than once thought: a
+   **system** was already depth 3, so Sol (`v1/0.0.0`) and the orrery (`v1/4.-2.7`) keep their
+   rung; what moves is depth 2, a star → a sector.
+3. **Root layout — DONE.** `src/universe/layout.ts`, `galaxyPosition`. Total and unbounded, so
+   "further out" always has something; `cbrt(|g|)` gives roughly constant density instead of a
+   shell. Galaxy 0 is the origin (Sol). 10 tests.
 4. **Galaxy variation law.** A parameter space sampled from the address: arms, pitch, bar, bulge,
    halo, dust, colour. Informed by `celestial-lab` references, implemented independently.
+   *Slice B. Not started.*
 5. **Galaxy naming.** A deterministic name per galaxy address, presentation-only, shown on hover.
 6. **Multi-galaxy rendering.** Instanced galaxy impostors with LOD, selected by apparent brightness.
    Addressable density stays full; the *render* set is a selection — that is how "infinite feel,

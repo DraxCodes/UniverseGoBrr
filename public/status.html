@@ -90,7 +90,7 @@
   <body>
     <main>
       <h1>UniverseGoBrr <span>build status</span></h1>
-      <p class="meta">Updated 2026-11-24 · update 9 · branch <code>wip/layer-3</code> · edited in the same commit as <code>docs/issues/status.md</code></p>
+      <p class="meta">Updated 2026-11-25 · update 10 · branch <code>wip/layer-3</code> · edited in the same commit as <code>docs/issues/status.md</code></p>
       <p class="lede">
         <strong>V1 is:</strong> fly from a galaxy arm down to a lit planet, cross the distance between
         systems with a real travel time, and send a friend the view. No gameplay. Layer 6 (walking on
@@ -106,8 +106,10 @@
         places you have been. The address is now clickable lines that zoom out to the galaxy for free,
         and a compass lists the nearest drawn stars plus where you came from — each row is a jump.
         Right-drag now pans: the view slides, and the next orbit turns around the point you panned to.
-        What is left is the tier masks — the effect that hides the frame swap. That is shader work, so
-        it is a Neon candidate rather than something to rush here.
+        The Layer 3 visual pass also landed: the galaxy now reads as a band of light rather than a
+        scatter of points, scored at the rubric's ship bar. What is left is the tier masks — the
+        effect that hides the frame swap. That is shader work, so it is a Neon candidate rather than
+        something to rush here.
       </p>
 
       <h2>Remaining to V1</h2>
@@ -128,8 +130,8 @@
           </tr>
           <tr>
             <td>L3</td>
-            <td class="task">Visual pass: tone, grading, arm density<em>The deferred gate. Scored 6/10; the four named flaws are fixed, the rest is taste.</em></td>
-            <td class="status s-neon">Neon candidate</td>
+            <td class="task">Visual pass: tone, grading, arm density<em>Done. The disc reads as a band of light, the nucleus is graded and unclipped, and the home star stays findable. ADR-0015.</em></td>
+            <td class="status s-done">Done · 8/10</td>
           </tr>
           <tr>
             <td>L5</td>
@@ -175,7 +177,12 @@
           <tr>
             <td>L3</td>
             <td class="task">Star field and one galaxy, and Sol as the first real node</td>
-            <td class="status s-done">Done · 6/10</td>
+            <td class="status s-done">Done · 8/10</td>
+          </tr>
+          <tr>
+            <td>L3</td>
+            <td class="task">Visual pass: HDR galaxy, tone curve, arm density<em>Own HDR buffer, one soft-shoulder curve with a 0.79 ceiling below the home star, 60k stars at an 0.80 exposure floor. Arm coverage 38% → 55%.</em></td>
+            <td class="status s-done">Done · 8/10</td>
           </tr>
           <tr>
             <td>L4</td>
@@ -218,9 +225,9 @@
       <h2>What to send to Neon</h2>
       <ul>
         <li>
-          <strong>Layer 3 visual pass.</strong> The one real handoff. Tone-mapping, colour grading and
-          arm density at 1080p are taste calls a stronger visual model is better placed to make. We
-          score the result here against the rubric — the score never leaves this workflow.
+          <strong>Layer 3 visual pass — returned and shipped.</strong> Tone-mapping, colour grading
+          and arm density went out, came back on a branch, and scored 8/10 here. The score never
+          left this workflow.
         </li>
         <li>
           <strong>Layer 5 nebulae.</strong> Volumetric light transport and procedural noise kernels are
@@ -243,8 +250,8 @@
       <p class="note">
         Your call on the arrival view is in: a jump lands on the destination's opening view, and a
         live clock keeps running instead of freezing. Panning is in too — right-drag slides the view.
-        Placement is complete, so a light you can see is one you can link to and travel to. The only
-        thing still waiting is the name.
+        Placement is complete, so a light you can see is one you can link to and travel to. The Layer 3
+        visual pass landed at the ship bar. The only thing still waiting is the name.
       </p>
 
       <h2>After V1</h2>

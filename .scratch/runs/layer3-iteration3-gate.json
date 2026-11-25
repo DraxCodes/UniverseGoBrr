@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "kind": "hillclimb",
+  "status": "passed",
+  "startedAt": "2026-11-25T01:50:00.000Z",
+  "endedAt": "2026-11-25T02:35:00.000Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Layer 3 perception gate, iteration 3: score the density pass handed back by Neon (rich disc 40,000 -> 55,000, rebalanced disc/bulge emission, widened impostor PSF with near-uniform 4.65-5.05 px footprint, GALAXY_GAIN 0.56 -> 0.194, tone ceiling 0.90 -> 0.79, exposure floor 0.80 with exponent -0.40, discBootLift now a cut) on the perception rubric, against the iteration-2 scorecard and its single named main-path flaw F1",
+  "commit": "e237545 (origin/agent/antigravity-layer3-density), branched from ae909ba (iteration 2), merged as 87ddcc1",
+  "models": [
+    "surplus30/deepseek-v4.1-flash-1017#high (chair)",
+    "surplus30/deepseek-v4.1-flash-1017#high (experience gate, quality-gatekeeper)",
+    "surplus/glm-5.3 (security audit)",
+    "surplus/glm-5.3-flash (blindspot, visual-review seat)"
+  ],
+  "rubric": "perception",
+  "verdict": "8/10, SHIP. The single main-path flaw that held iteration 2 at 7 (F1, the disc reading as a pointillist scatter) is measurably gone where it read worst, with no new main-path flaw: arm window coverage 38.0% across 332 components -> 55.0% across 135, 4K 1:1 arm crop 21.6% / 103 blobs >=80 px -> 31.1% / 77, lit px mean 132,523 -> 194,635 over 12 seeds, ridge/trough mean 7.65 -> 8.98. The lane stays open (9.4% lit, mean 0.037 vs 0.21 in the arm), the nucleus is graded and unclipped (0 px above 0.90/0.93/0.97 outside the HUD; peak 0.7085, radial profile 0.704/0.586/0.373/0.213/0.105/0.061), and the boot band is smoother rather than brighter (planet patch mean 0.326 -> 0.313, max 0.859 unchanged). The gate recomputed the coverage numbers with its own flood fill and matched to the digit, and verified both native crop offsets pixel-exact.",
+  "notes": "Loop stops at 8: same rubric, same target, same judge lineage, floor green, and two independent blindspot passes found no defect surviving native-resolution adjudication. Rough edges recorded for the next Layer 3 touch, none driving the score: (1) 4K 1:1 micro-texture is uniform 4.65-5.05 px pebbles with no per-star size cue (smallest fix is a +/-0.6 px spread); (2) boot-frame band texture is blotchier at 1:1 while measurably no brighter; (3) outer-disc halo mottling and the traceable soft edge (bottom-left 0.0221 vs corner 0.0148); (4) the home-star isolation metric's 12-60 px ring excludes a 0.788 sky star at 64 px, so the true nearest ratio is 1.13x rather than 1.37x - findability still holds on the 4x4 core and the dark gap, and it is the frame's only pixel above 0.79; (5) the star sits ~120-180 px from the arm ridge, so 'the arm containing this star' is loose wording for the thesis. Verification corrections: the maxLum 0.865 anomaly is a blue-white sky star at a fixed position showing through a semi-transparent arm pixel (core_alpha < 1, draw order sky -> galaxy composite -> orrery), not clipping; where mapped luminance > 0.48 the composite alpha is 1 and cannot exceed 0.79. The chair's repeated crop-labelling error was checked by the gate and the corrected labels are right (arm-edge cut at 2061,736 and home-star at 764,375 both match pixel-exact). Security lens PASS, no findings, two informational notes (pre-existing unreachable Inf->NaN path; exposure test lower bound 0.68 now slack against the 0.80 floor). The routed iteration-2 LOW is fixed on the merge commit: sampleFrame creates its four sample resources inside the try. Floor on the chair's own build of e237545: tsc clean, npm test 23 files/269 tests (re-run by the gate), build clean 97.35 kB / 34.49 kB gzip, capture 20/20, probe:live pass on isolated port 5201 with the listener command line proven (decreases 0, ramp step-64, full step-68, handoffSteps 4, maxCount 60000), and step-80 has 0 px above 0.97 outside the HUD with max 0.8871 at the home star and 0.7828 at the nucleus, matched independently by the gate. Layer 1 precision shots maxDeltaScene 0; Layer 2/Sol diffs contain galaxy points only, no planet, orbit or solar disc.",
+  "scores": {
+    "perception": 8,
+    "baseline": 6,
+    "previous": 7
+  },
+  "evidence": [
+    ".scratch/layer3-density/metrics.json",
+    ".scratch/before-check/metrics.json",
+    "C:/Users/joelp/code/UniverseGoBrr-review/.scratch/captures",
+    ".scratch/captures/layer3-galaxy-1080p.png",
+    ".scratch/captures/layer3-arm-edge-2160p.png",
+    ".scratch/captures/layer3-home-star-1080p.png",
+    ".scratch/captures/layer2-orrery.png",
+    ".scratch/captures/summary.json",
+    ".scratch/live-probe/summary.json",
+    ".scratch/visual-review/layer3-iter3/adjudication.md",
+    ".scratch/diffs/diff-layer2-orrery.png",
+    "docs/issues/gates/gate-layer-3-iteration-3-brief.md"
+  ]
+}

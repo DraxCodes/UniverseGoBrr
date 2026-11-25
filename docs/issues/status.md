@@ -1,9 +1,10 @@
 # Status — Layer 3: star field and galaxy
 
-Updated: 2026-11-24
-Branch: `wip/layer-3` — the Layer 3 line, now including Sol. `main` carries the docs reorg and is
-still Layer 2. Tag `pin/layer-3-assessment` marks `566a303`, the code state the gate
-scored 6/10, and stays there; the merge changed no source file.
+Updated: 2026-11-25
+Branch: `wip/layer-3` - the Layer 3 line, now including Sol and the shipped visual pass. `main`
+carries the docs reorg and is still Layer 2. Tag `pin/layer-3-assessment` marks `566a303`, the code
+state the first gate scored 6/10, and stays there; the merge changed no source file. The visual pass
+is merged on `wip/layer-3` as `87ddcc1` and scored 8/10.
 Working tree: clean except `opencode.json` (user work — do not commit, do not revert).
 Pushed: both `main` and `wip/layer-3` are on `origin`. The tag `pin/layer-3-assessment` is local
 only — it is the gate's fixed point, not a release.
@@ -31,11 +32,20 @@ structure is checked by `src/status-page.test.ts`; its content is the owner's to
 - Public repo pushed: `https://github.com/DraxCodes/UniverseGoBrr`, default branch `main`, README
   now carries two captures from `main`'s own build (`docs/media/`, commit `1066994`).
 - **Gate iteration 1: 6/10, KEEP and iterate.** Scorecard: `gates/gate-layer-3-iteration-1.md`.
-- **Iteration 2 deferred** with the four flaws fixed and measured: nucleus plateau 109 px → 12 px;
-  home star peak 0.887 at frame centre with its `HOME_GAP_PX` ring; arms 10.67 ridge/trough at
-  1080p vs 9.65 at 4K; a real dust band on the boot frame (axis ratio 1.25 → 4.17). `GALAXY_VERSION 4`,
-  `GALAXY_STREAM_VERSION 3`, `GALACTIC_PLANE_TILT_RAD -30°`. Remaining debt and the brief for the
-  visual pass: `iterations/layer-3-iteration-2-deferred.md`.
+- **Gate iteration 2: 7/10, KEEP and iterate.** The four iteration-1 flaws were fixed and measured
+  (nucleus plateau 0 px, home star 0.887, arms ridge/trough 4.56–14.43, boot dust band present), but
+  one main-path flaw remained: the disc read as a pointillist scatter (arm window 38.0% across 332
+  components). Scorecard: `gates/gate-layer-3-iteration-2.md`.
+- **Gate iteration 3: 8/10, SHIP - the visual pass is merged** as `87ddcc1`. Density came back
+  without clipping: rich disc 40,000 → 55,000 (tier budget exactly 60,000), disc emission
+  `0.73base^0.42`, impostor footprint 3.0–5.0 → **4.65–5.05 px**, `GALAXY_GAIN` 0.56 → 0.194,
+  tone ceiling `ceil_lum` 0.90 → 0.79 (below the home star), exposure floor 0.68 → 0.80 with
+  exponent −1.25 → −0.40, `GALAXY_VERSION 7 → 8`. The arm window that read 38.0% / 332 components
+  now reads **55.0% / 135**; 4K 1:1 coverage 21.6% → 31.1%; lit px mean 132,523 → 194,635 over 12
+  seeds; nucleus 0 px above 0.90/0.93/0.97 and below the star on all 12 seeds; the boot band is
+  smoother and no brighter (planet contrast byte-identical). Decision: **ADR-0015** (galaxy HDR
+  buffer and tone curve). Scorecard: `gates/gate-layer-3-iteration-3.md`. The security LOW from
+  iteration 2 (`sampleFrame` resources above the `try`) is fixed in the follow-up commit.
 - **Sol, correct** (spec §3.6) shipped as the first **authored node**: reserved address `v1/0.0.0`,
   a frozen registry checked before the generator, eight real planets with real semi-major axes,
   radii, tilts and sidereal spins (Venus and Uranus retrograde), periods derived by Kepler from
@@ -71,8 +81,9 @@ structure is checked by `src/status-page.test.ts`; its content is the owner's to
   it lives in. All 20 captures re-shot: 14 draw a galaxy at a deeper address, so their backdrop is a
   different roll of the same law, and the arm acceptance still passes (measured m=2 0.429 for
   `v1/4`, bar 0.25). The four boot-orrery shots at `v1/0` and the two precision probes are unchanged
-  by construction. **The layer-3 gate was scored against the old roll**, so the deferred visual pass
-  sees a different galaxy than the one that scored 6/10.
+  by construction. **The layer-3 gate was scored against the old roll**, so the first visual pass saw
+  a different galaxy than the one that scored 6/10; the pass then re-scored 7, then 8, on its own
+  fixed points (see *Gate iteration 2/3* above).
 
 - **Placement: done, both halves (ADR-0011).** `src/universe/placement.ts` — `placement(seed, address)`
   returns a position in the parent frame, from the seed and the address only, never the inverse.
@@ -140,8 +151,11 @@ scene), `docs/notes/powershell-writes-cp1252.md` and
    no production code changed. Lane 2's lens raised two low findings — a crafted `?t=` or `?epoch=`
    at the edge of the reader's range could make an arrival link reload as a *different* state — both
    fixed by making `advanceClock` refuse an unrepresentable arrival.
-2. The deferred visual pass: read `iterations/layer-3-iteration-2-deferred.md` before touching tone,
-   grading, density balance or reference claims. Re-gate here when it returns.
+2. The visual pass shipped: read `iterations/layer-3-iteration-2-deferred.md` and
+   `gates/gate-layer-3-iteration-3.md` before touching tone, grading, density balance or reference
+   claims. **ADR-0015** records the HDR buffer, the per-pass ceiling and the exposure floor; the
+   level-9 rough edges (4K 1:1 footprint uniformity, boot-band texture, outer-edge mottle, the
+   home-star ring caveat, "the arm containing this star") are routed there, not open defects.
 3. **Antigravity guidelines are defined** (owner, 2026-11-24): `AGENTS.md` → *Antigravity / Neon
    handoffs*, working detail in `docs/notes/two-agent-workflow.md`. The chair asks before any
    handoff; gate scoring never leaves this workflow.
@@ -277,8 +291,9 @@ The decision record is tracked, so a clone on another machine is enough to resum
 
 ## Verification
 
-- `npm test` — pass, 23 files, **267 tests**.
-- `npm run build` — pass, `tsc --noEmit && vite build`, clean; **92.07 kB JS / 32.93 kB gzip**.
+- `npm test` - pass, 23 files, **269 tests** (re-run on the merged tree and by the gate).
+- `npm run build` - pass, `tsc --noEmit && vite build`, clean; **96.92 kB JS / 34.57 kB gzip** on
+  the merged tree (the density branch alone built 97.35 kB / 34.49 kB gzip).
 - `npm run probe:travel` — **12/12 checks** (arrival-link reload, Back, Forward, framing write).
 - `npm run probe:compass` — **20/20 checks**: the address renders as lines with only the current
   one inert; the compass rows name a place, a bearing and a distance; a drag turns a bearing; a row
@@ -296,8 +311,10 @@ The decision record is tracked, so a clone on another machine is enough to resum
   checked-in golden would fail on another engine). The permanent evidence is the replay test:
   placement is deterministic, stays inside the galaxy's disc and outside the 120 ly local sphere,
   and replays the generator's `|disc` stream exactly.
-- `npm run capture` — **not re-run for placement**: the galaxy output is bit-identical and placement
-  has no renderer consumer yet. The last full run, after the galaxy-identity fix, was 20/20.
+- `npm run capture` - **20/20** on the density pass, re-shot after the visual-pass merge. Every
+  shot is bit-checkable against `capture/shots.json`; the two native crops
+  (`layer3-arm-edge-2160p` at (2061,736), `layer3-home-star-1080p` at (764,375)) were verified
+  pixel-exact by the gate.
 - `base doctor` — no errors; `docs.issues: docs/issues`, the doc tree and the ADR index check clean.
 - Doc path check — backticked refs that look like paths (one or more slashes plus a file extension),
   resolved against the repo root or the file's own directory, over the project markdown files (`docs/`
@@ -312,11 +329,16 @@ The decision record is tracked, so a clone on another machine is enough to resum
   `v1/0.0.0 · 3 levels` and `G-type · 8 planets · ×1930–18438 real`. Judged on a 1:1 crop after the
   downscaled image suggested the corona hid Mercury and Venus; it does not, which is why the
   presentation constants were left alone (`docs/notes/check-captures-at-1-to-1.md`).
-- `npm run probe:live` — `{steps:81, decreases:0, firstRampAt:"step-64", firstFullAt:"step-69",
-  handoffSteps:5, maxCount:45000, sceneRows:8}`; the far clamp reads `one galaxy · ×1 real`.
-  The handoff leg now starts on the inclined camera (the edge-on boot yaw keeps `lod` at 0 by design).
+- `npm run probe:live` — `{steps:81, decreases:0, firstRampAt:"step-64", firstFullAt:"step-68",
+  handoffSteps:4, maxCount:60000, sceneRows:8}` on isolated port 5201, listener command line proven
+  to be the density worktree; the far clamp reads `one galaxy · ×1 real`. Build fingerprint:
+  step-80 has 0 px above 0.97 outside the HUD, max 0.8871 at the home star, next 0.7828 at the
+  nucleus.
 - `npm run probe:watchdog` — rich 45000 → medium 22500, status `ready` (on `566a303`).
-- `perception` gate — 6/10 (below target 8); iteration 2 deferred, see above.
+- `perception` gate - 6/10 (iteration 1), 7/10 (iteration 2), **8/10 (iteration 3, SHIP)**. The
+  density pass is merged as `87ddcc1`; scorecard `gates/gate-layer-3-iteration-3.md`, ledger
+  `20261125T021249-a62f2277`. The 12-seed suite and both coverage numbers were reproduced by the
+  chair and again by the gate's own flood fill; the two native crop offsets were verified pixel-exact.
 - **Not run:** the 1650-class proxy; any mobile or 2560/3840 live loop.
 - All of the above were re-run after the iteration-2 fixes on `wip/layer-3`; the earlier
   "not re-run since the docs reorg" caveat no longer applies.

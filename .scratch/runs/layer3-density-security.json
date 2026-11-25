@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "kind": "security",
+  "status": "passed",
+  "startedAt": "2026-11-25T01:20:00.000Z",
+  "endedAt": "2026-11-25T01:45:00.000Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Security lens on the Layer 3 density pass: rich-tier disc 40,000 -> 55,000, rebalanced disc/bulge emission, widened impostor PSF (3.2 core, 0.28 tail, 4.65-5.05 px footprint), GALAXY_GAIN 0.56 -> 0.194, tone ceiling 0.90 -> 0.79, exposure floor 0.68 -> 0.80 with exponent -1.25 -> -0.40, and two new coverage metrics plus maxLumAt in the measurement tool",
+  "commit": "ae909ba..e237545 (origin/agent/antigravity-layer3-density)",
+  "models": [
+    "surplus/glm-5.3 (audit)"
+  ],
+  "verdict": "PASS, no findings at any severity. Five claims confirmed: no shader NaN/Inf with the new constants (worst-case HDR accumulation ~18,000 << 65504, so no Inf, so no Inf/Inf); measureRegionCoverage is bounds-checked and terminates (region clamped, mask sized rw*rh, neighbour pushes guarded, seen set at push time); the tool stays inert loopback-only with no eval and no write outside outDir; no test bound was weakened (no test file changed; exposure test still 0.68..1.55 with the code now at 0.80..1.55; the 60,000 budget assertion now binds at equality, 5,000 + 55,000); no secret, personal path, network or storage write, and GALAXY_VERSION 7 -> 8 is appearance-only. npm test 23 files / 269 tests in the density worktree.",
+  "notes": "Two informational notes, no action: (1) pre-existing and unreachable, an Inf in the HDR buffer would give NaN in the tone curve and slip the peak guard; arithmetic bound makes it impossible and this diff only lowers magnitudes. (2) The exposure test's lower bound 0.68 is now slack because the code floors at 0.80, so a future change to 0.70 would pass silently. The 60,000 assertion is tight rather than vacuous: any tier increase fails it, and GALAXY_MAX_INSTANCES sizes the CPU/GPU buffers from the same table, so a count change must bump the budget deliberately.",
+  "scores": {},
+  "evidence": [
+    "src/gpu/galaxy.wgsl",
+    "src/render/galaxy-scene.ts",
+    "src/universe/galaxy.ts",
+    "tools/measure-layer3.mjs"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "kind": "security",
+  "status": "skipped",
+  "startedAt": "2026-11-25T12:52:00.000Z",
+  "endedAt": "2026-11-25T12:54:00.000Z",
+  "base": {
+    "name": "drax-ai-workflow",
+    "version": "0.7.1",
+    "commit": "e63ff43"
+  },
+  "project": "UniverseGoBrr",
+  "task": "Security lens on commit 8e6f73e (galaxy variation law, ticket 06 item 4), scoped to the diff against 4405c2d.",
+  "commit": "8e6f73e",
+  "models": [
+    "surplus/glm-5.3 (security audit seat) - UNROUTABLE"
+  ],
+  "rubric": null,
+  "verdict": "SKIPPED, not passed. The audit seat could not be reached: surplus/glm-5.3 returned code minimum_discount_not_met on the min80 floor twice, 90 seconds apart - best eligible discount 69.87% then 69.39% across 24 and 30 offers. The project rule is that the audit keeps min80 so its findings stay comparable, and that an unroutable seat is paused and noted rather than silently run on another seller's model. No audit was performed. This commit has NOT been through the security lens.",
+  "notes": "Not a clean result and must not be read as one. To close it, either rerun when the floor clears (the discount moved 0.5 points in 90 seconds, so it is peak-hour congestion) or have the owner decide to lower the floor for this run. Scoped claims the audit was to test are recorded in the dispatch brief and are unverified: the gallery tool takes no untrusted input and cannot traverse out of --out; the shape stream cannot yield NaN/Infinity for a 900-char address; galaxyRadiusM output is bounded before reaching a float32 uniform; the disc retry loops terminate at the clamps added in this commit; no secret or credential entered the tree; nothing was transcribed from LLM or web output into an executable path.",
+  "scores": {},
+  "evidence": [
+    "8e6f73e"
+  ]
+}
